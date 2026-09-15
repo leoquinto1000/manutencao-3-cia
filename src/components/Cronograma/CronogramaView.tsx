@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { MissaoDiaria, EquipeManutencao, MembroEquipe } from '../../types';
+import { MissaoDiaria, EquipeManutencao, MembroEquipe, InformeMensal } from '../../types';
 import { MissoesDiariasTab } from './MissoesDiariasTab';
 import { CadastroEquipesTab } from './CadastroEquipesTab';
 import { formatarDataISO } from '../../utils';
@@ -20,6 +20,9 @@ interface CronogramaViewProps {
   onChangeEquipes: (equipes: EquipeManutencao[]) => void;
   membros: MembroEquipe[];
   onChangeMembros: (membros: MembroEquipe[]) => void;
+  informeAtual?: InformeMensal;
+  onChangeInformeAtual?: (informe: InformeMensal) => void;
+  onNavegarParaInforme?: () => void;
 }
 
 export const CronogramaView: React.FC<CronogramaViewProps> = ({
@@ -29,6 +32,9 @@ export const CronogramaView: React.FC<CronogramaViewProps> = ({
   onChangeEquipes,
   membros,
   onChangeMembros,
+  informeAtual,
+  onChangeInformeAtual,
+  onNavegarParaInforme,
 }) => {
   const [subAbaAtiva, setSubAbaAtiva] = useState<'missoes' | 'equipes'>('missoes');
 
@@ -126,6 +132,9 @@ export const CronogramaView: React.FC<CronogramaViewProps> = ({
             onChangeMissoes={onChangeMissoes}
             equipes={equipes}
             membros={membros}
+            informeAtual={informeAtual}
+            onChangeInformeAtual={onChangeInformeAtual}
+            onNavegarParaInforme={onNavegarParaInforme}
           />
         )}
 

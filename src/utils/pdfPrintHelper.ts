@@ -64,7 +64,7 @@ export function imprimirEmNovaJanela(containerElement: HTMLElement, titulo: stri
               background: #ffffff !important;
               color: #000000 !important;
               margin: 0;
-              padding: 10px;
+              padding: 0;
               font-family: Arial, Helvetica, sans-serif;
               -webkit-print-color-adjust: exact !important;
               print-color-adjust: exact !important;
@@ -72,11 +72,79 @@ export function imprimirEmNovaJanela(containerElement: HTMLElement, titulo: stri
             .no-print, button, input[type="file"] {
               display: none !important;
             }
-            .pesquisa-page, .sheet-paper, .balancete-page, .textoparte-page, .apmbb-page {
+            .only-print {
+              display: block !important;
+            }
+            .pesquisa-page {
+              border: 2px solid #000 !important;
+              box-shadow: none !important;
+              margin: 0 auto !important;
               page-break-after: always !important;
               page-break-inside: avoid !important;
-              margin-bottom: 20px !important;
+              break-inside: avoid !important;
+              width: 100% !important;
+              max-width: 194mm !important;
+              height: 275mm !important;
+              max-height: 275mm !important;
+              display: flex !important;
+              flex-direction: column !important;
+              justify-content: space-between !important;
+              overflow: hidden !important;
+              box-sizing: border-box !important;
+            }
+            .sheet-paper {
+              border: none !important;
               box-shadow: none !important;
+              padding: 4mm !important;
+              margin: 0 auto !important;
+              width: 100% !important;
+              max-width: none !important;
+              page-break-after: auto !important;
+              box-sizing: border-box !important;
+            }
+            .pauta-diaria-page {
+              border: none !important;
+              box-shadow: none !important;
+              padding: 4mm !important;
+              margin: 0 auto !important;
+              width: 100% !important;
+              max-width: 100% !important;
+              background: #ffffff !important;
+              box-sizing: border-box !important;
+            }
+            .balancete-page {
+              border: none !important;
+              box-shadow: none !important;
+              padding: 6mm 8mm !important;
+              margin: 0 auto !important;
+              page-break-after: always !important;
+              page-break-inside: avoid !important;
+              break-inside: avoid !important;
+              width: 100% !important;
+              max-width: 194mm !important;
+              max-height: 275mm !important;
+              overflow: hidden !important;
+              box-sizing: border-box !important;
+            }
+            .textoparte-page, .apmbb-page {
+              border: none !important;
+              box-shadow: none !important;
+              padding: 8mm 10mm !important;
+              margin: 0 auto 10mm auto !important;
+              page-break-after: always !important;
+              page-break-inside: avoid !important;
+              break-inside: avoid !important;
+              width: 100% !important;
+              max-width: 194mm !important;
+              box-sizing: border-box !important;
+            }
+            table {
+              border-collapse: collapse !important;
+              page-break-inside: auto;
+            }
+            tr {
+              page-break-inside: avoid;
+              page-break-after: auto;
             }
             /* Garantir que inputs pareçam texto normal impresso */
             input, select, textarea {

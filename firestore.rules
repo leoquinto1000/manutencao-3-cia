@@ -1,0 +1,13 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Permite leitura e escrita para o sistema de manutenção da 3ª Cia
+    match /sistema_manutencao/{document=**} {
+      allow read, write: if true;
+    }
+    // Regra geral para desenvolvimento/produção interna
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

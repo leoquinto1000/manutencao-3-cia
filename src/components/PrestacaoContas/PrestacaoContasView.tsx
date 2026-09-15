@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { NFInstance, PesquisaPrecoItem, BalanceteState, TextoParteState, ProjetoSalvo, MaterialItem, Supplier } from '../../types';
+import { NFInstance, PesquisaPrecoItem, BalanceteState, TextoParteState, ProjetoSalvo, MaterialItem, Supplier, EmpresaCadastrada } from '../../types';
 import { TabelaComposicao } from './TabelaComposicao';
 import { ExtratorNF } from './ExtratorNF';
 import { CatalogoFornecedores } from './CatalogoFornecedores';
@@ -7,7 +7,8 @@ import { PesquisasPrecosView } from './PesquisasPrecosView';
 import { BalanceteGlobalView } from './BalanceteGlobalView';
 import { TextoParteView } from './TextoParteView';
 import { ArquivosSalvosView } from './ArquivosSalvosView';
-import { FileText, Search, Scale, FileSignature, FolderArchive, Plus, Edit2, Trash2, Save, Check, X, AlertTriangle } from 'lucide-react';
+import { BancoFornecedoresView } from './BancoFornecedoresView';
+import { FileText, Search, Scale, FileSignature, FolderArchive, Plus, Edit2, Trash2, Save, Check, X, AlertTriangle, Building2 } from 'lucide-react';
 import { gerarId, DADOS_INICIAIS_NF1 } from '../../utils';
 
 interface PrestacaoContasViewProps {
@@ -31,6 +32,8 @@ interface PrestacaoContasViewProps {
   onExcluirProjeto: (id_arquivo: number) => void;
   onLimparHistorico: () => void;
   onImportarBackupJSON: (projetos: ProjetoSalvo[]) => void;
+  bancoFornecedores: EmpresaCadastrada[];
+  onChangeBancoFornecedores: (empresas: EmpresaCadastrada[]) => void;
 }
 
 export const PrestacaoContasView: React.FC<PrestacaoContasViewProps> = ({
@@ -51,10 +54,18 @@ export const PrestacaoContasView: React.FC<PrestacaoContasViewProps> = ({
   onExcluirProjeto,
   onLimparHistorico,
   onImportarBackupJSON,
+  bancoFornecedores,
+  onChangeBancoFornecedores,
 }) => {
-  const [moduloAtivo, setModuloAtivo] = useState<'planilhas' | 'pesquisas' | 'balancete' | 'textoparte' | 'arquivos'>('planilhas');
+  const [moduloAtivo, setModuloAtivo] = useState<'planilhas' | 'pesquisas' | 'balancete' | 'textoparte' | 'fornecedores_banco' | 'arquivos'>('planilhas');
   const [nfAtivaId, setNfAtivaId] = useState<number>(nfs[0]?.id || 1);
   const [subAbaInterna, setSubAbaInterna] = useState<'planilha' | 'leitor' | 'fornecedores'>('planilha');
+
+  const handleNavegarParaAbaFornecedores = (nfId: number) => {
+    setNfAtivaId(nfId);
+    setModuloAtivo('planilhas');
+    setSubAbaInterna('fornecedores');
+  };
 
   // Estado para renomear NF inline
   const [editingNfId, setEditingNfId] = useState<number | null>(null);
@@ -159,17 +170,7 @@ export const PrestacaoContasView: React.FC<PrestacaoContasViewProps> = ({
       descontoAplicado: 0,
       labelDesconto: 'Desconto Aplicado',
       items: [],
-      suppliers: [
-        {
-          id: gerarId(),
-          num: 1,
-          name: `Empresa 1 (NF ${nextId})`,
-          razaoSocial: `Empresa 1 Comercial Ltda`,
-          cnpj: '',
-          endereco: 'São Paulo - SP',
-          contato: '-',
-        },
-      ],
+      suppliers: [],
     };
     onChangeNFs([...nfs, nova]);
     setNfAtivaId(nextId);
@@ -314,6 +315,29 @@ export const PrestacaoContasView: React.FC<PrestacaoContasViewProps> = ({
           >
             <FileSignature size={15} />
             <span>📝 Texto Parte</span>
+          </button>
+
+          <button
+            onClick={() => setModuloAtivo('fornecedores_banco')}
+            className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-md transition text-left ${
+              moduloAtivo === 'fornecedores_banco'
+                ? 'bg-[#1a2b4c] text-white shadow-sm'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              <Building2 size={15} />
+              <span>🏢 Fornecedores Cadastrados</span>
+            </div>
+            <span
+              className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                moduloAtivo === 'fornecedores_banco'
+                  ? 'bg-amber-400 text-slate-900'
+                  : 'bg-slate-200 text-slate-700'
+              }`}
+            >
+              {bancoFornecedores.length}
+            </span>
           </button>
 
           <hr className="my-2 border-slate-200" />
@@ -525,6 +549,17 @@ export const PrestacaoContasView: React.FC<PrestacaoContasViewProps> = ({
                     suppliers={nfAtiva.suppliers || []}
                     onChangeSuppliers={handleUpdateSuppliers}
                     nfLabel={nfAtiva.label}
+                    bancoFornecedores={bancoFornecedores}
+                    onAdicionarAoBanco={(novaEmpresa) => {
+                      const jaExiste = bancoFornecedores.some(
+                        (b) =>
+                          (novaEmpresa.cnpj && b.cnpj && novaEmpresa.cnpj.replace(/\D/g, '') === b.cnpj.replace(/\D/g, '')) ||
+                          b.name.trim().toLowerCase() === novaEmpresa.name.trim().toLowerCase()
+                      );
+                      if (!jaExiste) {
+                        onChangeBancoFornecedores([novaEmpresa, ...bancoFornecedores]);
+                      }
+                    }}
                   />
                 )}
               </div>
@@ -554,6 +589,17 @@ export const PrestacaoContasView: React.FC<PrestacaoContasViewProps> = ({
             textoParte={textoParte}
             onChangeTextoParte={onChangeTextoParte}
             nfs={nfs}
+          />
+        )}
+
+        {moduloAtivo === 'fornecedores_banco' && (
+          <BancoFornecedoresView
+            bancoFornecedores={bancoFornecedores}
+            onChangeBancoFornecedores={onChangeBancoFornecedores}
+            nfs={nfs}
+            onChangeNFs={onChangeNFs}
+            nfAtivaId={nfAtivaId}
+            onNavegarParaAbaFornecedores={handleNavegarParaAbaFornecedores}
           />
         )}
 

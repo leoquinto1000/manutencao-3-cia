@@ -53,6 +53,7 @@ export const PesquisasPrecosView: React.FC<PesquisasPrecosViewProps> = ({
             pesquisaIndice: pIdx,
             empresaNum: pIdx,
             empresaNome: existing ? existing.empresaNome : empNome,
+            cnpj: existing?.cnpj || sup?.cnpj || '',
             supplierId: existing?.supplierId || sup?.id,
             dataCotacao: existing ? existing.dataCotacao : '27/08/2026',
             contato: existing ? existing.contato : sup?.contato || '-',
@@ -86,6 +87,7 @@ export const PesquisasPrecosView: React.FC<PesquisasPrecosViewProps> = ({
         supplierId: supplier.id,
         empresaNum: supplier.num,
         empresaNome: supplier.name,
+        cnpj: supplier.cnpj || p.cnpj || '',
         contato: supplier.contato && supplier.contato !== '-' ? supplier.contato : p.contato,
       };
     });
@@ -219,15 +221,30 @@ export const PesquisasPrecosView: React.FC<PesquisasPrecosViewProps> = ({
           return updatedItem;
         });
 
-        // Sincroniza também o nome da empresa se alterado
+        // Sincroniza também o fornecedor se alterado
         let updatedSuppliers = nf.suppliers ? [...nf.suppliers] : [];
-        if (field === 'empresaNome' && hasUpdatedItem) {
-          const supIdx = compNum - 1;
-          if (updatedSuppliers[supIdx]) {
-            updatedSuppliers[supIdx] = {
-              ...updatedSuppliers[supIdx],
-              name: String(val),
+        const existingSupIdx = updatedSuppliers.findIndex((s) => s.num === compNum);
+        
+        if (hasUpdatedItem && (field === 'empresaNome' || field === 'cnpj' || field === 'contato')) {
+          if (existingSupIdx >= 0) {
+            updatedSuppliers[existingSupIdx] = {
+              ...updatedSuppliers[existingSupIdx],
+              ...(field === 'empresaNome' ? { name: String(val) } : {}),
+              ...(field === 'cnpj' ? { cnpj: String(val) } : {}),
+              ...(field === 'contato' ? { contato: String(val) } : {}),
             };
+          } else {
+            updatedSuppliers.push({
+              id: String(Date.now() + Math.random()),
+              num: compNum,
+              name: field === 'empresaNome' ? String(val) : `Empresa ${compNum}`,
+              razaoSocial: field === 'empresaNome' ? String(val) : `Empresa ${compNum}`,
+              cnpj: field === 'cnpj' ? String(val) : '',
+              endereco: '-',
+              contato: field === 'contato' ? String(val) : '-',
+            });
+            // Ordena pelos números
+            updatedSuppliers.sort((a, b) => a.num - b.num);
           }
         }
 
@@ -536,31 +553,31 @@ export const PesquisasPrecosView: React.FC<PesquisasPrecosViewProps> = ({
                 </tbody>
               </table>
 
-              {/* Comprovante / Print Body Area */}
+              {/* Comprovante / Print Body Area - Proporção exata para Folha A4 */}
               <div
                 onPaste={(e) => handlePasteImage(item.id, e)}
                 tabIndex={0}
-                className="flex-1 min-h-[750px] relative flex items-center justify-center bg-slate-50 hover:bg-slate-100/70 transition p-4 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                className="flex-1 min-h-0 relative flex items-center justify-center bg-slate-50 hover:bg-slate-100/70 transition p-2 cursor-pointer focus:outline-none focus:ring-1 focus:ring-indigo-400 overflow-hidden"
               >
                 {item.imagemComprovante ? (
                   <div className="w-full h-full flex flex-col items-center justify-center">
                     <img
                       src={item.imagemComprovante}
                       alt="Comprovante de Cotação"
-                      className="max-h-[740px] max-w-full object-contain mx-auto shadow-sm border border-slate-200"
+                      className="max-h-[680px] print:max-h-[190mm] max-w-full object-contain mx-auto shadow-sm border border-slate-200"
                     />
-                    <div className="no-print mt-2 flex items-center gap-2">
+                    <div className="no-print mt-1.5 flex items-center gap-2">
                       <button
                         onClick={() => handleUpdate(item.id, 'imagemComprovante', '')}
-                        className="bg-red-500 hover:bg-red-600 text-white text-[11px] px-2.5 py-1 rounded shadow"
+                        className="bg-red-500 hover:bg-red-600 text-white text-[11px] px-2.5 py-0.5 rounded shadow"
                       >
                         Remover Imagem
                       </button>
                     </div>
                   </div>
                 ) : (
-                  <div className="text-center p-8 text-slate-400 select-none">
-                    <ImageIcon className="mx-auto mb-2 text-slate-300" size={54} />
+                  <div className="text-center p-4 text-slate-400 select-none">
+                    <ImageIcon className="mx-auto mb-2 text-slate-300" size={48} />
                     <p className="text-sm font-bold text-slate-600">
                       Cole aqui o Print da Cotação (Ctrl+V)
                     </p>
@@ -568,7 +585,7 @@ export const PesquisasPrecosView: React.FC<PesquisasPrecosViewProps> = ({
                       (Site da loja, tela do carrinho, orçamento em PDF ou WhatsApp)
                     </p>
 
-                    <div className="no-print mt-4 inline-block">
+                    <div className="no-print mt-3 inline-block">
                       <label className="flex items-center gap-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-semibold px-3 py-1.5 rounded cursor-pointer transition">
                         <Upload size={13} />
                         <span>Carregar Arquivo de Imagem</span>
@@ -590,10 +607,23 @@ export const PesquisasPrecosView: React.FC<PesquisasPrecosViewProps> = ({
               </div>
 
               {/* Footer Table */}
-              <table className="w-full border-collapse border-t-2 border-black font-sans text-xs">
+              <table className="w-full table-fixed border-collapse border-t-2 border-black font-sans text-xs">
                 <tbody>
                   <tr>
-                    <td className="p-2 text-left w-full bg-slate-50">
+                    <td className="p-2 text-left border-r-2 border-black bg-slate-50 w-[35%] align-top">
+                      <span className="font-bold text-[10px] uppercase block text-slate-600">
+                        CNPJ DO FORNECEDOR:
+                      </span>
+                      <input
+                        type="text"
+                        value={item.cnpj !== undefined ? item.cnpj : (matchedSup?.cnpj || '')}
+                        onChange={(e) => handleUpdate(item.id, 'cnpj', e.target.value)}
+                        placeholder="00.000.000/0000-00"
+                        className="w-full font-mono font-semibold text-[11px] text-slate-900 bg-transparent border-0 focus:ring-1 focus:ring-black rounded mt-0.5 truncate"
+                        title="CNPJ do Fornecedor / Empresa Cotada"
+                      />
+                    </td>
+                    <td className="p-2 text-left bg-slate-50 w-[65%] align-top">
                       <span className="font-bold text-[10px] uppercase block text-slate-600">
                         INFORMAÇÕES DE CONTATO DO FORNECEDOR:
                       </span>
@@ -601,8 +631,9 @@ export const PesquisasPrecosView: React.FC<PesquisasPrecosViewProps> = ({
                         type="text"
                         value={item.contato}
                         onChange={(e) => handleUpdate(item.id, 'contato', e.target.value)}
-                        placeholder="Telefone, e-mail, vendedor ou endereço do fornecedor..."
-                        className="w-full font-mono text-[11px] bg-transparent border-0 focus:ring-1 focus:ring-black rounded mt-0.5"
+                        placeholder="Telefone, WhatsApp, e-mail ou endereço..."
+                        className="w-full font-mono text-[11px] text-slate-800 bg-transparent border-0 focus:ring-1 focus:ring-black rounded mt-0.5 truncate"
+                        title="Telefone, e-mail ou contato do fornecedor"
                       />
                     </td>
                   </tr>

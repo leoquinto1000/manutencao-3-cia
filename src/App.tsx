@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   NFInstance,
   PesquisaPrecoItem,
@@ -15,6 +15,7 @@ import {
   MissaoDiaria,
   EquipeManutencao,
   MembroEquipe,
+  EmpresaCadastrada,
 } from './types';
 import {
   DADOS_INICIAIS_NF1,
@@ -25,8 +26,15 @@ import {
   DADOS_INICIAIS_MISSOES,
   DADOS_INICIAIS_EQUIPES,
   DADOS_INICIAIS_MEMBROS,
+  DADOS_INICIAIS_BANCO_FORNECEDORES,
   gerarId,
 } from './utils';
+import {
+  carregarDadosFirestore,
+  salvarDadosFirestore,
+  escutarDadosFirestore,
+  DadosSistemaFirestore,
+} from './firebase';
 import { Header } from './components/Header';
 import { PrestacaoContasView } from './components/PrestacaoContas/PrestacaoContasView';
 import { MateriaisUsadosView } from './components/MateriaisUsados/MateriaisUsadosView';
@@ -35,6 +43,11 @@ import { CronogramaView } from './components/Cronograma/CronogramaView';
 
 export default function App() {
   const [abaPrincipal, setAbaPrincipal] = useState<'prestacao' | 'materiais' | 'informe' | 'cronograma'>('prestacao');
+
+  // Estado de Sincronização em Nuvem com o Firebase Firestore (manutencao-3-cia)
+  const [statusFirebase, setStatusFirebase] = useState<'carregando' | 'conectado' | 'salvando' | 'erro-permissao' | 'offline'>('carregando');
+  const [ultimaSincronizacao, setUltimaSincronizacao] = useState<string | null>(null);
+  const isCarregadoInicialmente = useRef(false);
 
   // Load state from localStorage or use initial military templates
   const [nfs, setNfs] = useState<NFInstance[]>(() => {
@@ -175,12 +188,47 @@ export default function App() {
       const saved = localStorage.getItem('pmesp_membros');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((m: any) => {
+            let ano = m.anoCurso;
+            if (ano === '1º Ano' || ano === '1º Ano (CFO / CFSd)') ano = '1°CFO';
+            else if (ano === '2º Ano' || ano === '2º Ano (CFO)' || ano === '2º Ano CFO') ano = '2°CFO';
+            else if (ano === '3º Ano' || ano === '3º Ano (CFO)' || ano === '3º Ano CFO') ano = '3°CFO';
+            else if (ano === '4º Ano' || ano === '4º Ano (CFO / Formando)') ano = '4°CFO';
+            else if (ano === 'Quadro Efetivo (Permanente)' || ano === 'Quadro de Oficiais') ano = 'Efetivo Permanente';
+            const tipoEfetivo =
+              m.tipoEfetivo === 'fixo' || m.tipoEfetivo === 'apoio'
+                ? m.tipoEfetivo
+                : m.anoCurso?.includes('CFO')
+                ? 'apoio'
+                : 'fixo';
+            return {
+              ...m,
+              anoCurso: ano || '1°CFO',
+              pelotao: m.pelotao || 'A',
+              tipoEfetivo,
+            };
+          });
+        }
       }
     } catch (e) {
       console.error(e);
     }
     return DADOS_INICIAIS_MEMBROS;
+  });
+
+  // Banco Geral de Fornecedores Cadastrados
+  const [bancoFornecedores, setBancoFornecedores] = useState<EmpresaCadastrada[]>(() => {
+    try {
+      const saved = localStorage.getItem('pmesp_banco_fornecedores');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return DADOS_INICIAIS_BANCO_FORNECEDORES;
   });
 
   // LocalStorage synchronizations
@@ -249,6 +297,170 @@ export default function App() {
       localStorage.setItem('pmesp_membros', JSON.stringify(membros));
     } catch (e) {}
   }, [membros]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('pmesp_banco_fornecedores', JSON.stringify(bancoFornecedores));
+    } catch (e) {}
+  }, [bancoFornecedores]);
+
+  // Sincronização Inicial com o Firebase Firestore (manutencao-3-cia)
+  useEffect(() => {
+    let isMounted = true;
+    setStatusFirebase('carregando');
+
+    carregarDadosFirestore()
+      .then((dados) => {
+        if (!isMounted) return;
+        if (dados) {
+          // Documento existe no Firestore: preenche todos os módulos
+          if (Array.isArray(dados.nfs) && dados.nfs.length > 0) setNfs(dados.nfs);
+          if (Array.isArray(dados.pesquisas)) setPesquisas(dados.pesquisas);
+          if (dados.balancete) setBalancete(dados.balancete);
+          if (dados.textoParte) setTextoParte(dados.textoParte);
+          if (Array.isArray(dados.materiaisUsados)) setMateriaisUsados(dados.materiaisUsados);
+          if (dados.informeAtual) setInformeAtual(dados.informeAtual);
+          if (Array.isArray(dados.informesArquivados)) setInformesArquivados(dados.informesArquivados);
+          if (Array.isArray(dados.arquivosSalvos)) setArquivosSalvos(dados.arquivosSalvos);
+          if (Array.isArray(dados.missoes)) setMissoes(dados.missoes);
+          if (Array.isArray(dados.equipes)) setEquipes(dados.equipes);
+          if (Array.isArray(dados.membros) && dados.membros.length > 0) setMembros(dados.membros);
+          if (Array.isArray(dados.bancoFornecedores)) setBancoFornecedores(dados.bancoFornecedores);
+
+          if (dados.ultimaAtualizacao) {
+            try {
+              setUltimaSincronizacao(new Date(dados.ultimaAtualizacao).toLocaleTimeString('pt-BR'));
+            } catch (e) {}
+          }
+          setStatusFirebase('conectado');
+        } else {
+          // Primeira vez que o app conecta a este banco: inicializa o documento com os dados atuais
+          salvarDadosFirestore({
+            nfs,
+            pesquisas,
+            balancete,
+            textoParte,
+            materiaisUsados,
+            informeAtual,
+            informesArquivados,
+            arquivosSalvos,
+            missoes,
+            equipes,
+            membros,
+            bancoFornecedores,
+          })
+            .then(() => {
+              if (!isMounted) return;
+              setStatusFirebase('conectado');
+              setUltimaSincronizacao(new Date().toLocaleTimeString('pt-BR'));
+            })
+            .catch((err: any) => {
+              if (!isMounted) return;
+              if (err?.code === 'permission-denied') {
+                setStatusFirebase('erro-permissao');
+              } else {
+                setStatusFirebase('conectado');
+              }
+            });
+        }
+        isCarregadoInicialmente.current = true;
+      })
+      .catch((err: any) => {
+        if (!isMounted) return;
+        console.warn('Erro na carga inicial do Firestore:', err);
+        if (err?.code === 'permission-denied') {
+          setStatusFirebase('erro-permissao');
+        } else {
+          setStatusFirebase('offline');
+        }
+        isCarregadoInicialmente.current = true;
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Auto-Save debounced para o Firestore quando houver modificação de dados
+  useEffect(() => {
+    if (!isCarregadoInicialmente.current) return;
+    if (statusFirebase === 'erro-permissao') return;
+
+    const timer = setTimeout(() => {
+      setStatusFirebase('salvando');
+      salvarDadosFirestore({
+        nfs,
+        pesquisas,
+        balancete,
+        textoParte,
+        materiaisUsados,
+        informeAtual,
+        informesArquivados,
+        arquivosSalvos,
+        missoes,
+        equipes,
+        membros,
+        bancoFornecedores,
+      })
+        .then(() => {
+          setStatusFirebase('conectado');
+          setUltimaSincronizacao(new Date().toLocaleTimeString('pt-BR'));
+        })
+        .catch((err: any) => {
+          console.error('Erro ao auto-salvar no Firestore:', err);
+          if (err?.code === 'permission-denied') {
+            setStatusFirebase('erro-permissao');
+          } else {
+            setStatusFirebase('offline');
+          }
+        });
+    }, 1200);
+
+    return () => clearTimeout(timer);
+  }, [
+    nfs,
+    pesquisas,
+    balancete,
+    textoParte,
+    materiaisUsados,
+    informeAtual,
+    informesArquivados,
+    arquivosSalvos,
+    missoes,
+    equipes,
+    membros,
+    bancoFornecedores,
+  ]);
+
+  // Sincronização manual imediata solicitada pelo usuário
+  const handleSincronizarManual = async () => {
+    setStatusFirebase('salvando');
+    try {
+      await salvarDadosFirestore({
+        nfs,
+        pesquisas,
+        balancete,
+        textoParte,
+        materiaisUsados,
+        informeAtual,
+        informesArquivados,
+        arquivosSalvos,
+        missoes,
+        equipes,
+        membros,
+        bancoFornecedores,
+      });
+      setStatusFirebase('conectado');
+      setUltimaSincronizacao(new Date().toLocaleTimeString('pt-BR'));
+    } catch (err: any) {
+      console.error(err);
+      if (err?.code === 'permission-denied') {
+        setStatusFirebase('erro-permissao');
+      } else {
+        setStatusFirebase('offline');
+      }
+    }
+  };
 
   // Project Archiving Handlers
   const handleSalvarProjetoAtual = (tituloCustom?: string) => {
@@ -360,7 +572,13 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-100 text-slate-900 font-sans">
-      <Header abaAtiva={abaPrincipal} onTrocarAba={setAbaPrincipal} />
+      <Header
+        abaAtiva={abaPrincipal}
+        onTrocarAba={setAbaPrincipal}
+        statusFirebase={statusFirebase}
+        ultimaSincronizacao={ultimaSincronizacao}
+        onSincronizarManual={handleSincronizarManual}
+      />
 
       <main className="main-print-container flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 py-6">
         {abaPrincipal === 'prestacao' && (
@@ -382,6 +600,8 @@ export default function App() {
             onExcluirProjeto={handleExcluirProjeto}
             onLimparHistorico={handleLimparHistoricoProjetos}
             onImportarBackupJSON={handleImportarBackupJSON}
+            bancoFornecedores={bancoFornecedores}
+            onChangeBancoFornecedores={setBancoFornecedores}
           />
         )}
 
@@ -413,6 +633,9 @@ export default function App() {
             onChangeEquipes={setEquipes}
             membros={membros}
             onChangeMembros={setMembros}
+            informeAtual={informeAtual}
+            onChangeInformeAtual={setInformeAtual}
+            onNavegarParaInforme={() => setAbaPrincipal('informe')}
           />
         )}
       </main>

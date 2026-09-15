@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MissaoDiaria, EquipeManutencao, MembroEquipe } from '../../types';
 import { gerarId, formatarDataISO, adicionarDiasISO } from '../../utils';
 import {
@@ -15,6 +15,10 @@ import {
   Plus,
   Shield,
   UserCheck,
+  Camera,
+  Upload,
+  Trash2,
+  Image as ImageIcon,
 } from 'lucide-react';
 
 interface ModalNovaMissaoProps {
@@ -65,8 +69,63 @@ export const ModalNovaMissao: React.FC<ModalNovaMissaoProps> = ({
     missaoEmEdicao?.materiaisNecessarios || ''
   );
   const [observacoes, setObservacoes] = useState(missaoEmEdicao?.observacoes || '');
+  const [fotoAntesUrl, setFotoAntesUrl] = useState<string>(missaoEmEdicao?.fotoAntesUrl || '');
+  const [fotoDepoisUrl, setFotoDepoisUrl] = useState<string>(missaoEmEdicao?.fotoDepoisUrl || '');
+
+  // Sincroniza e reseta o formulário quando o modal abre ou a missão em edição muda
+  useEffect(() => {
+    if (aberto) {
+      if (missaoEmEdicao) {
+        setData(missaoEmEdicao.data);
+        setTitulo(missaoEmEdicao.titulo || '');
+        setDescricao(missaoEmEdicao.descricao || '');
+        setLocal(missaoEmEdicao.local || 'Alojamento da 3ª Cia');
+        setPrioridade(missaoEmEdicao.prioridade || 'Alta');
+        setEquipeId(missaoEmEdicao.equipeId || '');
+        setMembrosDesignados(missaoEmEdicao.membrosDesignados || '');
+        setTurno(
+          (missaoEmEdicao.turno as any) === 'Manhã'
+            ? 'Manhã (07h15)'
+            : (missaoEmEdicao.turno as any) === 'Tarde'
+            ? 'Tarde (9º e 10º tempos)'
+            : (missaoEmEdicao.turno as any) || 'Manhã (07h15)'
+        );
+        setConcluida(missaoEmEdicao.concluida || false);
+        setAdiadaParaProximoDia(missaoEmEdicao.adiadaParaProximoDia || false);
+        setMateriaisNecessarios(missaoEmEdicao.materiaisNecessarios || '');
+        setObservacoes(missaoEmEdicao.observacoes || '');
+        setFotoAntesUrl(missaoEmEdicao.fotoAntesUrl || '');
+        setFotoDepoisUrl(missaoEmEdicao.fotoDepoisUrl || '');
+      } else {
+        setData(dataSugerida || formatarDataISO());
+        setTitulo('');
+        setDescricao('');
+        setLocal('Alojamento da 3ª Cia');
+        setPrioridade('Alta');
+        setEquipeId('');
+        setMembrosDesignados('');
+        setTurno('Manhã (07h15)');
+        setConcluida(false);
+        setAdiadaParaProximoDia(false);
+        setMateriaisNecessarios('');
+        setObservacoes('');
+        setFotoAntesUrl('');
+        setFotoDepoisUrl('');
+      }
+    }
+  }, [aberto, missaoEmEdicao, dataSugerida]);
 
   if (!aberto) return null;
+
+  const handleCarregarFoto = (tipo: 'antes' | 'depois', file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      if (tipo === 'antes') setFotoAntesUrl(dataUrl);
+      else setFotoDepoisUrl(dataUrl);
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Adicionar ou remover policial dos executores escalados
   const toggleMilitarEscalado = (nomeGuerra: string) => {
@@ -120,6 +179,9 @@ export const ModalNovaMissao: React.FC<ModalNovaMissaoProps> = ({
       proximaData: adiadaParaProximoDia ? adicionarDiasISO(data, 1) : undefined,
       materiaisNecessarios: materiaisNecessarios.trim(),
       observacoes: observacoes.trim(),
+      fotoAntesUrl: fotoAntesUrl || undefined,
+      fotoDepoisUrl: fotoDepoisUrl || undefined,
+      informePaginaId: missaoEmEdicao?.informePaginaId,
     };
 
     onSalvar(novaMissao);
@@ -307,13 +369,30 @@ export const ModalNovaMissao: React.FC<ModalNovaMissaoProps> = ({
                     >
                       {estaEscalado && <UserCheck size={11} className="text-[#c9a84e]" />}
                       <span>{m.nomeGuerra}</span>
-                      {m.anoCurso && (
+                      <span
+                        className={`text-[8px] font-extrabold uppercase px-1 py-0.2 rounded ${
+                          m.tipoEfetivo === 'apoio'
+                            ? estaEscalado
+                              ? 'bg-amber-400 text-slate-950'
+                              : 'bg-amber-50 text-amber-900 border border-amber-300'
+                            : estaEscalado
+                            ? 'bg-blue-300 text-blue-950'
+                            : 'bg-blue-50 text-blue-800 border border-blue-200'
+                        }`}
+                      >
+                        {m.tipoEfetivo === 'apoio' ? 'Apoio' : 'Fixo'}
+                      </span>
+                      {(m.anoCurso || m.pelotao) && (
                         <span
-                          className={`text-[9px] px-1 rounded ${
-                            estaEscalado ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
+                          className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${
+                            estaEscalado
+                              ? 'bg-amber-400 text-slate-950'
+                              : 'bg-amber-100 text-amber-900 border border-amber-200'
                           }`}
                         >
-                          {m.anoCurso}
+                          {m.anoCurso
+                            ? `${m.anoCurso}${m.pelotao ? ` ${m.pelotao}` : ''}`
+                            : `Pel. ${m.pelotao}`}
                         </span>
                       )}
                     </button>
@@ -429,6 +508,117 @@ export const ModalNovaMissao: React.FC<ModalNovaMissaoProps> = ({
               placeholder="Ex: Aguardando secagem da argamassa; necessário pedir mais 2 disjuntores..."
               className="w-full px-3 py-1.5 border border-slate-300 rounded-md focus:ring-1 focus:ring-[#1a2b4c]"
             />
+          </div>
+
+          {/* Registro Fotográfico (Antes & Depois) para o Informe Mensal */}
+          <div className="pt-3 border-t border-slate-200">
+            <div className="flex items-center gap-2 mb-2">
+              <Camera size={15} className="text-[#1a2b4c]" />
+              <span className="font-bold text-slate-800 text-xs sm:text-sm">
+                Registro Fotográfico (Gera Folha no Padrão do Informe Mensal)
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Foto Antes */}
+              <div className="border border-slate-200 rounded-lg p-2.5 bg-slate-50">
+                <span className="block text-xs font-bold text-slate-700 mb-1.5">
+                  1. Foto do Antes (Situação Inicial)
+                </span>
+                {fotoAntesUrl ? (
+                  <div className="relative rounded overflow-hidden h-28 border border-slate-300 bg-white">
+                    <img src={fotoAntesUrl} alt="Antes" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setFotoAntesUrl('')}
+                      className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white p-1 rounded shadow text-xs"
+                      title="Remover foto"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-1.5">
+                    <label className="cursor-pointer px-2.5 py-1.5 bg-[#1a2b4c] hover:bg-[#2c4373] text-white text-xs font-bold rounded flex items-center justify-center gap-1.5 transition">
+                      <Camera size={13} />
+                      <span>Tirar Foto (Câmera)</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleCarregarFoto('antes', file);
+                        }}
+                      />
+                    </label>
+                    <label className="cursor-pointer px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-semibold rounded flex items-center justify-center gap-1.5 transition">
+                      <Upload size={13} />
+                      <span>Galeria / Arquivo</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleCarregarFoto('antes', file);
+                        }}
+                      />
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              {/* Foto Depois */}
+              <div className="border border-slate-200 rounded-lg p-2.5 bg-slate-50">
+                <span className="block text-xs font-bold text-slate-700 mb-1.5">
+                  2. Foto do Depois (Serviço Concluído)
+                </span>
+                {fotoDepoisUrl ? (
+                  <div className="relative rounded overflow-hidden h-28 border border-slate-300 bg-white">
+                    <img src={fotoDepoisUrl} alt="Depois" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setFotoDepoisUrl('')}
+                      className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white p-1 rounded shadow text-xs"
+                      title="Remover foto"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-1.5">
+                    <label className="cursor-pointer px-2.5 py-1.5 bg-[#1a2b4c] hover:bg-[#2c4373] text-white text-xs font-bold rounded flex items-center justify-center gap-1.5 transition">
+                      <Camera size={13} />
+                      <span>Tirar Foto (Câmera)</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleCarregarFoto('depois', file);
+                        }}
+                      />
+                    </label>
+                    <label className="cursor-pointer px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-semibold rounded flex items-center justify-center gap-1.5 transition">
+                      <Upload size={13} />
+                      <span>Galeria / Arquivo</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleCarregarFoto('depois', file);
+                        }}
+                      />
+                    </label>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Botões do Modal */}

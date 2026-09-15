@@ -41,6 +41,7 @@ export interface PesquisaPrecoItem {
   pesquisaIndice: number; // 1, 2, ou 3
   empresaNum: number;
   empresaNome: string;
+  cnpj?: string;
   dataCotacao: string;
   contato: string;
   precoUnitario: number;
@@ -48,6 +49,20 @@ export interface PesquisaPrecoItem {
   imagemComprovante?: string;
   linkOuObservacao?: string;
   supplierId?: string;
+}
+
+export interface EmpresaCadastrada {
+  id: string;
+  name: string; // Nome Fantasia
+  razaoSocial: string;
+  cnpj: string;
+  endereco: string;
+  contato: string;
+  telefone?: string;
+  email?: string;
+  segmento?: string; // Ex: Materiais Elétricos, Hidráulica, Tintas/Acabamento, Ferramentas, Construção Geral
+  observacoes?: string;
+  dataCadastro?: string;
 }
 
 export interface BalanceteDespesa {
@@ -176,8 +191,14 @@ export interface MembroEquipe {
   re?: string;
   especialidade: string;
   telefone?: string;
-  anoCurso?: string; // Ex: '1º Ano', '2º Ano', '3º Ano', '4º Ano', 'CFO', 'Quadro Efetivo'
+  anoCurso?: string; // Ex: '1°CFO', '2°CFO', '3°CFO', '4°CFO', 'Efetivo Permanente'
+  pelotao?: string; // Pelotão: 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H'
   ativo: boolean;
+  tipoEfetivo?: 'fixo' | 'apoio'; // 'fixo' = Efetivo Fixo da Manutenção, 'apoio' = Policiais que prestam apoio
+  origemApoio?: string; // Origem/pelotão de onde o policial veio
+  periodoApoio?: string; // Período de apoio (ex: 'Setembro/2026', '15/09 a 20/09', 'Apoio Diário')
+  funcaoApoio?: string; // Atividade ou reforço prestado (ex: Pintura geral, Apoio hidráulico)
+  observacoesApoio?: string;
 }
 
 export interface EquipeManutencao {
@@ -206,4 +227,7 @@ export interface MissaoDiaria {
   proximaData?: string;
   materiaisNecessarios?: string;
   observacoes?: string;
+  fotoAntesUrl?: string;
+  fotoDepoisUrl?: string;
+  informePaginaId?: string;
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { EquipeManutencao, MembroEquipe } from '../../types';
 import { gerarId } from '../../utils';
 import {
@@ -16,7 +16,34 @@ import {
   Briefcase,
   GraduationCap,
   MessageCircle,
+  Search,
+  Check,
+  Filter,
+  Handshake,
+  ArrowRightLeft,
+  Calendar,
+  Clock,
+  UserCheck,
+  Undo2,
+  AlertTriangle,
 } from 'lucide-react';
+
+const PELOTOES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+
+export const OPCOES_ANO_CURSO = [
+  '1°CFO',
+  '2°CFO',
+  '3°CFO',
+  '4°CFO',
+  'Efetivo Permanente',
+];
+
+export const formatarAnoPelotao = (anoCurso?: string, pelotao?: string) => {
+  if (!anoCurso && !pelotao) return '-';
+  if (anoCurso && pelotao) return `${anoCurso} ${pelotao}`;
+  if (anoCurso) return anoCurso;
+  return `Pelotão ${pelotao}`;
+};
 
 interface CadastroEquipesTabProps {
   equipes: EquipeManutencao[];
@@ -39,23 +66,51 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
   const [especialidadeEquipe, setEspecialidadeEquipe] = useState('');
   const [membrosEquipeSelecionados, setMembrosEquipeSelecionados] = useState<string[]>([]);
   const [corBadgeEquipe, setCorBadgeEquipe] = useState<string>('blue');
+  const [buscaMilitarEquipe, setBuscaMilitarEquipe] = useState('');
+  const [filtroPelotaoModal, setFiltroPelotaoModal] = useState('todos');
 
   // Estado para modal / form de Militar
   const [modalMilitarAberta, setModalMilitarAberta] = useState(false);
   const [militarEmEdicao, setMilitarEmEdicao] = useState<MembroEquipe | null>(null);
+  const [tipoEfetivoMilitar, setTipoEfetivoMilitar] = useState<'fixo' | 'apoio'>('fixo');
   const [graduacaoMilitar, setGraduacaoMilitar] = useState('Cb PM');
   const [nomeGuerraMilitar, setNomeGuerraMilitar] = useState('');
   const [nomeCompletoMilitar, setNomeCompletoMilitar] = useState('');
   const [reMilitar, setReMilitar] = useState('');
-  const [anoCursoMilitar, setAnoCursoMilitar] = useState('4º Ano');
+  const [anoCursoMilitar, setAnoCursoMilitar] = useState('1°CFO');
+  const [pelotaoMilitar, setPelotaoMilitar] = useState('A');
   const [especialidadeMilitar, setEspecialidadeMilitar] = useState('');
   const [telefoneMilitar, setTelefoneMilitar] = useState('');
+  const [origemApoioMilitar, setOrigemApoioMilitar] = useState('');
+  const [periodoApoioMilitar, setPeriodoApoioMilitar] = useState('');
+  const [funcaoApoioMilitar, setFuncaoApoioMilitar] = useState('');
+  const [observacoesApoioMilitar, setObservacoesApoioMilitar] = useState('');
+
+  // Sub-aba da Seção de Efetivo: 'fixo' = Efetivo Fixo da Manutenção | 'apoio' = Policiais que prestam apoio
+  const [abaEfetivoAtiva, setAbaEfetivoAtiva] = useState<'fixo' | 'apoio'>('fixo');
+
+  // Notificação de ação rápida no efetivo (transferência, salvar, etc.)
+  const [notificacaoEfetivo, setNotificacaoEfetivo] = useState<{
+    mensagem: string;
+    tipo: 'sucesso' | 'info';
+    militarNome?: string;
+    acaoDesfazer?: () => void;
+  } | null>(null);
+
+  // Modal para confirmação de exclusão (In-app, 100% compatível com iframe)
+  const [itemParaExcluir, setItemParaExcluir] = useState<{
+    tipo: 'militar' | 'equipe';
+    id: string;
+    nome: string;
+  } | null>(null);
+
+  // Filtro da tabela de militares
+  const [filtroPelotaoTabela, setFiltroPelotaoTabela] = useState('todos');
 
   // Helper para formatar link do WhatsApp
   const obterLinkWhatsapp = (telefone: string) => {
     const apenasDigitos = telefone.replace(/\D/g, '');
     if (!apenasDigitos) return null;
-    // Se não tiver código de país (55), adiciona
     const numeroCompleto = apenasDigitos.startsWith('55')
       ? apenasDigitos
       : `55${apenasDigitos}`;
@@ -70,6 +125,8 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
     setEspecialidadeEquipe('');
     setMembrosEquipeSelecionados([]);
     setCorBadgeEquipe('blue');
+    setBuscaMilitarEquipe('');
+    setFiltroPelotaoModal('todos');
     setModalEquipeAberta(true);
   };
 
@@ -81,6 +138,8 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
     setEspecialidadeEquipe(eq.especialidade);
     setMembrosEquipeSelecionados(eq.membros || []);
     setCorBadgeEquipe(eq.corBadge || 'blue');
+    setBuscaMilitarEquipe('');
+    setFiltroPelotaoModal('todos');
     setModalEquipeAberta(true);
   };
 
@@ -119,11 +178,14 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
     setModalEquipeAberta(false);
   };
 
+  // Excluir equipe com confirmação in-app
   const handleExcluirEquipe = (id: string) => {
     const eq = equipes.find((e) => e.id === id);
-    if (confirm(`Deseja realmente remover a equipe "${eq?.nome || id}"?`)) {
-      onChangeEquipes(equipes.filter((e) => e.id !== id));
-    }
+    setItemParaExcluir({
+      tipo: 'equipe',
+      id,
+      nome: eq?.nome || id,
+    });
   };
 
   // Toggle militar na equipe
@@ -135,30 +197,121 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
     }
   };
 
-  // Abrir form para novo militar
-  const abrirNovoMilitar = () => {
+  // Helper para normalizar ano do curso
+  const normalizarAnoCurso = (ano?: string) => {
+    if (!ano) return '1°CFO';
+    if (ano.includes('1')) return '1°CFO';
+    if (ano.includes('2')) return '2°CFO';
+    if (ano.includes('3')) return '3°CFO';
+    if (ano.includes('4')) return '4°CFO';
+    if (
+      ano.toLowerCase().includes('permanente') ||
+      ano.toLowerCase().includes('efetivo') ||
+      ano.toLowerCase().includes('oficiais')
+    ) {
+      return 'Efetivo Permanente';
+    }
+    return ano;
+  };
+
+  // Abrir form para novo militar (tipo fixo ou apoio)
+  const abrirNovoMilitar = (tipo: 'fixo' | 'apoio' = abaEfetivoAtiva) => {
     setMilitarEmEdicao(null);
-    setGraduacaoMilitar('Cb PM');
+    setTipoEfetivoMilitar(tipo);
+    setGraduacaoMilitar(tipo === 'apoio' ? 'Sd PM' : 'Cb PM');
     setNomeGuerraMilitar('');
     setNomeCompletoMilitar('');
     setReMilitar('');
-    setAnoCursoMilitar('4º Ano');
+    setAnoCursoMilitar(tipo === 'apoio' ? '2°CFO' : 'Efetivo Permanente');
+    setPelotaoMilitar('A');
     setEspecialidadeMilitar('');
     setTelefoneMilitar('');
+    setOrigemApoioMilitar(tipo === 'apoio' ? '1º Pelotão da 3ª Cia' : '');
+    setPeriodoApoioMilitar(tipo === 'apoio' ? 'Setembro/2026' : '');
+    setFuncaoApoioMilitar('');
+    setObservacoesApoioMilitar('');
     setModalMilitarAberta(true);
   };
 
   // Abrir edição militar
   const abrirEditarMilitar = (m: MembroEquipe) => {
     setMilitarEmEdicao(m);
+    setTipoEfetivoMilitar(m.tipoEfetivo || (m.anoCurso?.includes('CFO') ? 'apoio' : 'fixo'));
     setGraduacaoMilitar(m.graduacao);
     setNomeGuerraMilitar(m.nomeGuerra);
     setNomeCompletoMilitar(m.nomeCompleto || '');
     setReMilitar(m.re || '');
-    setAnoCursoMilitar(m.anoCurso || '4º Ano');
+    setAnoCursoMilitar(normalizarAnoCurso(m.anoCurso));
+    setPelotaoMilitar(m.pelotao || 'A');
     setEspecialidadeMilitar(m.especialidade);
     setTelefoneMilitar(m.telefone || '');
+    setOrigemApoioMilitar(m.origemApoio || '');
+    setPeriodoApoioMilitar(m.periodoApoio || '');
+    setFuncaoApoioMilitar(m.funcaoApoio || '');
+    setObservacoesApoioMilitar(m.observacoesApoio || '');
     setModalMilitarAberta(true);
+  };
+
+  // Mover militar diretamente para o Efetivo Fixo da Manutenção
+  const handleMoverParaEfetivoFixo = (militar: MembroEquipe) => {
+    onChangeMembros(
+      membros.map((m) => {
+        if (m.id === militar.id) {
+          return {
+            ...m,
+            tipoEfetivo: 'fixo',
+          };
+        }
+        return m;
+      })
+    );
+
+    // Navega automaticamente para a aba de efetivo fixo para que o militar apareça imediatamente na tela
+    setAbaEfetivoAtiva('fixo');
+    setNotificacaoEfetivo({
+      mensagem: `${militar.nomeGuerra} foi transferido(a) para o Efetivo Fixo da Manutenção com sucesso!`,
+      tipo: 'sucesso',
+      militarNome: militar.nomeGuerra,
+      acaoDesfazer: () => {
+        onChangeMembros(
+          membros.map((m) => (m.id === militar.id ? { ...m, tipoEfetivo: 'apoio' } : m))
+        );
+        setAbaEfetivoAtiva('apoio');
+        setNotificacaoEfetivo(null);
+      },
+    });
+  };
+
+  // Mover militar para Policiais que Prestam Apoio
+  const handleMoverParaApoio = (militar: MembroEquipe) => {
+    onChangeMembros(
+      membros.map((m) => {
+        if (m.id === militar.id) {
+          return {
+            ...m,
+            tipoEfetivo: 'apoio',
+            origemApoio: m.origemApoio || (m.pelotao ? `Pelotão ${m.pelotao} da 3ª Cia` : '3ª Cia Escola'),
+            periodoApoio: m.periodoApoio || 'Escala Diária / Demanda',
+            funcaoApoio: m.funcaoApoio || m.especialidade || 'Reforço de Manutenção',
+          };
+        }
+        return m;
+      })
+    );
+
+    setAbaEfetivoAtiva('apoio');
+    setNotificacaoEfetivo({
+      mensagem: `${militar.nomeGuerra} foi transferido(a) para Policiais que Prestam Apoio com sucesso!`,
+      tipo: 'sucesso',
+      militarNome: militar.nomeGuerra,
+      acaoDesfazer: () => {
+        onChangeMembros(
+          membros.map((m) => (m.id === militar.id ? { ...m, tipoEfetivo: 'fixo' } : m))
+        );
+        setAbaEfetivoAtiva('fixo');
+        setNotificacaoEfetivo(null);
+      },
+    });
   };
 
   // Salvar Militar
@@ -181,8 +334,14 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
                 nomeCompleto: nomeCompletoMilitar.trim(),
                 re: reMilitar.trim(),
                 anoCurso: anoCursoMilitar.trim(),
+                pelotao: pelotaoMilitar,
                 especialidade: especialidadeMilitar.trim(),
                 telefone: telefoneMilitar.trim(),
+                tipoEfetivo: tipoEfetivoMilitar,
+                origemApoio: tipoEfetivoMilitar === 'apoio' ? origemApoioMilitar.trim() : undefined,
+                periodoApoio: tipoEfetivoMilitar === 'apoio' ? periodoApoioMilitar.trim() : undefined,
+                funcaoApoio: tipoEfetivoMilitar === 'apoio' ? funcaoApoioMilitar.trim() : undefined,
+                observacoesApoio: tipoEfetivoMilitar === 'apoio' ? observacoesApoioMilitar.trim() : undefined,
               }
             : m
         )
@@ -195,21 +354,94 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
         nomeCompleto: nomeCompletoMilitar.trim(),
         re: reMilitar.trim(),
         anoCurso: anoCursoMilitar.trim(),
+        pelotao: pelotaoMilitar,
         especialidade: especialidadeMilitar.trim(),
         telefone: telefoneMilitar.trim(),
         ativo: true,
+        tipoEfetivo: tipoEfetivoMilitar,
+        origemApoio: tipoEfetivoMilitar === 'apoio' ? origemApoioMilitar.trim() : undefined,
+        periodoApoio: tipoEfetivoMilitar === 'apoio' ? periodoApoioMilitar.trim() : undefined,
+        funcaoApoio: tipoEfetivoMilitar === 'apoio' ? funcaoApoioMilitar.trim() : undefined,
+        observacoesApoio: tipoEfetivoMilitar === 'apoio' ? observacoesApoioMilitar.trim() : undefined,
       };
       onChangeMembros([...membros, novo]);
     }
+
+    setAbaEfetivoAtiva(tipoEfetivoMilitar);
+    setNotificacaoEfetivo({
+      mensagem: `${nomeFormatado} foi salvo no ${
+        tipoEfetivoMilitar === 'fixo' ? 'Efetivo Fixo da Manutenção' : 'Quadro de Apoio'
+      } com sucesso!`,
+      tipo: 'sucesso',
+    });
 
     setModalMilitarAberta(false);
   };
 
   const handleExcluirMilitar = (id: string) => {
-    if (confirm('Deseja realmente remover este militar do cadastro?')) {
-      onChangeMembros(membros.filter((m) => m.id !== id));
-    }
+    const m = membros.find((item) => item.id === id);
+    setItemParaExcluir({
+      tipo: 'militar',
+      id,
+      nome: m?.nomeGuerra || 'Militar',
+    });
   };
+
+  const handleConfirmarExclusao = () => {
+    if (!itemParaExcluir) return;
+    if (itemParaExcluir.tipo === 'equipe') {
+      onChangeEquipes(equipes.filter((e) => e.id !== itemParaExcluir.id));
+      setNotificacaoEfetivo({
+        mensagem: `Equipe "${itemParaExcluir.nome}" foi excluída com sucesso.`,
+        tipo: 'info',
+      });
+    } else {
+      onChangeMembros(membros.filter((m) => m.id !== itemParaExcluir.id));
+      setNotificacaoEfetivo({
+        mensagem: `${itemParaExcluir.nome} foi removido(a) do efetivo.`,
+        tipo: 'info',
+      });
+    }
+    setItemParaExcluir(null);
+  };
+
+  // Efetivo separado entre Fixo e Apoio
+  const membrosFixos = useMemo(() => {
+    return membros.filter((m) => m.tipoEfetivo !== 'apoio');
+  }, [membros]);
+
+  const membrosApoio = useMemo(() => {
+    return membros.filter((m) => m.tipoEfetivo === 'apoio');
+  }, [membros]);
+
+  // Militares filtrados dentro do modal de equipe
+  const militaresFiltradosParaEquipe = useMemo(() => {
+    return membros.filter((m) => {
+      if (filtroPelotaoModal !== 'todos' && m.pelotao !== filtroPelotaoModal) {
+        return false;
+      }
+      if (buscaMilitarEquipe.trim()) {
+        const termo = buscaMilitarEquipe.toLowerCase();
+        const nomeG = (m.nomeGuerra || '').toLowerCase();
+        const nomeC = (m.nomeCompleto || '').toLowerCase();
+        const esp = (m.especialidade || '').toLowerCase();
+        return nomeG.includes(termo) || nomeC.includes(termo) || esp.includes(termo);
+      }
+      return true;
+    });
+  }, [membros, filtroPelotaoModal, buscaMilitarEquipe]);
+
+  // Militares filtrados na tabela de Efetivo Fixo
+  const militaresFixosFiltrados = useMemo(() => {
+    if (filtroPelotaoTabela === 'todos') return membrosFixos;
+    return membrosFixos.filter((m) => m.pelotao === filtroPelotaoTabela);
+  }, [membrosFixos, filtroPelotaoTabela]);
+
+  // Militares filtrados na tabela de Apoio
+  const militaresApoioFiltrados = useMemo(() => {
+    if (filtroPelotaoTabela === 'todos') return membrosApoio;
+    return membrosApoio.filter((m) => m.pelotao === filtroPelotaoTabela);
+  }, [membrosApoio, filtroPelotaoTabela]);
 
   const getCorBadgeClass = (cor?: string) => {
     switch (cor) {
@@ -238,13 +470,13 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
               Equipes de Manutenção da 3ª Cia
             </h3>
             <p className="text-xs text-slate-500">
-              Grupos de trabalho escalados para execuções das ordens de serviço diárias
+              Grupos de trabalho escalados para execuções das ordens de serviço diárias (policiais do Efetivo de Manutenção da 3ª Cia)
             </p>
           </div>
           <button
             type="button"
             onClick={abrirNovaEquipe}
-            className="px-3.5 py-2 text-xs font-bold bg-[#1a2b4c] hover:bg-[#2c4373] text-white rounded-md shadow-xs transition flex items-center gap-1.5 self-start sm:self-auto"
+            className="px-3.5 py-2 text-xs font-bold bg-[#1a2b4c] hover:bg-[#2c4373] text-white rounded-md shadow-xs transition flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
           >
             <Plus size={15} />
             <span>Cadastrar Nova Equipe</span>
@@ -266,20 +498,24 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
                   >
                     {eq.nome}
                   </span>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1.5">
                     <button
+                      type="button"
                       onClick={() => abrirEditarEquipe(eq)}
                       title="Editar Equipe"
-                      className="text-slate-400 hover:text-blue-600 p-1 rounded transition"
+                      className="px-2 py-1 text-slate-600 hover:text-blue-700 hover:bg-blue-50 border border-slate-200 rounded text-xs font-semibold transition flex items-center gap-1 cursor-pointer"
                     >
-                      <Edit2 size={14} />
+                      <Edit2 size={13} />
+                      <span>Editar</span>
                     </button>
                     <button
+                      type="button"
                       onClick={() => handleExcluirEquipe(eq.id)}
                       title="Excluir Equipe"
-                      className="text-slate-400 hover:text-red-600 p-1 rounded transition"
+                      className="px-2 py-1 text-red-600 hover:text-red-800 hover:bg-red-50 border border-red-200 rounded text-xs font-semibold transition flex items-center gap-1 cursor-pointer"
                     >
-                      <Trash2 size={14} />
+                      <Trash2 size={13} />
+                      <span>Excluir</span>
                     </button>
                   </div>
                 </div>
@@ -288,7 +524,7 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
                   <div className="flex items-center gap-1.5">
                     <Shield size={13} className="text-blue-600 shrink-0" />
                     <span className="font-semibold text-slate-900">Encarregado:</span>
-                    <span className="font-bold text-[#1a2b4c]">{eq.encarregado}</span>
+                    <span className="font-bold text-[#1a2b4c]">{eq.encarregado || 'Não definido'}</span>
                   </div>
 
                   {eq.especialidade && (
@@ -300,19 +536,43 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
                 </div>
 
                 <div className="mt-3 pt-3 border-t border-slate-100">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">
-                    Militares Componentes ({eq.membros?.length || 0}):
-                  </span>
-                  <div className="flex flex-wrap gap-1">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                      Militares Componentes ({eq.membros?.length || 0}):
+                    </span>
+                    {(!eq.membros || eq.membros.length === 0) && (
+                      <button
+                        type="button"
+                        onClick={() => abrirEditarEquipe(eq)}
+                        className="text-[11px] text-blue-600 hover:underline font-semibold cursor-pointer"
+                      >
+                        + Vincular Policiais
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
                     {eq.membros && eq.membros.length > 0 ? (
-                      eq.membros.map((membro, idx) => (
-                        <span
-                          key={idx}
-                          className="bg-slate-100 text-slate-700 border border-slate-200 text-[11px] font-medium px-2 py-0.5 rounded"
-                        >
-                          {membro}
-                        </span>
-                      ))
+                      eq.membros.map((membroNome, idx) => {
+                        const militar = membros.find(
+                          (m) =>
+                            m.nomeGuerra.toLowerCase() === membroNome.toLowerCase() ||
+                            membroNome.toLowerCase().includes(m.nomeGuerra.toLowerCase())
+                        );
+                        const anoPelotao = formatarAnoPelotao(militar?.anoCurso, militar?.pelotao);
+                        return (
+                          <span
+                            key={idx}
+                            className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-800 border border-slate-200 text-[11px] font-medium px-2 py-0.5 rounded shadow-2xs"
+                          >
+                            <span>{membroNome}</span>
+                            {anoPelotao !== '-' && (
+                              <span className="bg-amber-100 text-amber-900 border border-amber-200 text-[9px] font-bold px-1.5 py-0.2 rounded">
+                                {anoPelotao}
+                              </span>
+                            )}
+                          </span>
+                        );
+                      })
                     ) : (
                       <span className="text-slate-400 text-xs italic">
                         Nenhum militar vinculado ainda.
@@ -325,148 +585,459 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
           ))}
 
           {equipes.length === 0 && (
-            <div className="col-span-full py-8 text-center text-slate-400 text-xs">
-              Nenhuma equipe cadastrada no momento. Clique em "Cadastrar Nova Equipe" acima.
+            <div className="col-span-full py-10 text-center bg-slate-50 rounded-lg border border-dashed border-slate-300">
+              <Users size={32} className="mx-auto text-slate-400 mb-2" />
+              <p className="font-bold text-slate-700 text-sm">Nenhuma equipe cadastrada no momento</p>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-4">
+                Crie equipes de manutenção e vincule os policiais militares da 3ª Cia cadastrados no efetivo.
+              </p>
+              <button
+                type="button"
+                onClick={abrirNovaEquipe}
+                className="px-4 py-2 text-xs font-bold bg-[#1a2b4c] hover:bg-[#2c4373] text-white rounded-md transition inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus size={15} />
+                <span>Cadastrar Nova Equipe</span>
+              </button>
             </div>
           )}
         </div>
       </div>
 
-      {/* Seção 2: Efetivo de Manutenção Cadastrado (Militares) */}
+      {/* Seção 2: Efetivo de Manutenção (Militares da 3ª Cia) - Abas: Efetivo Fixo e Policiais em Apoio */}
       <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-4 sm:p-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200">
           <div>
             <h3 className="text-base font-bold text-[#1a2b4c] flex items-center gap-2">
               <Shield size={18} className="text-[#c9a84e]" />
-              Efetivo de Manutenção (Militares da 3ª Cia)
+              <span>Efetivo de Manutenção (Militares da 3ª Cia)</span>
             </h3>
-            <p className="text-xs text-slate-500">
-              Oficiais, praças e cadetes designados para as atividades de reparo e conservação
+            <p className="text-xs text-slate-500 mt-0.5">
+              Gestão separada do efetivo fixo da manutenção e dos policiais militares que prestam apoio à Subunidade
             </p>
           </div>
           <button
             type="button"
-            onClick={abrirNovoMilitar}
-            className="px-3.5 py-2 text-xs font-bold bg-[#c9a84e] hover:bg-[#b5953e] text-[#1a2b4c] rounded-md shadow-xs transition flex items-center gap-1.5 self-start sm:self-auto"
+            onClick={() => abrirNovoMilitar(abaEfetivoAtiva)}
+            className="px-3.5 py-2 text-xs font-bold bg-[#c9a84e] hover:bg-[#b5953e] text-[#1a2b4c] rounded-md shadow-xs transition flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
           >
-            <UserPlus size={15} />
-            <span>Cadastrar Militar</span>
+            {abaEfetivoAtiva === 'fixo' ? (
+              <>
+                <UserPlus size={15} />
+                <span>+ Cadastrar Militar Fixo</span>
+              </>
+            ) : (
+              <>
+                <UserCheck size={15} />
+                <span>+ Cadastrar Policial em Apoio</span>
+              </>
+            )}
           </button>
         </div>
 
-        <div className="overflow-x-auto mt-4">
-          <table className="w-full text-left text-xs border border-slate-200">
-            <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
-              <tr>
-                <th className="px-3 py-2.5">Graduação & Nome de Guerra</th>
-                <th className="px-3 py-2.5">Ano do Curso</th>
-                <th className="px-3 py-2.5">RE</th>
-                <th className="px-3 py-2.5">Especialidade / Foco</th>
-                <th className="px-3 py-2.5">Telefone / Contato (WhatsApp)</th>
-                <th className="px-3 py-2.5 text-center">Status</th>
-                <th className="px-3 py-2.5 text-center">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
-              {membros.map((m) => {
-                const linkWhats = m.telefone ? obterLinkWhatsapp(m.telefone) : null;
-                return (
-                  <tr key={m.id} className="hover:bg-slate-50/70 transition">
-                    <td className="px-3 py-2 font-bold text-slate-900">
-                      <div className="flex items-center gap-2">
-                        <span className="bg-[#1a2b4c] text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
-                          {m.graduacao}
-                        </span>
-                        <span>{m.nomeGuerra}</span>
-                      </div>
-                      {m.nomeCompleto && (
-                        <div className="text-[11px] text-slate-500 font-normal pl-8">
-                          {m.nomeCompleto}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-3 py-2">
-                      {m.anoCurso ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                          <GraduationCap size={11} className="text-amber-600" />
-                          {m.anoCurso}
-                        </span>
-                      ) : (
-                        <span className="text-slate-400 text-[11px]">-</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 font-mono text-slate-600">
-                      {m.re || '-'}
-                    </td>
-                    <td className="px-3 py-2 text-slate-700">
-                      {m.especialidade || 'Manutenção Geral'}
-                    </td>
-                    <td className="px-3 py-2 text-slate-600">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-[11px]">{m.telefone || '-'}</span>
-                        {linkWhats && (
-                          <a
-                            href={linkWhats}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] shadow-2xs transition"
-                            title={`Conversar com ${m.nomeGuerra} no WhatsApp`}
-                          >
-                            <MessageCircle size={11} />
-                            <span>WhatsApp</span>
-                          </a>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2 text-center">
-                      <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                        Ativo
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <button
-                          onClick={() => abrirEditarMilitar(m)}
-                          className="p-1 text-slate-400 hover:text-blue-600 rounded transition"
-                          title="Editar Militar"
-                        >
-                          <Edit2 size={14} />
-                        </button>
-                        <button
-                          onClick={() => handleExcluirMilitar(m.id)}
-                          className="p-1 text-slate-400 hover:text-red-600 rounded transition"
-                          title="Excluir Militar"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        {/* Banner de Notificação com Ação / Desfazer */}
+        {notificacaoEfetivo && (
+          <div className="mt-3 p-3 bg-emerald-50 border border-emerald-300 text-emerald-950 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs font-semibold shadow-2xs">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+              <span>{notificacaoEfetivo.mensagem}</span>
+            </div>
+            <div className="flex items-center gap-2 self-end sm:self-auto">
+              {notificacaoEfetivo.acaoDesfazer && (
+                <button
+                  type="button"
+                  onClick={notificacaoEfetivo.acaoDesfazer}
+                  className="px-2.5 py-1 rounded bg-white hover:bg-emerald-100 text-emerald-900 border border-emerald-300 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition shadow-2xs"
+                  title="Desfazer transferência"
+                >
+                  <Undo2 size={12} />
+                  <span>Desfazer</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setNotificacaoEfetivo(null)}
+                className="text-emerald-700 hover:text-emerald-900 font-bold px-1 cursor-pointer"
+                title="Fechar notificação"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Abas Superiores: 1. Efetivo Fixo da Manutenção | 2. Policiais que Prestam Apoio */}
+        <div className="flex items-center gap-2 pt-3 border-b border-slate-200">
+          <button
+            type="button"
+            onClick={() => setAbaEfetivoAtiva('fixo')}
+            className={`flex items-center gap-2 pb-2.5 px-3 text-xs font-bold border-b-2 transition cursor-pointer ${
+              abaEfetivoAtiva === 'fixo'
+                ? 'border-[#1a2b4c] text-[#1a2b4c]'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Shield size={15} className={abaEfetivoAtiva === 'fixo' ? 'text-[#c9a84e]' : ''} />
+            <span>1. Efetivo Fixo da Manutenção</span>
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                abaEfetivoAtiva === 'fixo'
+                  ? 'bg-[#1a2b4c] text-white'
+                  : 'bg-slate-100 text-slate-600'
+              }`}
+            >
+              {membrosFixos.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setAbaEfetivoAtiva('apoio')}
+            className={`flex items-center gap-2 pb-2.5 px-3 text-xs font-bold border-b-2 transition cursor-pointer ${
+              abaEfetivoAtiva === 'apoio'
+                ? 'border-[#1a2b4c] text-[#1a2b4c]'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Handshake size={15} className={abaEfetivoAtiva === 'apoio' ? 'text-[#c9a84e]' : ''} />
+            <span>2. Policiais que Prestam Apoio</span>
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                abaEfetivoAtiva === 'apoio'
+                  ? 'bg-amber-600 text-white'
+                  : 'bg-slate-100 text-slate-600'
+              }`}
+            >
+              {membrosApoio.length}
+            </span>
+          </button>
         </div>
+
+        {/* Filtro por Pelotão na Tabela */}
+        <div className="flex items-center gap-1.5 mt-3 overflow-x-auto pb-1 text-xs">
+          <span className="font-bold text-slate-600 flex items-center gap-1 shrink-0 mr-1">
+            <Filter size={13} className="text-slate-500" />
+            Filtrar Pelotão:
+          </span>
+          <button
+            type="button"
+            onClick={() => setFiltroPelotaoTabela('todos')}
+            className={`px-2.5 py-1 rounded text-xs font-bold transition shrink-0 cursor-pointer ${
+              filtroPelotaoTabela === 'todos'
+                ? 'bg-[#1a2b4c] text-white'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            Todos ({abaEfetivoAtiva === 'fixo' ? membrosFixos.length : membrosApoio.length})
+          </button>
+          {PELOTOES.map((pel) => {
+            const listaBase = abaEfetivoAtiva === 'fixo' ? membrosFixos : membrosApoio;
+            const count = listaBase.filter((m) => m.pelotao === pel).length;
+            return (
+              <button
+                key={pel}
+                type="button"
+                onClick={() => setFiltroPelotaoTabela(pel)}
+                className={`px-2.5 py-1 rounded text-xs font-bold transition shrink-0 cursor-pointer ${
+                  filtroPelotaoTabela === pel
+                    ? 'bg-[#1a2b4c] text-white'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                Pelotão {pel} {count > 0 ? `(${count})` : ''}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Conteúdo Aba 1: Efetivo Fixo da Manutenção */}
+        {abaEfetivoAtiva === 'fixo' && (
+          <div className="overflow-x-auto mt-3">
+            <table className="w-full text-left text-xs border border-slate-200">
+              <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
+                <tr>
+                  <th className="px-3 py-2.5">Graduação & Nome de Guerra</th>
+                  <th className="px-3 py-2.5 text-center">Ano/Pelotão</th>
+                  <th className="px-3 py-2.5">RE</th>
+                  <th className="px-3 py-2.5">Especialidade / Foco Fixo</th>
+                  <th className="px-3 py-2.5">Telefone / Contato (WhatsApp)</th>
+                  <th className="px-3 py-2.5 text-center">Status</th>
+                  <th className="px-3 py-2.5 text-center">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {militaresFixosFiltrados.map((m) => {
+                  const linkWhats = m.telefone ? obterLinkWhatsapp(m.telefone) : null;
+                  const anoPelotao = formatarAnoPelotao(m.anoCurso, m.pelotao);
+                  return (
+                    <tr key={m.id} className="hover:bg-slate-50/70 transition">
+                      <td className="px-3 py-2 font-bold text-slate-900">
+                        <div className="flex items-center gap-2">
+                          <span className="bg-[#1a2b4c] text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
+                            {m.graduacao}
+                          </span>
+                          <span>{m.nomeGuerra}</span>
+                          <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-blue-50 text-blue-800 border border-blue-200">
+                            Fixo
+                          </span>
+                        </div>
+                        {m.nomeCompleto && (
+                          <div className="text-[11px] text-slate-500 font-normal pl-8">
+                            {m.nomeCompleto}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-center whitespace-nowrap">
+                        {anoPelotao !== '-' ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold bg-amber-50 text-amber-900 border border-amber-200 shadow-2xs">
+                            <GraduationCap size={12} className="text-amber-600 shrink-0" />
+                            <span>{anoPelotao}</span>
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 text-[11px]">-</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 font-mono text-slate-600">
+                        {m.re || '-'}
+                      </td>
+                      <td className="px-3 py-2 text-slate-700">
+                        {m.especialidade || 'Manutenção Predial Geral'}
+                      </td>
+                      <td className="px-3 py-2 text-slate-600">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-[11px]">{m.telefone || '-'}</span>
+                          {linkWhats && (
+                            <a
+                              href={linkWhats}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] shadow-2xs transition"
+                              title={`Conversar com ${m.nomeGuerra} no WhatsApp`}
+                            >
+                              <MessageCircle size={11} />
+                              <span>WhatsApp</span>
+                            </a>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                          Ativo Fixo
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => handleMoverParaApoio(m)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300 font-semibold text-[11px] shadow-2xs transition cursor-pointer"
+                            title={`Mover ${m.nomeGuerra} para Policiais que Prestam Apoio`}
+                          >
+                            <Handshake size={12} className="text-amber-700" />
+                            <span>Mover p/ Apoio</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => abrirEditarMilitar(m)}
+                            className="p-1 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded transition cursor-pointer"
+                            title="Editar Militar"
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleExcluirMilitar(m.id)}
+                            className="p-1 text-slate-400 hover:text-red-600 hover:bg-slate-100 rounded transition cursor-pointer"
+                            title="Excluir Militar"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            {militaresFixosFiltrados.length === 0 && (
+              <div className="py-8 text-center text-xs text-slate-400 bg-slate-50">
+                Nenhum militar do efetivo fixo cadastrado para o filtro selecionado.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Conteúdo Aba 2: Policiais que Prestam Apoio */}
+        {abaEfetivoAtiva === 'apoio' && (
+          <div className="overflow-x-auto mt-3">
+            <div className="mb-2 p-2 bg-amber-50/80 border border-amber-200 rounded text-xs text-amber-900 flex items-center justify-between">
+              <span className="flex items-center gap-1.5 font-medium">
+                <Handshake size={14} className="text-amber-700 shrink-0" />
+                <span>Policiais Militares que ficam e prestam apoio à manutenção predial (3ª Cia).</span>
+              </span>
+              <span className="font-bold text-[11px] text-amber-800">
+                {membrosApoio.length} policial(is) em apoio
+              </span>
+            </div>
+
+            <table className="w-full text-left text-xs border border-slate-200">
+              <thead className="bg-amber-50/60 text-slate-700 font-bold border-b border-slate-200">
+                <tr>
+                  <th className="px-3 py-2.5">Graduação & Nome de Guerra</th>
+                  <th className="px-3 py-2.5 text-center">Origem / Pelotão</th>
+                  <th className="px-3 py-2.5">Período / Escala de Apoio</th>
+                  <th className="px-3 py-2.5">Função / Reforço Prestado</th>
+                  <th className="px-3 py-2.5">Telefone / Contato</th>
+                  <th className="px-3 py-2.5">Observações</th>
+                  <th className="px-3 py-2.5 text-center">Status</th>
+                  <th className="px-3 py-2.5 text-center">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {militaresApoioFiltrados.map((m) => {
+                  const linkWhats = m.telefone ? obterLinkWhatsapp(m.telefone) : null;
+                  const anoPelotao = formatarAnoPelotao(m.anoCurso, m.pelotao);
+                  return (
+                    <tr key={m.id} className="hover:bg-amber-50/30 transition">
+                      <td className="px-3 py-2 font-bold text-slate-900">
+                        <div className="flex items-center gap-2">
+                          <span className="bg-[#1a2b4c] text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
+                            {m.graduacao}
+                          </span>
+                          <span>{m.nomeGuerra}</span>
+                          <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-300">
+                            Apoio
+                          </span>
+                        </div>
+                        {m.nomeCompleto && (
+                          <div className="text-[11px] text-slate-500 font-normal pl-8">
+                            {m.nomeCompleto}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-center whitespace-nowrap">
+                        <div className="inline-flex flex-col items-center">
+                          {anoPelotao !== '-' && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-200 mb-0.5">
+                              <GraduationCap size={11} className="text-amber-600" />
+                              <span>{anoPelotao}</span>
+                            </span>
+                          )}
+                          <span className="text-[10px] text-slate-600 font-medium">
+                            {m.origemApoio || `Pelotão ${m.pelotao || '-'}`}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-slate-700">
+                        <span className="font-semibold text-slate-800">
+                          {m.periodoApoio || 'Escala Diária / Demanda'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-slate-700 font-medium">
+                        {m.funcaoApoio || m.especialidade || 'Reforço Geral'}
+                      </td>
+                      <td className="px-3 py-2 text-slate-600">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-[11px]">{m.telefone || '-'}</span>
+                          {linkWhats && (
+                            <a
+                              href={linkWhats}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] shadow-2xs transition"
+                              title={`Conversar com ${m.nomeGuerra} no WhatsApp`}
+                            >
+                              <MessageCircle size={11} />
+                              <span>WhatsApp</span>
+                            </a>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-slate-500 text-[11px]">
+                        {m.observacoesApoio || '-'}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        <span className="bg-amber-100 text-amber-900 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-200">
+                          Em Apoio
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => handleMoverParaEfetivoFixo(m)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#1a2b4c] hover:bg-[#2c4373] text-white font-bold text-xs shadow-xs transition cursor-pointer"
+                            title={`Mover ${m.nomeGuerra} para o Efetivo Fixo da Manutenção`}
+                          >
+                            <Shield size={13} className="text-[#c9a84e]" />
+                            <span>Mover para Efetivo Fixo</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => abrirEditarMilitar(m)}
+                            className="p-1 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded transition cursor-pointer"
+                            title="Editar Dados de Apoio"
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleExcluirMilitar(m.id)}
+                            className="p-1 text-slate-400 hover:text-red-600 hover:bg-slate-100 rounded transition cursor-pointer"
+                            title="Excluir Militar em Apoio"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            {militaresApoioFiltrados.length === 0 && (
+              <div className="py-8 text-center text-xs text-slate-400 bg-slate-50">
+                <p>Nenhum policial que presta apoio cadastrado para o filtro selecionado.</p>
+                <button
+                  type="button"
+                  onClick={() => abrirNovoMilitar('apoio')}
+                  className="mt-2 px-3 py-1.5 text-xs font-bold text-amber-800 bg-amber-100 hover:bg-amber-200 rounded transition inline-flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus size={13} />
+                  <span>Cadastrar Policial em Apoio</span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Modal de Equipe */}
+      {/* Modal de Equipe (Cadastrar Nova ou Editar) */}
       {modalEquipeAberta && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-2xl border border-slate-200">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
-              <h3 className="text-base font-bold text-[#1a2b4c] flex items-center gap-2">
-                <Users size={18} className="text-[#c9a84e]" />
-                {equipeEmEdicao ? 'Editar Equipe de Manutenção' : 'Cadastrar Nova Equipe'}
-              </h3>
+          <div className="bg-white rounded-xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-3">
+              <div>
+                <h3 className="text-base font-bold text-[#1a2b4c] flex items-center gap-2">
+                  <Users size={18} className="text-[#c9a84e]" />
+                  {equipeEmEdicao ? 'Editar Equipe de Manutenção' : 'Cadastrar Nova Equipe de Manutenção'}
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Os policiais componentes são selecionados a partir do Efetivo de Manutenção (Militares da 3ª Cia).
+                </p>
+              </div>
               <button
+                type="button"
                 onClick={() => setModalEquipeAberta(false)}
-                className="text-slate-400 hover:text-slate-700 text-sm font-bold"
+                className="text-slate-400 hover:text-slate-700 text-sm font-bold p-1 cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleSalvarEquipe} className="space-y-3.5 text-xs">
+            <form onSubmit={handleSalvarEquipe} className="space-y-3.5 text-xs overflow-y-auto pr-1 flex-1">
               <div>
                 <label className="block font-bold text-slate-700 mb-1">
                   Nome da Equipe: <span className="text-red-500">*</span>
@@ -476,7 +1047,7 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
                   required
                   value={nomeEquipe}
                   onChange={(e) => setNomeEquipe(e.target.value)}
-                  placeholder="Ex: Equipe Delta - Serralheria & Solda"
+                  placeholder="Ex: Equipe Alfa - Elétrica & Rede"
                   className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-[#1a2b4c] font-semibold text-slate-900"
                 />
               </div>
@@ -484,16 +1055,17 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
-                    Encarregado / Líder:
+                    Encarregado / Líder da Equipe:
                   </label>
                   <select
                     value={encarregadoEquipe}
                     onChange={(e) => setEncarregadoEquipe(e.target.value)}
                     className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md focus:ring-1 focus:ring-[#1a2b4c] bg-white font-medium"
                   >
+                    <option value="">-- Selecione o Encarregado (Militar da 3ª Cia) --</option>
                     {membros.map((m) => (
                       <option key={m.id} value={m.nomeGuerra}>
-                        {m.nomeGuerra} ({m.especialidade})
+                        {m.nomeGuerra} {m.pelotao ? `(Pelotão ${m.pelotao})` : ''} - {m.especialidade}
                       </option>
                     ))}
                   </select>
@@ -501,7 +1073,7 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
 
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
-                    Cor / Identificador:
+                    Cor / Identificador Visual:
                   </label>
                   <select
                     value={corBadgeEquipe}
@@ -525,34 +1097,148 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
                   type="text"
                   value={especialidadeEquipe}
                   onChange={(e) => setEspecialidadeEquipe(e.target.value)}
-                  placeholder="Ex: Reparos elétricos, troca de lâmpadas, tomadas e disjuntores..."
+                  placeholder="Ex: Instalações elétricas, canaletas, tomadas e iluminação..."
                   className="w-full px-3 py-1.5 border border-slate-300 rounded-md focus:ring-1 focus:ring-[#1a2b4c]"
                 />
               </div>
 
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">
-                  Selecione os Militares Integrantes da Equipe:
-                </label>
-                <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-md p-2 space-y-1 bg-slate-50">
-                  {membros.map((m) => {
-                    const estaNaEquipe = membrosEquipeSelecionados.includes(m.nomeGuerra);
-                    return (
-                      <label
-                        key={m.id}
-                        className="flex items-center gap-2 p-1.5 rounded hover:bg-white cursor-pointer transition text-xs"
+              {/* Seleção dos Policiais Componentes (Militares da 3ª Cia) */}
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-2">
+                  <label className="font-bold text-slate-800 flex items-center gap-1.5">
+                    <Shield size={14} className="text-[#1a2b4c]" />
+                    <span>Policiais Componentes (Efetivo da 3ª Cia):</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-900 border border-blue-200">
+                      {membrosEquipeSelecionados.length} selecionado(s)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nomesVisiveis = militaresFiltradosParaEquipe.map((m) => m.nomeGuerra);
+                        const conjunto = Array.from(new Set([...membrosEquipeSelecionados, ...nomesVisiveis]));
+                        setMembrosEquipeSelecionados(conjunto);
+                      }}
+                      className="text-[11px] text-blue-600 hover:underline font-bold cursor-pointer"
+                    >
+                      Marcar todos
+                    </button>
+                    <span className="text-slate-300">|</span>
+                    <button
+                      type="button"
+                      onClick={() => setMembrosEquipeSelecionados([])}
+                      className="text-[11px] text-slate-500 hover:underline font-bold cursor-pointer"
+                    >
+                      Limpar
+                    </button>
+                  </div>
+                </div>
+
+                {/* Filtros de Pelotão e Busca dentro do modal */}
+                <div className="flex flex-col sm:flex-row gap-2 mb-2">
+                  <div className="relative flex-1">
+                    <Search size={13} className="absolute left-2.5 top-2.5 text-slate-400" />
+                    <input
+                      type="text"
+                      value={buscaMilitarEquipe}
+                      onChange={(e) => setBuscaMilitarEquipe(e.target.value)}
+                      placeholder="Buscar policial por nome ou especialidade..."
+                      className="w-full pl-7 pr-3 py-1.5 bg-white border border-slate-300 rounded text-xs focus:ring-1 focus:ring-[#1a2b4c]"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-1 overflow-x-auto pb-1">
+                    <button
+                      type="button"
+                      onClick={() => setFiltroPelotaoModal('todos')}
+                      className={`px-2 py-1 rounded text-[10px] font-bold shrink-0 cursor-pointer ${
+                        filtroPelotaoModal === 'todos'
+                          ? 'bg-[#1a2b4c] text-white'
+                          : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      Todos
+                    </button>
+                    {PELOTOES.map((pel) => (
+                      <button
+                        key={pel}
+                        type="button"
+                        onClick={() => setFiltroPelotaoModal(pel)}
+                        className={`px-2 py-1 rounded text-[10px] font-bold shrink-0 cursor-pointer ${
+                          filtroPelotaoModal === pel
+                            ? 'bg-[#1a2b4c] text-white'
+                            : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                        }`}
                       >
-                        <input
-                          type="checkbox"
-                          checked={estaNaEquipe}
-                          onChange={() => toggleMembroNaEquipe(m.nomeGuerra)}
-                          className="rounded text-blue-600 focus:ring-blue-500"
-                        />
-                        <span className="font-bold text-slate-800">{m.nomeGuerra}</span>
-                        <span className="text-slate-500 text-[11px]">({m.especialidade})</span>
-                      </label>
-                    );
-                  })}
+                        Pel. {pel}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Lista de Militares para Seleção */}
+                <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-md p-1.5 space-y-1 bg-white">
+                  {militaresFiltradosParaEquipe.length > 0 ? (
+                    militaresFiltradosParaEquipe.map((m) => {
+                      const estaNaEquipe = membrosEquipeSelecionados.includes(m.nomeGuerra);
+                      return (
+                        <label
+                          key={m.id}
+                          className={`flex items-center justify-between p-1.5 rounded border cursor-pointer transition text-xs ${
+                            estaNaEquipe
+                              ? 'bg-blue-50/80 border-blue-300 text-blue-900'
+                              : 'border-slate-200 hover:bg-slate-50 text-slate-800'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={estaNaEquipe}
+                              onChange={() => toggleMembroNaEquipe(m.nomeGuerra)}
+                              className="rounded text-blue-600 focus:ring-blue-500 h-4 w-4 cursor-pointer"
+                            />
+                            <div>
+                              <div className="font-bold flex items-center gap-1.5">
+                                <span className="bg-[#1a2b4c] text-white text-[9px] font-bold px-1.5 py-0.2 rounded">
+                                  {m.graduacao}
+                                </span>
+                                <span>{m.nomeGuerra}</span>
+                                <span
+                                  className={`text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded border ${
+                                    m.tipoEfetivo === 'apoio'
+                                      ? 'bg-amber-50 text-amber-900 border-amber-300'
+                                      : 'bg-blue-50 text-blue-900 border-blue-200'
+                                  }`}
+                                >
+                                  {m.tipoEfetivo === 'apoio' ? 'Apoio' : 'Fixo'}
+                                </span>
+                                {(m.anoCurso || m.pelotao) && (
+                                  <span className="bg-amber-100 text-amber-900 border border-amber-200 text-[10px] font-bold px-1.5 py-0.2 rounded">
+                                    {formatarAnoPelotao(m.anoCurso, m.pelotao)}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[11px] text-slate-500">
+                                {m.tipoEfetivo === 'apoio' && m.funcaoApoio
+                                  ? `Apoio: ${m.funcaoApoio} • ${m.origemApoio || '3ª Cia'}`
+                                  : m.especialidade}
+                              </div>
+                            </div>
+                          </div>
+                          {estaNaEquipe && (
+                            <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded">
+                              Componente
+                            </span>
+                          )}
+                        </label>
+                      );
+                    })
+                  ) : (
+                    <div className="p-3 text-center text-xs text-slate-400">
+                      Nenhum militar do efetivo encontrado com os filtros atuais.
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -560,13 +1246,13 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
                 <button
                   type="button"
                   onClick={() => setModalEquipeAberta(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-md"
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-md cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-xs font-bold bg-[#1a2b4c] hover:bg-[#2c4373] text-white rounded-md shadow-sm"
+                  className="px-5 py-2 text-xs font-bold bg-[#1a2b4c] hover:bg-[#2c4373] text-white rounded-md shadow-sm cursor-pointer"
                 >
                   Salvar Equipe
                 </button>
@@ -576,24 +1262,143 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
         </div>
       )}
 
-      {/* Modal de Militar */}
+      {/* Modal de Militar (Cadastrar Novo ou Editar - Fixo ou Apoio) */}
       {modalMilitarAberta && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
-              <h3 className="text-base font-bold text-[#1a2b4c] flex items-center gap-2">
-                <Shield size={18} className="text-[#c9a84e]" />
-                {militarEmEdicao ? 'Editar Militar' : 'Cadastrar Novo Militar'}
-              </h3>
+          <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-3">
+              <div>
+                <h3 className="text-base font-bold text-[#1a2b4c] flex items-center gap-2">
+                  {tipoEfetivoMilitar === 'apoio' ? (
+                    <Handshake size={18} className="text-[#c9a84e]" />
+                  ) : (
+                    <Shield size={18} className="text-[#c9a84e]" />
+                  )}
+                  <span>
+                    {militarEmEdicao
+                      ? `Editar Militar (${tipoEfetivoMilitar === 'apoio' ? 'Apoio' : 'Efetivo Fixo'})`
+                      : `Cadastrar Militar (${tipoEfetivoMilitar === 'apoio' ? 'Apoio' : 'Efetivo Fixo'})`}
+                  </span>
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  {tipoEfetivoMilitar === 'apoio'
+                    ? 'Cadastro de policial militar que permanece e presta apoio aos serviços de manutenção'
+                    : 'Cadastro do militar com designação orgânica no efetivo fixo da manutenção (3ª Cia)'}
+                </p>
+              </div>
               <button
+                type="button"
                 onClick={() => setModalMilitarAberta(false)}
-                className="text-slate-400 hover:text-slate-700 text-sm font-bold"
+                className="text-slate-400 hover:text-slate-700 text-sm font-bold cursor-pointer p-1"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleSalvarMilitar} className="space-y-3 text-xs">
+            <form onSubmit={handleSalvarMilitar} className="space-y-3 text-xs overflow-y-auto pr-1 flex-1">
+              {/* Seleção do Tipo de Efetivo: Fixo ou Apoio */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1.5">
+                  Tipo de Cadastro no Efetivo da 3ª Cia: <span className="text-red-500">*</span>
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTipoEfetivoMilitar('fixo')}
+                    className={`py-2 px-3 rounded-lg border text-left flex items-center gap-2 transition cursor-pointer ${
+                      tipoEfetivoMilitar === 'fixo'
+                        ? 'border-[#1a2b4c] bg-[#1a2b4c]/5 text-[#1a2b4c] font-bold ring-1 ring-[#1a2b4c]'
+                        : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <Shield size={16} className={tipoEfetivoMilitar === 'fixo' ? 'text-[#c9a84e]' : 'text-slate-400'} />
+                    <div>
+                      <div className="text-xs">Efetivo Fixo</div>
+                      <div className="text-[10px] text-slate-500 font-normal">Manutenção Permanente</div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setTipoEfetivoMilitar('apoio')}
+                    className={`py-2 px-3 rounded-lg border text-left flex items-center gap-2 transition cursor-pointer ${
+                      tipoEfetivoMilitar === 'apoio'
+                        ? 'border-amber-600 bg-amber-50 text-amber-950 font-bold ring-1 ring-amber-500'
+                        : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <Handshake size={16} className={tipoEfetivoMilitar === 'apoio' ? 'text-amber-600' : 'text-slate-400'} />
+                    <div>
+                      <div className="text-xs">Prestando Apoio</div>
+                      <div className="text-[10px] text-slate-500 font-normal">Reforço / Escala de Apoio</div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Informações Específicas de Apoio se for tipo 'apoio' */}
+              {tipoEfetivoMilitar === 'apoio' && (
+                <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-lg space-y-2.5">
+                  <div className="font-bold text-amber-900 flex items-center gap-1.5 text-xs">
+                    <Handshake size={14} className="text-amber-700" />
+                    <span>Dados do Apoio Prestado à Manutenção:</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block font-semibold text-amber-950 mb-1">
+                        Origem do Policial / Pelotão:
+                      </label>
+                      <input
+                        type="text"
+                        value={origemApoioMilitar}
+                        onChange={(e) => setOrigemApoioMilitar(e.target.value)}
+                        placeholder="Ex: 2º Pelotão da 3ª Cia"
+                        className="w-full px-2.5 py-1.5 border border-amber-300 rounded bg-white focus:ring-1 focus:ring-amber-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-amber-950 mb-1">
+                        Período / Horário de Apoio:
+                      </label>
+                      <input
+                        type="text"
+                        value={periodoApoioMilitar}
+                        onChange={(e) => setPeriodoApoioMilitar(e.target.value)}
+                        placeholder="Ex: Setembro/2026 / 9º-10º tempos"
+                        className="w-full px-2.5 py-1.5 border border-amber-300 rounded bg-white focus:ring-1 focus:ring-amber-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-amber-950 mb-1">
+                      Função / Atividade Desempenhada no Apoio:
+                    </label>
+                    <input
+                      type="text"
+                      value={funcaoApoioMilitar}
+                      onChange={(e) => setFuncaoApoioMilitar(e.target.value)}
+                      placeholder="Ex: Pintura, Lixamento, Apoio Elétrico, Transporte de Materiais"
+                      className="w-full px-2.5 py-1.5 border border-amber-300 rounded bg-white focus:ring-1 focus:ring-amber-500 font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-amber-950 mb-1">
+                      Observações Adicionais do Apoio:
+                    </label>
+                    <input
+                      type="text"
+                      value={observacoesApoioMilitar}
+                      onChange={(e) => setObservacoesApoioMilitar(e.target.value)}
+                      placeholder="Ex: Policial liberado da instrução após o almoço para apoiar reparos"
+                      className="w-full px-2.5 py-1.5 border border-amber-300 rounded bg-white focus:ring-1 focus:ring-amber-500 text-slate-700"
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Posto / Graduação:</label>
@@ -655,19 +1460,60 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
                 <div>
                   <label className="block font-bold text-slate-700 mb-1 flex items-center gap-1">
                     <GraduationCap size={13} className="text-amber-600" />
-                    Ano no Curso de Formação:
+                    Ano no Curso / Quadro:
                   </label>
                   <select
                     value={anoCursoMilitar}
                     onChange={(e) => setAnoCursoMilitar(e.target.value)}
-                    className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md focus:ring-1 focus:ring-[#1a2b4c] bg-white font-medium"
+                    className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md focus:ring-1 focus:ring-[#1a2b4c] bg-white font-semibold text-slate-900"
                   >
-                    <option value="1º Ano">1º Ano (CFO / CFSd)</option>
-                    <option value="2º Ano">2º Ano (CFO)</option>
-                    <option value="3º Ano">3º Ano (CFO)</option>
-                    <option value="4º Ano">4º Ano (CFO / Formando)</option>
-                    <option value="Efetivo Permanente">Efetivo Permanente</option>
+                    {OPCOES_ANO_CURSO.map((opcao) => (
+                      <option key={opcao} value={opcao}>
+                        {opcao}
+                      </option>
+                    ))}
                   </select>
+                </div>
+              </div>
+
+              {/* Campo Pelotão (A, B, C, D, E, F, G, H) */}
+              <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-slate-800 flex items-center gap-1.5">
+                    <Shield size={14} className="text-[#1a2b4c]" />
+                    <span>Pelotão do Militar (3ª Cia): <span className="text-red-500">*</span></span>
+                  </label>
+                  <span className="font-bold text-xs text-[#1a2b4c] bg-white px-2 py-0.5 rounded border border-slate-300 shadow-2xs">
+                    Pelotão {pelotaoMilitar}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5">
+                  {PELOTOES.map((pel) => (
+                    <button
+                      key={pel}
+                      type="button"
+                      onClick={() => setPelotaoMilitar(pel)}
+                      className={`py-1.5 text-center font-bold text-xs rounded border transition cursor-pointer ${
+                        pelotaoMilitar === pel
+                          ? 'bg-[#1a2b4c] text-white border-[#1a2b4c] shadow-xs'
+                          : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                      }`}
+                    >
+                      {pel}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Exibição conjunta Ano/Pelotão */}
+                <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
+                  <span className="text-[11px] text-slate-600 font-medium">
+                    Visualização conjunta (Ano/Pelotão):
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 text-xs font-bold bg-amber-100 text-amber-950 border border-amber-300 px-2.5 py-0.5 rounded shadow-2xs">
+                    <GraduationCap size={12} className="text-amber-700" />
+                    <span>{formatarAnoPelotao(anoCursoMilitar, pelotaoMilitar)}</span>
+                  </span>
                 </div>
               </div>
 
@@ -675,7 +1521,7 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
                 <div>
                   <label className="block font-bold text-slate-700 mb-1 flex items-center gap-1">
                     <Phone size={13} className="text-slate-500" />
-                    Telefone (com DDD p/ WhatsApp):
+                    Telefone (WhatsApp):
                   </label>
                   <input
                     type="text"
@@ -686,12 +1532,14 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Especialidade Principal:</label>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    {tipoEfetivoMilitar === 'apoio' ? 'Função de Apoio / Foco:' : 'Especialidade Principal:'}
+                  </label>
                   <input
                     type="text"
                     value={especialidadeMilitar}
                     onChange={(e) => setEspecialidadeMilitar(e.target.value)}
-                    placeholder="Ex: Eletricista, Encanador, Pintura..."
+                    placeholder={tipoEfetivoMilitar === 'apoio' ? 'Ex: Pintura, Lixamento...' : 'Ex: Eletricista, Encanador...'}
                     className="w-full px-3 py-1.5 border border-slate-300 rounded-md focus:ring-1 focus:ring-[#1a2b4c]"
                   />
                 </div>
@@ -701,18 +1549,57 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
                 <button
                   type="button"
                   onClick={() => setModalMilitarAberta(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-md"
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-md cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-xs font-bold bg-[#1a2b4c] hover:bg-[#2c4373] text-white rounded-md shadow-sm"
+                  className="px-5 py-2 text-xs font-bold bg-[#1a2b4c] hover:bg-[#2c4373] text-white rounded-md shadow-sm cursor-pointer"
                 >
                   Salvar Militar
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Modal de Confirmação de Exclusão (In-App, 100% compatível com iframe) */}
+      {itemParaExcluir && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-white rounded-xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95">
+            <div className="flex items-center gap-3 mb-3 text-red-600">
+              <div className="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                <AlertTriangle size={20} />
+              </div>
+              <div>
+                <h4 className="font-bold text-slate-900 text-sm">Confirmar Exclusão</h4>
+                <p className="text-[11px] text-slate-500">Esta ação não poderá ser desfeita.</p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-700 mb-4">
+              Deseja realmente remover{' '}
+              <strong className="text-slate-900 font-bold">{itemParaExcluir.nome}</strong>{' '}
+              {itemParaExcluir.tipo === 'equipe'
+                ? 'das equipes de manutenção?'
+                : 'do cadastro de efetivo da 3ª Cia?'}
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setItemParaExcluir(null)}
+                className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmarExclusao}
+                className="px-4 py-1.5 text-xs font-bold bg-red-600 hover:bg-red-700 text-white rounded shadow-xs cursor-pointer"
+              >
+                Sim, Excluir
+              </button>
+            </div>
           </div>
         </div>
       )}

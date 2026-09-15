@@ -1,6 +1,15 @@
-import React, { useState, useMemo } from 'react';
-import { MissaoDiaria, EquipeManutencao, MembroEquipe } from '../../types';
+import React, { useState, useMemo, useRef } from 'react';
+import {
+  MissaoDiaria,
+  EquipeManutencao,
+  MembroEquipe,
+  InformeMensal,
+  PaginaFotoServico,
+  FotoCard,
+} from '../../types';
 import { ModalNovaMissao } from './ModalNovaMissao';
+import { ModalPreviaFolhaInforme } from './ModalPreviaFolhaInforme';
+import { imprimirEmNovaJanela } from '../../utils/pdfPrintHelper';
 import {
   formatarDataISO,
   adicionarDiasISO,
@@ -28,6 +37,12 @@ import {
   Shield,
   Layers,
   Sparkles,
+  Camera,
+  Upload,
+  Eye,
+  ExternalLink,
+  Newspaper,
+  Image as ImageIcon,
 } from 'lucide-react';
 
 interface MissoesDiariasTabProps {
@@ -35,6 +50,9 @@ interface MissoesDiariasTabProps {
   onChangeMissoes: (missoes: MissaoDiaria[]) => void;
   equipes: EquipeManutencao[];
   membros: MembroEquipe[];
+  informeAtual?: InformeMensal;
+  onChangeInformeAtual?: (informe: InformeMensal) => void;
+  onNavegarParaInforme?: () => void;
 }
 
 export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
@@ -42,16 +60,25 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
   onChangeMissoes,
   equipes,
   membros,
+  informeAtual,
+  onChangeInformeAtual,
+  onNavegarParaInforme,
 }) => {
   const hoje = formatarDataISO();
   const [dataSelecionada, setDataSelecionada] = useState<string>(hoje);
   const [mostrarApenasPendentes, setMostrarApenasPendentes] = useState(false);
   const [filtroEquipe, setFiltroEquipe] = useState<string>('todas');
   const [filtroPrioridade, setFiltroPrioridade] = useState<string>('todas');
+  const [modoVisualizacao, setModoVisualizacao] = useState<'tabela' | 'cards'>('tabela');
 
-  // Controle de Modal
+  // Controle de Modais
   const [modalAberta, setModalAberta] = useState(false);
   const [missaoEmEdicao, setMissaoEmEdicao] = useState<MissaoDiaria | null>(null);
+  const [missaoPreviaFolha, setMissaoPreviaFolha] = useState<MissaoDiaria | null>(null);
+  const [mensagemSucesso, setMensagemSucesso] = useState<string | null>(null);
+
+  // Referência para impressão da folha oficial de ordem do dia
+  const folhaOrdemDoDiaRef = useRef<HTMLDivElement>(null);
 
   // Formatação amigável da data selecionada
   const formatarDataCabecalho = (dataISO: string) => {
@@ -248,18 +275,161 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
     }
   };
 
+  // Sincronização automática da missão com o Informe Mensal (cria folha oficial)
+  const sincronizarComInformeMensal = (
+    missaoAtualizada: MissaoDiaria,
+    fotoAntesParam?: string,
+    fotoDepoisParam?: string
+  ) => {
+    if (!onChangeInformeAtual || !informeAtual) return;
+
+    const antes = fotoAntesParam !== undefined ? fotoAntesParam : missaoAtualizada.fotoAntesUrl;
+    const depois = fotoDepoisParam !== undefined ? fotoDepoisParam : missaoAtualizada.fotoDepoisUrl;
+    const paginaId = missaoAtualizada.informePaginaId || `folha-missao-${missaoAtualizada.id}`;
+
+    const fotosPagina: FotoCard[] = [];
+    if (antes) {
+      fotosPagina.push({
+        id: `foto-antes-${missaoAtualizada.id}`,
+        url: antes,
+        legenda: 'SITUAÇÃO INICIAL (ANTES DO SERVIÇO)',
+      });
+    }
+    if (depois) {
+      fotosPagina.push({
+        id: `foto-depois-${missaoAtualizada.id}`,
+        url: depois,
+        legenda: 'SERVIÇO CONCLUÍDO (DEPOIS DA INTERVENÇÃO)',
+      });
+    }
+
+    // Se nenhuma foto estiver anexada, remove a folha vinculada se ela existia
+    if (fotosPagina.length === 0) {
+      if (missaoAtualizada.informePaginaId) {
+        onChangeInformeAtual({
+          ...informeAtual,
+          paginas: informeAtual.paginas.filter((p) => p.id !== paginaId),
+        });
+      }
+      return;
+    }
+
+    const paginaFormatada: PaginaFotoServico = {
+      id: paginaId,
+      tituloServico: (missaoAtualizada.titulo || 'SERVIÇO DE MANUTENÇÃO PREDIAL').toUpperCase(),
+      dataServico: formatarDataCurta(missaoAtualizada.data),
+      descricao: `${missaoAtualizada.local ? `${missaoAtualizada.local} — ` : ''}${
+        missaoAtualizada.descricao || missaoAtualizada.titulo
+      }. Executores: ${
+        missaoAtualizada.membrosDesignados ||
+        missaoAtualizada.equipeNome ||
+        'Efetivo da 3ª Cia Escola'
+      }.`,
+      anotacao:
+        missaoAtualizada.observacoes ||
+        '✅ Manutenção predial finalizada com êxito conforme determinação da Seção.',
+      tipoGrid: '2',
+      fotos: fotosPagina,
+    };
+
+    const indexExiste = informeAtual.paginas.findIndex((p) => p.id === paginaId);
+    let novasPaginas: PaginaFotoServico[];
+    if (indexExiste >= 0) {
+      novasPaginas = [...informeAtual.paginas];
+      novasPaginas[indexExiste] = paginaFormatada;
+    } else {
+      novasPaginas = [...informeAtual.paginas, paginaFormatada];
+    }
+
+    onChangeInformeAtual({
+      ...informeAtual,
+      paginas: novasPaginas,
+    });
+  };
+
+  // Upload/captura de foto pelo policial (Câmera ou Galeria)
+  const handleUploadFoto = (
+    missaoId: string,
+    tipo: 'antes' | 'depois',
+    file: File
+  ) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      const missaoAlvo = missoes.find((m) => m.id === missaoId);
+      if (!missaoAlvo) return;
+
+      const fotoAntes = tipo === 'antes' ? dataUrl : missaoAlvo.fotoAntesUrl;
+      const fotoDepois = tipo === 'depois' ? dataUrl : missaoAlvo.fotoDepoisUrl;
+      const paginaId = missaoAlvo.informePaginaId || `folha-missao-${missaoAlvo.id}`;
+
+      const missaoAtualizada: MissaoDiaria = {
+        ...missaoAlvo,
+        fotoAntesUrl: fotoAntes,
+        fotoDepoisUrl: fotoDepois,
+        informePaginaId: paginaId,
+      };
+
+      onChangeMissoes(
+        missoes.map((m) => (m.id === missaoId ? missaoAtualizada : m))
+      );
+
+      sincronizarComInformeMensal(missaoAtualizada, fotoAntes, fotoDepois);
+      setMensagemSucesso(
+        `📸 Foto do ${tipo.toUpperCase()} registrada! Folha criada no padrão do Informe Mensal.`
+      );
+      setTimeout(() => setMensagemSucesso(null), 4000);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Remover foto registrada
+  const handleRemoverFoto = (missaoId: string, tipo: 'antes' | 'depois') => {
+    const missaoAlvo = missoes.find((m) => m.id === missaoId);
+    if (!missaoAlvo) return;
+
+    const fotoAntes = tipo === 'antes' ? undefined : missaoAlvo.fotoAntesUrl;
+    const fotoDepois = tipo === 'depois' ? undefined : missaoAlvo.fotoDepoisUrl;
+
+    const missaoAtualizada: MissaoDiaria = {
+      ...missaoAlvo,
+      fotoAntesUrl: fotoAntes,
+      fotoDepoisUrl: fotoDepois,
+    };
+
+    onChangeMissoes(
+      missoes.map((m) => (m.id === missaoId ? missaoAtualizada : m))
+    );
+
+    sincronizarComInformeMensal(missaoAtualizada, fotoAntes, fotoDepois);
+  };
+
   // Salvar do modal
   const handleSalvarMissaoModal = (missao: MissaoDiaria) => {
+    let missaoFinal = { ...missao };
+    if (missaoFinal.fotoAntesUrl || missaoFinal.fotoDepoisUrl) {
+      if (!missaoFinal.informePaginaId) {
+        missaoFinal.informePaginaId = `folha-missao-${missaoFinal.id}`;
+      }
+      sincronizarComInformeMensal(missaoFinal);
+    }
     if (missaoEmEdicao) {
-      onChangeMissoes(missoes.map((m) => (m.id === missao.id ? missao : m)));
+      onChangeMissoes(missoes.map((m) => (m.id === missaoFinal.id ? missaoFinal : m)));
     } else {
-      onChangeMissoes([...missoes, missao]);
+      onChangeMissoes([...missoes, missaoFinal]);
     }
   };
 
-  // Impressão da Ordem do Dia
+  // Impressão da Ordem do Dia (abre janela dedicada e imprime exatamente a pauta oficial)
   const handleImprimir = () => {
-    window.print();
+    if (folhaOrdemDoDiaRef.current) {
+      imprimirEmNovaJanela(
+        folhaOrdemDoDiaRef.current,
+        `PAUTA DIÁRIA DE MISSÕES - ${formatarDataCurta(dataSelecionada)}`
+      );
+    } else {
+      window.print();
+    }
   };
 
   // Exportar CSV do dia
@@ -323,6 +493,23 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
 
   return (
     <div className="space-y-4">
+      {/* Notificação de sucesso / sincronização com informe */}
+      {mensagemSucesso && (
+        <div className="no-print bg-emerald-50 border border-emerald-300 text-emerald-900 px-4 py-2.5 rounded-lg flex items-center justify-between text-xs font-semibold shadow-xs animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+            <span>{mensagemSucesso}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setMensagemSucesso(null)}
+            className="text-emerald-700 hover:text-emerald-900 font-bold ml-2 cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Barra Superior de Navegação por Data & Ações */}
       <div className="no-print bg-white rounded-lg border border-slate-200 shadow-sm p-4">
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
@@ -517,66 +704,294 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
               <option value="Baixa">🟢 Baixa</option>
             </select>
           </div>
+
+          {/* Alternador de Modo de Visualização */}
+          <div className="flex items-center gap-1.5 ml-auto">
+            <span className="text-slate-500 font-medium">Visualização:</span>
+            <div className="flex items-center bg-slate-100 p-0.5 rounded-md border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setModoVisualizacao('tabela')}
+                className={`px-2.5 py-1 text-xs font-bold rounded flex items-center gap-1.5 transition ${
+                  modoVisualizacao === 'tabela'
+                    ? 'bg-[#1a2b4c] text-white shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Exibir Folha Oficial da Pauta Diária de Missões"
+              >
+                <FileSpreadsheet size={13} />
+                <span>Pauta Oficial PMESP (Tabela)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setModoVisualizacao('cards')}
+                className={`px-2.5 py-1 text-xs font-bold rounded flex items-center gap-1.5 transition ${
+                  modoVisualizacao === 'cards'
+                    ? 'bg-[#1a2b4c] text-white shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Exibir como Cards Interativos"
+              >
+                <Layers size={13} />
+                <span>Cards</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* ÁREA DE IMPRESSÃO EXCLUSIVA (OFICIAL PMESP) */}
-      <div className="only-print p-6 text-black bg-white">
-        <div className="border-b-2 border-black pb-3 mb-4 text-center">
-          <h2 className="text-sm font-bold tracking-wider">POLÍCIA MILITAR DO ESTADO DE SÃO PAULO</h2>
-          <h3 className="text-xs font-semibold">ACADEMIA DE POLÍCIA MILITAR DO BARRO BRANCO</h3>
-          <h4 className="text-xs font-bold text-slate-900 mt-0.5">3ª COMPANHIA ESCOLA • SEÇÃO DE MANUTENÇÃO PREDIAL</h4>
-          <div className="mt-2 text-sm font-bold uppercase underline">
+      {/* ============================================================ */}
+      {/* TABELA / FOLHA OFICIAL PMESP DE PAUTA DIÁRIA DE MISSÕES       */}
+      {/* ============================================================ */}
+      <div
+        ref={folhaOrdemDoDiaRef}
+        className={`pauta-diaria-page bg-white rounded-lg border border-slate-300 shadow-sm p-4 sm:p-8 text-black print:border-none print:shadow-none print:p-0 ${
+          modoVisualizacao === 'tabela' ? 'block' : 'hidden print:block'
+        }`}
+      >
+        {/* Cabeçalho Oficial PMESP / APMBB exatamente conforme modelo */}
+        <div className="text-center select-text pb-1">
+          <h2 className="text-sm sm:text-base font-extrabold tracking-wider text-black uppercase leading-tight">
+            POLÍCIA MILITAR DO ESTADO DE SÃO PAULO
+          </h2>
+          <h3 className="text-xs sm:text-sm font-bold text-black uppercase leading-tight mt-0.5">
+            ACADEMIA DE POLÍCIA MILITAR DO BARRO BRANCO
+          </h3>
+          <h4 className="text-xs sm:text-sm font-bold text-black uppercase leading-tight mt-0.5">
+            3ª COMPANHIA ESCOLA • SEÇÃO DE MANUTENÇÃO PREDIAL
+          </h4>
+          <div className="mt-2.5 text-sm sm:text-base font-extrabold uppercase underline tracking-wide text-black">
             PAUTA DIÁRIA DE MISSÕES E DETERMINAÇÕES DE MANUTENÇÃO
           </div>
-          <div className="text-xs font-medium mt-1">
+          <div className="text-xs sm:text-sm mt-1 text-black font-normal">
             Data de Execução: <strong>{formatarDataCurta(dataSelecionada)}</strong>
           </div>
         </div>
 
-        <table className="w-full text-xs border-collapse border border-black mb-6">
-          <thead>
-            <tr className="bg-slate-200">
-              <th className="border border-black p-1.5 text-center w-12">CHECK</th>
-              <th className="border border-black p-1.5 text-left">DETERMINAÇÃO / MISSÃO</th>
-              <th className="border border-black p-1.5 text-left w-36">LOCAL / SETOR</th>
-              <th className="border border-black p-1.5 text-left w-44">POLICIAIS EXECUTORES</th>
-              <th className="border border-black p-1.5 text-center w-24">TURNO</th>
-              <th className="border border-black p-1.5 text-center w-24">PRÓX. DIA?</th>
-            </tr>
-          </thead>
-          <tbody>
-            {missoesFiltradas.map((m, idx) => (
-              <tr key={m.id}>
-                <td className="border border-black p-2 text-center font-bold text-base">
-                  {m.concluida ? '[ X ]' : '[   ]'}
-                </td>
-                <td className="border border-black p-1.5">
-                  <div className="font-bold">{idx + 1}. {m.titulo}</div>
-                  {m.descricao && <div className="text-[10px] text-slate-700">{m.descricao}</div>}
-                  {m.materiaisNecessarios && (
-                    <div className="text-[10px] italic">Mat: {m.materiaisNecessarios}</div>
-                  )}
-                </td>
-                <td className="border border-black p-1.5">{m.local}</td>
-                <td className="border border-black p-1.5">
-                  <div className="font-bold text-slate-900">{m.membrosDesignados || m.equipeNome || 'A definir'}</div>
-                  {m.equipeNome && m.membrosDesignados && (
-                    <div className="text-[10px] text-slate-600">Equipe: {m.equipeNome}</div>
-                  )}
-                </td>
-                <td className="border border-black p-1.5 text-center">{m.turno}</td>
-                <td className="border border-black p-1.5 text-center">
-                  {m.adiadaParaProximoDia ? 'SIM (Amanhã)' : '-'}
-                </td>
+        {/* Linha divisória horizontal preta separando o cabeçalho da tabela */}
+        <div className="border-t border-black my-3.5 w-full" />
+
+        {/* Tabela de Missões e Determinações (6 colunas fixas com alinhamento rigoroso) */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs border-collapse border border-black mb-4 table-fixed">
+            <colgroup>
+              <col style={{ width: '56px' }} />
+              <col />
+              <col style={{ width: '180px' }} />
+              <col style={{ width: '220px' }} />
+              <col style={{ width: '120px' }} />
+              <col style={{ width: '90px' }} />
+            </colgroup>
+            <thead>
+              <tr className="bg-[#dde5ee] text-black">
+                <th className="border border-black px-1 py-2 text-center w-14 font-bold tracking-tight">
+                  CHECK
+                </th>
+                <th className="border border-black px-2.5 py-2 text-left font-bold tracking-tight">
+                  DETERMINAÇÃO / MISSÃO
+                </th>
+                <th className="border border-black px-2.5 py-2 text-left w-[180px] font-bold tracking-tight">
+                  LOCAL / SETOR
+                </th>
+                <th className="border border-black px-2.5 py-2 text-left w-[220px] font-bold tracking-tight">
+                  POLICIAIS EXECUTORES
+                </th>
+                <th className="border border-black px-2 py-2 text-center w-[120px] font-bold tracking-tight">
+                  TURNO
+                </th>
+                <th className="border border-black px-2 py-2 text-center w-[90px] font-bold tracking-tight">
+                  PRÓX. DIA?
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {missoesFiltradas.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="border border-black p-8 text-center text-slate-500">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <CheckSquare size={32} className="text-slate-400" />
+                      <span className="font-bold text-slate-700 text-sm">
+                        Nenhuma missão cadastrada para esta data ({formatarDataCurta(dataSelecionada)}).
+                      </span>
+                      <p className="text-xs text-slate-500 max-w-md">
+                        Utilize o botão <strong>"+ Nova Determinação / Missão"</strong> acima para registrar serviços para as equipes e efetivo da 3ª Cia.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMissaoEmEdicao(null);
+                          setModalAberta(true);
+                        }}
+                        className="no-print mt-2 px-3 py-1.5 bg-[#1a2b4c] hover:bg-[#2c4373] text-white text-xs font-bold rounded flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                      >
+                        <Plus size={14} />
+                        <span>Cadastrar Missão Agora</span>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                missoesFiltradas.map((m, idx) => (
+                  <tr
+                    key={m.id}
+                    className="hover:bg-slate-50/70 transition group relative"
+                  >
+                    {/* CHECK [ ] ou [X] - Sem desalinhamento, largura e altura perfeitamente rígidas */}
+                    <td className="border border-black p-0 text-center align-middle w-14 h-10">
+                      <button
+                        type="button"
+                        onClick={() => toggleConcluida(m.id)}
+                        title={m.concluida ? 'Marcar como Pendente [ ]' : 'Marcar como Concluída [X]'}
+                        className="w-full h-full min-h-[40px] flex items-center justify-center cursor-pointer text-black hover:bg-slate-100 transition-colors select-none focus:outline-none"
+                      >
+                        <span className="font-mono font-bold text-sm tracking-wider inline-block w-8 text-center select-none leading-none">
+                          {m.concluida ? '[X]' : '[ ]'}
+                        </span>
+                      </button>
+                    </td>
+
+                    {/* DETERMINAÇÃO / MISSÃO */}
+                    <td className="border border-black px-2.5 py-2 align-top">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div
+                            onClick={() => {
+                              setMissaoEmEdicao(m);
+                              setModalAberta(true);
+                            }}
+                            className="font-bold text-black text-xs sm:text-[13px] leading-tight cursor-pointer hover:text-blue-800"
+                            title="Clique para editar determinação"
+                          >
+                            {idx + 1}. {m.titulo}
+                          </div>
+
+                          {m.descricao && (
+                            <div className="text-[11px] text-slate-700 mt-0.5 leading-snug">
+                              {m.descricao}
+                            </div>
+                          )}
+
+                          {m.materiaisNecessarios && (
+                            <div className="text-[10px] text-slate-700 italic mt-0.5">
+                              Mat: {m.materiaisNecessarios}
+                            </div>
+                          )}
+
+                          {m.observacoes && (
+                            <div className="text-[10px] text-slate-600 mt-0.5">
+                              Obs: {m.observacoes}
+                            </div>
+                          )}
+
+                          {/* Se tiver fotos anexadas, exibe tag de atalho para a Folha do Informe Mensal */}
+                          {(m.fotoAntesUrl || m.fotoDepoisUrl) && (
+                            <div className="mt-1.5 flex items-center gap-1.5 no-print">
+                              <button
+                                type="button"
+                                onClick={() => setMissaoPreviaFolha(m)}
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-900 text-[10px] font-bold rounded cursor-pointer transition"
+                                title="Ver folha gerada nos padrões do Informe Mensal"
+                              >
+                                <Camera size={11} className="text-blue-700" />
+                                <span>Folha do Informe Gerada ({[m.fotoAntesUrl, m.fotoDepoisUrl].filter(Boolean).length} foto(s))</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Botões rápidos de ação no hover (ocultos na impressão) */}
+                        <div className="opacity-0 group-hover:opacity-100 transition no-print flex items-center gap-1 shrink-0 bg-white/95 border border-slate-300 rounded px-1 py-0.5 shadow-2xs">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMissaoEmEdicao(m);
+                              setModalAberta(true);
+                            }}
+                            title="Tirar foto ou editar missão"
+                            className="p-1 text-slate-600 hover:text-blue-700 hover:bg-slate-100 rounded cursor-pointer"
+                          >
+                            <Camera size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMissaoEmEdicao(m);
+                              setModalAberta(true);
+                            }}
+                            title="Editar Missão"
+                            className="p-1 text-slate-600 hover:text-blue-700 hover:bg-slate-100 rounded cursor-pointer"
+                          >
+                            <Edit2 size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moverMissaoParaProximoDia(m.id)}
+                            title="Avançar para amanhã"
+                            className="p-1 text-slate-600 hover:text-amber-700 hover:bg-slate-100 rounded cursor-pointer"
+                          >
+                            ⏩
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => excluirMissao(m.id)}
+                            title="Excluir Missão"
+                            className="p-1 text-slate-600 hover:text-red-700 hover:bg-slate-100 rounded cursor-pointer"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* LOCAL / SETOR */}
+                    <td className="border border-black px-2.5 py-2 align-top text-xs text-black">
+                      {m.local}
+                    </td>
+
+                    {/* POLICIAIS EXECUTORES */}
+                    <td className="border border-black px-2.5 py-2 align-top text-xs">
+                      <div className="font-bold text-black">
+                        {m.membrosDesignados || (!m.equipeNome ? 'A definir' : '')}
+                      </div>
+                      {m.equipeNome && (
+                        <div className="text-[11px] text-slate-500 leading-tight">
+                          Equipe: {m.equipeNome}
+                        </div>
+                      )}
+                      {!m.membrosDesignados && !m.equipeNome && (
+                        <div className="font-bold text-black">A definir</div>
+                      )}
+                    </td>
+
+                    {/* TURNO */}
+                    <td className="border border-black px-2 py-2 text-center align-top text-xs text-black whitespace-nowrap">
+                      {m.turno}
+                    </td>
+
+                    {/* PRÓX. DIA? */}
+                    <td className="border border-black px-2 py-2 text-center align-top text-xs whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={() => toggleAdiadaParaProximoDia(m.id)}
+                        title="Clique para alternar se vai para o próximo dia"
+                        className="hover:font-bold cursor-pointer text-black"
+                      >
+                        {m.adiadaParaProximoDia ? 'SIM (Amanhã)' : '-'}
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* Lista Interativa de Missões (Cards / Tabela Responsiva) */}
-      <div className="no-print space-y-3">
+      {/* ============================================================ */}
+      {/* LISTA DE CARDS INTERATIVOS (MODO ALTERNATIVO)                 */}
+      {/* ============================================================ */}
+      {modoVisualizacao === 'cards' && (
+        <div className="no-print space-y-3">
         {missoesFiltradas.length === 0 ? (
           <div className="bg-white rounded-lg border border-slate-200 p-8 text-center text-slate-500">
             <CheckSquare size={36} className="mx-auto text-slate-300 mb-2" />
@@ -781,11 +1196,258 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
                     </button>
                   </div>
                 </div>
+
+                {/* ============================================================ */}
+                {/* SEÇÃO DE FOTOS: ANTES & DEPOIS (Padrão Oficial Informe Mensal) */}
+                {/* ============================================================ */}
+                <div className="mt-4 pt-3 border-t border-slate-200">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="p-1 rounded bg-[#1a2b4c]/10 text-[#1a2b4c]">
+                        <Camera size={15} />
+                      </div>
+                      <span className="text-xs font-bold text-[#1a2b4c]">
+                        Registro Fotográfico (Antes & Depois do Serviço)
+                      </span>
+                      {(m.fotoAntesUrl || m.fotoDepoisUrl) && (
+                        <span className="bg-blue-100 text-blue-900 border border-blue-200 text-[10.5px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <CheckCircle2 size={11} className="text-blue-700" />
+                          Folha Gerada no Informe Mensal
+                        </span>
+                      )}
+                    </div>
+
+                    {(m.fotoAntesUrl || m.fotoDepoisUrl) && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setMissaoPreviaFolha(m)}
+                          className="text-xs font-bold text-blue-700 hover:text-blue-900 flex items-center gap-1 cursor-pointer bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded border border-blue-200 transition"
+                          title="Visualizar a folha montada nos padrões oficiais do Informe Mensal"
+                        >
+                          <Eye size={13} />
+                          <span>Ver Folha do Informe</span>
+                        </button>
+                        {onNavegarParaInforme && (
+                          <button
+                            type="button"
+                            onClick={onNavegarParaInforme}
+                            className="text-xs font-bold text-slate-700 hover:text-slate-900 flex items-center gap-1 cursor-pointer bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded border border-slate-300 transition"
+                            title="Ir para o módulo do Informe Mensal completo"
+                          >
+                            <span>Ir p/ Informe ↗</span>
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Bloco Foto ANTES */}
+                    <div className="border border-slate-200 rounded-lg p-2.5 bg-slate-50/70 flex flex-col justify-between">
+                      <div className="flex items-center justify-between gap-1 mb-1.5">
+                        <span className="text-[11.5px] font-bold text-slate-800 flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-amber-500 inline-block"></span>
+                          FOTO DO ANTES (Situação Inicial / Problema)
+                        </span>
+                        {m.fotoAntesUrl && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoverFoto(m.id, 'antes')}
+                            className="text-red-600 hover:text-red-800 text-[10.5px] font-semibold flex items-center gap-0.5 cursor-pointer"
+                            title="Remover foto do Antes"
+                          >
+                            <Trash2 size={11} />
+                            <span>Remover</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {m.fotoAntesUrl ? (
+                        <div className="relative rounded-md overflow-hidden h-36 border border-slate-300 bg-white group/foto">
+                          <img
+                            src={m.fotoAntesUrl}
+                            alt="Antes do serviço"
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/foto:opacity-100 transition-opacity flex items-center justify-center gap-2 p-2">
+                            <label className="cursor-pointer px-2 py-1 bg-white/95 hover:bg-white text-slate-900 text-[11px] font-bold rounded shadow flex items-center gap-1">
+                              <Camera size={12} />
+                              <span>Tirar Nova</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleUploadFoto(m.id, 'antes', file);
+                                  e.target.value = '';
+                                }}
+                              />
+                            </label>
+                            <label className="cursor-pointer px-2 py-1 bg-white/95 hover:bg-white text-slate-900 text-[11px] font-bold rounded shadow flex items-center gap-1">
+                              <Upload size={12} />
+                              <span>Arquivo</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleUploadFoto(m.id, 'antes', file);
+                                  e.target.value = '';
+                                }}
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="border border-dashed border-slate-300 rounded-md p-3 flex flex-col items-center justify-center gap-2 bg-white min-h-[110px]">
+                          <span className="text-[11px] text-slate-500 font-medium text-center">
+                            Policial, registre a foto do local antes da intervenção:
+                          </span>
+                          <div className="flex flex-wrap items-center justify-center gap-2">
+                            <label className="cursor-pointer px-2.5 py-1.5 bg-[#1a2b4c] hover:bg-[#2c4373] text-white text-xs font-bold rounded flex items-center gap-1.5 shadow-2xs transition">
+                              <Camera size={13} />
+                              <span>Tirar Foto (Câmera)</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleUploadFoto(m.id, 'antes', file);
+                                  e.target.value = '';
+                                }}
+                              />
+                            </label>
+                            <label className="cursor-pointer px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-semibold rounded flex items-center gap-1.5 shadow-2xs transition">
+                              <Upload size={13} />
+                              <span>Galeria / Arquivo</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleUploadFoto(m.id, 'antes', file);
+                                  e.target.value = '';
+                                }}
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Bloco Foto DEPOIS */}
+                    <div className="border border-slate-200 rounded-lg p-2.5 bg-slate-50/70 flex flex-col justify-between">
+                      <div className="flex items-center justify-between gap-1 mb-1.5">
+                        <span className="text-[11.5px] font-bold text-slate-800 flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
+                          FOTO DO DEPOIS (Serviço Concluído / Feito)
+                        </span>
+                        {m.fotoDepoisUrl && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoverFoto(m.id, 'depois')}
+                            className="text-red-600 hover:text-red-800 text-[10.5px] font-semibold flex items-center gap-0.5 cursor-pointer"
+                            title="Remover foto do Depois"
+                          >
+                            <Trash2 size={11} />
+                            <span>Remover</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {m.fotoDepoisUrl ? (
+                        <div className="relative rounded-md overflow-hidden h-36 border border-slate-300 bg-white group/foto">
+                          <img
+                            src={m.fotoDepoisUrl}
+                            alt="Depois do serviço realizado"
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/foto:opacity-100 transition-opacity flex items-center justify-center gap-2 p-2">
+                            <label className="cursor-pointer px-2 py-1 bg-white/95 hover:bg-white text-slate-900 text-[11px] font-bold rounded shadow flex items-center gap-1">
+                              <Camera size={12} />
+                              <span>Tirar Nova</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleUploadFoto(m.id, 'depois', file);
+                                  e.target.value = '';
+                                }}
+                              />
+                            </label>
+                            <label className="cursor-pointer px-2 py-1 bg-white/95 hover:bg-white text-slate-900 text-[11px] font-bold rounded shadow flex items-center gap-1">
+                              <Upload size={12} />
+                              <span>Arquivo</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleUploadFoto(m.id, 'depois', file);
+                                  e.target.value = '';
+                                }}
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="border border-dashed border-slate-300 rounded-md p-3 flex flex-col items-center justify-center gap-2 bg-white min-h-[110px]">
+                          <span className="text-[11px] text-slate-500 font-medium text-center">
+                            Policial, tire a foto do serviço finalizado e restaurado:
+                          </span>
+                          <div className="flex flex-wrap items-center justify-center gap-2">
+                            <label className="cursor-pointer px-2.5 py-1.5 bg-[#1a2b4c] hover:bg-[#2c4373] text-white text-xs font-bold rounded flex items-center gap-1.5 shadow-2xs transition">
+                              <Camera size={13} />
+                              <span>Tirar Foto (Câmera)</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleUploadFoto(m.id, 'depois', file);
+                                  e.target.value = '';
+                                }}
+                              />
+                            </label>
+                            <label className="cursor-pointer px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-semibold rounded flex items-center gap-1.5 shadow-2xs transition">
+                              <Upload size={13} />
+                              <span>Galeria / Arquivo</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleUploadFoto(m.id, 'depois', file);
+                                  e.target.value = '';
+                                }}
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
             );
           })
         )}
       </div>
+      )}
 
       {/* Modal de Criação / Edição de Missão */}
       <ModalNovaMissao
@@ -799,6 +1461,13 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
         dataSugerida={dataSelecionada}
         equipes={equipes}
         membros={membros}
+      />
+
+      {/* Modal de Prévia e Impressão da Folha no Padrão do Informe Mensal */}
+      <ModalPreviaFolhaInforme
+        missao={missaoPreviaFolha}
+        onFechar={() => setMissaoPreviaFolha(null)}
+        onNavegarParaInforme={onNavegarParaInforme}
       />
     </div>
   );
