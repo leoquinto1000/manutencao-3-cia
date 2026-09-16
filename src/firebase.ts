@@ -29,9 +29,12 @@ export const firebaseConfig = {
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 
-// Coleção e Documento central no Firestore
+// Coleção e Documentos no Firestore para garantir que fotos nunca estourem o limite de 1MB por documento
 export const FIRESTORE_COLLECTION = 'sistema_manutencao';
 export const FIRESTORE_DOC_ID = 'dados_gerais';
+export const FIRESTORE_DOC_MISSOES = 'dados_missoes';
+export const FIRESTORE_DOC_INFORME = 'dados_informe';
+export const FIRESTORE_DOC_HISTORICO = 'dados_historico';
 
 export interface DadosSistemaFirestore {
   nfs: NFInstance[];
@@ -62,16 +65,58 @@ export function limparParaFirestore<T>(dado: T): T {
 }
 
 /**
- * Carrega todos os dados do sistema salvos no Firestore
+ * Carrega todos os dados do sistema salvos no Firestore,
+ * combinando os documentos particionados para suportar fotos sem limite de 1MB.
  */
 export async function carregarDadosFirestore(): Promise<DadosSistemaFirestore | null> {
   try {
-    const ref = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_ID);
-    const snap = await getDoc(ref);
-    if (snap.exists()) {
-      return snap.data() as DadosSistemaFirestore;
+    const refGeral = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_ID);
+    const refMissoes = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_MISSOES);
+    const refInforme = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_INFORME);
+    const refHistorico = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_HISTORICO);
+
+    const [snapGeral, snapMissoes, snapInforme, snapHistorico] = await Promise.all([
+      getDoc(refGeral).catch(() => null),
+      getDoc(refMissoes).catch(() => null),
+      getDoc(refInforme).catch(() => null),
+      getDoc(refHistorico).catch(() => null),
+    ]);
+
+    if (!snapGeral?.exists() && !snapMissoes?.exists() && !snapInforme?.exists()) {
+      return null;
     }
-    return null;
+
+    const dadosGerais = snapGeral?.exists() ? (snapGeral.data() as Partial<DadosSistemaFirestore>) : {};
+    const dadosMissoes = snapMissoes?.exists() ? snapMissoes.data() : null;
+    const dadosInforme = snapInforme?.exists() ? snapInforme.data() : null;
+    const dadosHistorico = snapHistorico?.exists() ? snapHistorico.data() : null;
+
+    const missoesFinais = (dadosMissoes?.missoes as MissaoDiaria[]) || dadosGerais.missoes;
+    const informeFinal = (dadosInforme?.informeAtual as InformeMensal) || dadosGerais.informeAtual;
+    const informesArquivadosFinais =
+      (dadosHistorico?.informesArquivados as InformeMensal[]) || dadosGerais.informesArquivados;
+    const arquivosSalvosFinais =
+      (dadosHistorico?.arquivosSalvos as ProjetoSalvo[]) || dadosGerais.arquivosSalvos;
+
+    return {
+      nfs: dadosGerais.nfs || [],
+      pesquisas: dadosGerais.pesquisas || [],
+      balancete: dadosGerais.balancete as BalanceteState,
+      textoParte: dadosGerais.textoParte as TextoParteState,
+      materiaisUsados: dadosGerais.materiaisUsados || [],
+      informeAtual: informeFinal as InformeMensal,
+      informesArquivados: informesArquivadosFinais || [],
+      arquivosSalvos: arquivosSalvosFinais || [],
+      missoes: missoesFinais || [],
+      equipes: dadosGerais.equipes || [],
+      membros: dadosGerais.membros || [],
+      bancoFornecedores: dadosGerais.bancoFornecedores || [],
+      ultimaAtualizacao:
+        dadosGerais.ultimaAtualizacao ||
+        dadosMissoes?.ultimaAtualizacao ||
+        dadosInforme?.ultimaAtualizacao ||
+        new Date().toISOString(),
+    };
   } catch (error) {
     console.error('Erro ao ler do Firestore:', error);
     throw error;
@@ -79,16 +124,82 @@ export async function carregarDadosFirestore(): Promise<DadosSistemaFirestore | 
 }
 
 /**
- * Salva todos os dados atuais no documento central do Firestore
+ * Salva todos os dados atuais particionados no Firestore,
+ * garantindo que documentos de fotos não ultrapassem o limite de 1MB por documento.
  */
 export async function salvarDadosFirestore(dados: Partial<DadosSistemaFirestore>): Promise<void> {
   try {
-    const ref = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_ID);
-    const dadosLimpos = limparParaFirestore({
-      ...dados,
-      ultimaAtualizacao: new Date().toISOString(),
-    });
-    await setDoc(ref, dadosLimpos, { merge: true });
+    const timestamp = new Date().toISOString();
+    const promises: Promise<any>[] = [];
+
+    // 1. Dados Estruturais Gerais (NFs, pesquisas, balancete, textoParte, equipes, membros, etc.)
+    const {
+      missoes,
+      informeAtual,
+      informesArquivados,
+      arquivosSalvos,
+      ...dadosGeraisSemFotosPesadas
+    } = dados;
+
+    const refGeral = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_ID);
+    promises.push(
+      setDoc(
+        refGeral,
+        limparParaFirestore({
+          ...dadosGeraisSemFotosPesadas,
+          ultimaAtualizacao: timestamp,
+        }),
+        { merge: true }
+      )
+    );
+
+    // 2. Missões e suas fotos (salvas em documento dedicado para não esgotar 1MB)
+    if (missoes !== undefined) {
+      const refMissoes = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_MISSOES);
+      promises.push(
+        setDoc(
+          refMissoes,
+          limparParaFirestore({
+            missoes,
+            ultimaAtualizacao: timestamp,
+          }),
+          { merge: true }
+        )
+      );
+    }
+
+    // 3. Informe Mensal e suas fotos (salvo em documento dedicado)
+    if (informeAtual !== undefined) {
+      const refInforme = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_INFORME);
+      promises.push(
+        setDoc(
+          refInforme,
+          limparParaFirestore({
+            informeAtual,
+            ultimaAtualizacao: timestamp,
+          }),
+          { merge: true }
+        )
+      );
+    }
+
+    // 4. Arquivos históricos
+    if (informesArquivados !== undefined || arquivosSalvos !== undefined) {
+      const refHistorico = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_HISTORICO);
+      promises.push(
+        setDoc(
+          refHistorico,
+          limparParaFirestore({
+            ...(informesArquivados !== undefined ? { informesArquivados } : {}),
+            ...(arquivosSalvos !== undefined ? { arquivosSalvos } : {}),
+            ultimaAtualizacao: timestamp,
+          }),
+          { merge: true }
+        )
+      );
+    }
+
+    await Promise.all(promises);
   } catch (error) {
     console.error('Erro ao salvar no Firestore:', error);
     throw error;

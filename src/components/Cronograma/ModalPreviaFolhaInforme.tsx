@@ -1,7 +1,8 @@
 import React, { useRef } from 'react';
 import { MissaoDiaria } from '../../types';
 import { imprimirEmNovaJanela } from '../../utils/pdfPrintHelper';
-import { Printer, ExternalLink, X, CheckCircle2, AlertCircle } from 'lucide-react';
+import { baixarFoto } from '../../utils';
+import { Printer, ExternalLink, X, CheckCircle2, AlertCircle, Download } from 'lucide-react';
 
 interface ModalPreviaFolhaInformeProps {
   aberto: boolean;
@@ -62,7 +63,28 @@ export const ModalPreviaFolhaInforme: React.FC<ModalPreviaFolhaInformeProps> = (
             </p>
           </div>
 
-          <div className="flex items-center gap-2 justify-end">
+          <div className="flex items-center gap-2 justify-end flex-wrap">
+            {(fotoAntes || fotoDepois) && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (fotoAntes) {
+                    baixarFoto(fotoAntes, `missao-${missao.numeroOrdem || missao.id}-ANTES.jpg`);
+                  }
+                  if (fotoDepois) {
+                    setTimeout(() => {
+                      baixarFoto(fotoDepois!, `missao-${missao.numeroOrdem || missao.id}-DEPOIS.jpg`);
+                    }, 300);
+                  }
+                }}
+                className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded flex items-center gap-1.5 shadow-sm cursor-pointer transition"
+                title="Salvar fotos no computador ou celular"
+              >
+                <Download size={14} />
+                <span>Salvar Foto(s)</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={handleImprimirFolha}
@@ -162,10 +184,21 @@ export const ModalPreviaFolhaInforme: React.FC<ModalPreviaFolhaInformeProps> = (
                     </div>
                   )}
                 </div>
-                <div className="w-full bg-slate-50 border-t border-slate-200 p-2 text-center">
+                <div className="w-full bg-slate-50 border-t border-slate-200 p-2 text-center flex flex-col items-center gap-1">
                   <span className="font-heading text-[11.5px] font-bold text-slate-800 block uppercase">
                     SITUAÇÃO INICIAL (ANTES DO SERVIÇO)
                   </span>
+                  {fotoAntes && (
+                    <button
+                      type="button"
+                      onClick={() => baixarFoto(fotoAntes, `missao-${missao.numeroOrdem || missao.id}-ANTES.jpg`)}
+                      className="no-print mt-0.5 text-[10.5px] font-bold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded border border-blue-200 flex items-center gap-1 cursor-pointer transition"
+                      title="Baixar esta foto no aparelho"
+                    >
+                      <Download size={11} />
+                      <span>Baixar Foto (Antes)</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -185,10 +218,21 @@ export const ModalPreviaFolhaInforme: React.FC<ModalPreviaFolhaInformeProps> = (
                     </div>
                   )}
                 </div>
-                <div className="w-full bg-slate-50 border-t border-slate-200 p-2 text-center">
+                <div className="w-full bg-slate-50 border-t border-slate-200 p-2 text-center flex flex-col items-center gap-1">
                   <span className="font-heading text-[11.5px] font-bold text-slate-800 block uppercase">
                     SERVIÇO CONCLUÍDO (DEPOIS DA INTERVENÇÃO)
                   </span>
+                  {fotoDepois && (
+                    <button
+                      type="button"
+                      onClick={() => baixarFoto(fotoDepois, `missao-${missao.numeroOrdem || missao.id}-DEPOIS.jpg`)}
+                      className="no-print mt-0.5 text-[10.5px] font-bold text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200 flex items-center gap-1 cursor-pointer transition"
+                      title="Baixar esta foto no aparelho"
+                    >
+                      <Download size={11} />
+                      <span>Baixar Foto (Depois)</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

@@ -31,16 +31,16 @@ import {
 const PELOTOES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
 
 export const OPCOES_ANO_CURSO = [
+  'Efetivo Permanente',
   '1°CFO',
   '2°CFO',
   '3°CFO',
   '4°CFO',
-  'Efetivo Permanente',
 ];
 
 export const formatarAnoPelotao = (anoCurso?: string, pelotao?: string) => {
   if (!anoCurso && !pelotao) return '-';
-  if (anoCurso && pelotao) return `${anoCurso} ${pelotao}`;
+  if (anoCurso && pelotao && pelotao.trim()) return `${anoCurso} ${pelotao.trim()}`;
   if (anoCurso) return anoCurso;
   return `Pelotão ${pelotao}`;
 };
@@ -103,9 +103,6 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
     id: string;
     nome: string;
   } | null>(null);
-
-  // Filtro da tabela de militares
-  const [filtroPelotaoTabela, setFiltroPelotaoTabela] = useState('todos');
 
   // Helper para formatar link do WhatsApp
   const obterLinkWhatsapp = (telefone: string) => {
@@ -197,13 +194,10 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
     }
   };
 
-  // Helper para normalizar ano do curso
+  // Helper para normalizar CFO / Quadro do militar
   const normalizarAnoCurso = (ano?: string) => {
     if (!ano) return '1°CFO';
-    if (ano.includes('1')) return '1°CFO';
-    if (ano.includes('2')) return '2°CFO';
-    if (ano.includes('3')) return '3°CFO';
-    if (ano.includes('4')) return '4°CFO';
+    if (ano === '1°CFO' || ano === '2°CFO' || ano === '3°CFO' || ano === '4°CFO') return ano;
     if (
       ano.toLowerCase().includes('permanente') ||
       ano.toLowerCase().includes('efetivo') ||
@@ -211,6 +205,10 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
     ) {
       return 'Efetivo Permanente';
     }
+    if (ano.includes('1')) return '1°CFO';
+    if (ano.includes('2')) return '2°CFO';
+    if (ano.includes('3')) return '3°CFO';
+    if (ano.includes('4')) return '4°CFO';
     return ano;
   };
 
@@ -218,12 +216,12 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
   const abrirNovoMilitar = (tipo: 'fixo' | 'apoio' = abaEfetivoAtiva) => {
     setMilitarEmEdicao(null);
     setTipoEfetivoMilitar(tipo);
-    setGraduacaoMilitar(tipo === 'apoio' ? 'Sd PM' : 'Cb PM');
+    setGraduacaoMilitar(tipo === 'apoio' ? 'Sd PM' : 'Cad PM');
     setNomeGuerraMilitar('');
     setNomeCompletoMilitar('');
     setReMilitar('');
-    setAnoCursoMilitar(tipo === 'apoio' ? '2°CFO' : 'Efetivo Permanente');
-    setPelotaoMilitar('A');
+    setAnoCursoMilitar(tipo === 'apoio' ? '2°CFO' : '2°CFO');
+    setPelotaoMilitar('');
     setEspecialidadeMilitar('');
     setTelefoneMilitar('');
     setOrigemApoioMilitar(tipo === 'apoio' ? '1º Pelotão da 3ª Cia' : '');
@@ -242,7 +240,7 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
     setNomeCompletoMilitar(m.nomeCompleto || '');
     setReMilitar(m.re || '');
     setAnoCursoMilitar(normalizarAnoCurso(m.anoCurso));
-    setPelotaoMilitar(m.pelotao || 'A');
+    setPelotaoMilitar(m.pelotao || '');
     setEspecialidadeMilitar(m.especialidade);
     setTelefoneMilitar(m.telefone || '');
     setOrigemApoioMilitar(m.origemApoio || '');
@@ -431,17 +429,15 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
     });
   }, [membros, filtroPelotaoModal, buscaMilitarEquipe]);
 
-  // Militares filtrados na tabela de Efetivo Fixo
+  // Militares na tabela de Efetivo Fixo
   const militaresFixosFiltrados = useMemo(() => {
-    if (filtroPelotaoTabela === 'todos') return membrosFixos;
-    return membrosFixos.filter((m) => m.pelotao === filtroPelotaoTabela);
-  }, [membrosFixos, filtroPelotaoTabela]);
+    return membrosFixos;
+  }, [membrosFixos]);
 
-  // Militares filtrados na tabela de Apoio
+  // Militares na tabela de Apoio
   const militaresApoioFiltrados = useMemo(() => {
-    if (filtroPelotaoTabela === 'todos') return membrosApoio;
-    return membrosApoio.filter((m) => m.pelotao === filtroPelotaoTabela);
-  }, [membrosApoio, filtroPelotaoTabela]);
+    return membrosApoio;
+  }, [membrosApoio]);
 
   const getCorBadgeClass = (cor?: string) => {
     switch (cor) {
@@ -713,43 +709,6 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
           </button>
         </div>
 
-        {/* Filtro por Pelotão na Tabela */}
-        <div className="flex items-center gap-1.5 mt-3 overflow-x-auto pb-1 text-xs">
-          <span className="font-bold text-slate-600 flex items-center gap-1 shrink-0 mr-1">
-            <Filter size={13} className="text-slate-500" />
-            Filtrar Pelotão:
-          </span>
-          <button
-            type="button"
-            onClick={() => setFiltroPelotaoTabela('todos')}
-            className={`px-2.5 py-1 rounded text-xs font-bold transition shrink-0 cursor-pointer ${
-              filtroPelotaoTabela === 'todos'
-                ? 'bg-[#1a2b4c] text-white'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            Todos ({abaEfetivoAtiva === 'fixo' ? membrosFixos.length : membrosApoio.length})
-          </button>
-          {PELOTOES.map((pel) => {
-            const listaBase = abaEfetivoAtiva === 'fixo' ? membrosFixos : membrosApoio;
-            const count = listaBase.filter((m) => m.pelotao === pel).length;
-            return (
-              <button
-                key={pel}
-                type="button"
-                onClick={() => setFiltroPelotaoTabela(pel)}
-                className={`px-2.5 py-1 rounded text-xs font-bold transition shrink-0 cursor-pointer ${
-                  filtroPelotaoTabela === pel
-                    ? 'bg-[#1a2b4c] text-white'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                Pelotão {pel} {count > 0 ? `(${count})` : ''}
-              </button>
-            );
-          })}
-        </div>
-
         {/* Conteúdo Aba 1: Efetivo Fixo da Manutenção */}
         {abaEfetivoAtiva === 'fixo' && (
           <div className="overflow-x-auto mt-3">
@@ -757,7 +716,7 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
               <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
                 <tr>
                   <th className="px-3 py-2.5">Graduação & Nome de Guerra</th>
-                  <th className="px-3 py-2.5 text-center">Ano/Pelotão</th>
+                  <th className="px-3 py-2.5 text-center">CFO/Pelotão</th>
                   <th className="px-3 py-2.5">RE</th>
                   <th className="px-3 py-2.5">Especialidade / Foco Fixo</th>
                   <th className="px-3 py-2.5">Telefone / Contato (WhatsApp)</th>
@@ -1460,7 +1419,7 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
                 <div>
                   <label className="block font-bold text-slate-700 mb-1 flex items-center gap-1">
                     <GraduationCap size={13} className="text-amber-600" />
-                    Ano no Curso / Quadro:
+                    CFO / Quadro do Militar:
                   </label>
                   <select
                     value={anoCursoMilitar}
@@ -1481,14 +1440,25 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
                 <div className="flex items-center justify-between">
                   <label className="font-bold text-slate-800 flex items-center gap-1.5">
                     <Shield size={14} className="text-[#1a2b4c]" />
-                    <span>Pelotão do Militar (3ª Cia): <span className="text-red-500">*</span></span>
+                    <span>Pelotão do Militar (3ª Cia): <span className="text-slate-400 font-normal text-[11px]">(Opcional)</span></span>
                   </label>
                   <span className="font-bold text-xs text-[#1a2b4c] bg-white px-2 py-0.5 rounded border border-slate-300 shadow-2xs">
-                    Pelotão {pelotaoMilitar}
+                    {pelotaoMilitar ? `Pelotão ${pelotaoMilitar}` : 'Sem pelotão (Em branco)'}
                   </span>
                 </div>
 
-                <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5">
+                <div className="grid grid-cols-5 sm:grid-cols-9 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setPelotaoMilitar('')}
+                    className={`py-1.5 text-center font-bold text-xs rounded border transition cursor-pointer ${
+                      !pelotaoMilitar
+                        ? 'bg-[#1a2b4c] text-white border-[#1a2b4c] shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                    }`}
+                  >
+                    Nenhum
+                  </button>
                   {PELOTOES.map((pel) => (
                     <button
                       key={pel}
@@ -1505,10 +1475,10 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
                   ))}
                 </div>
 
-                {/* Exibição conjunta Ano/Pelotão */}
+                {/* Exibição conjunta CFO/Pelotão */}
                 <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
                   <span className="text-[11px] text-slate-600 font-medium">
-                    Visualização conjunta (Ano/Pelotão):
+                    Visualização conjunta (CFO/Pelotão):
                   </span>
                   <span className="inline-flex items-center gap-1.5 text-xs font-bold bg-amber-100 text-amber-950 border border-amber-300 px-2.5 py-0.5 rounded shadow-2xs">
                     <GraduationCap size={12} className="text-amber-700" />

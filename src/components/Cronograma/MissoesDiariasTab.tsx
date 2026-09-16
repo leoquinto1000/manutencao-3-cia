@@ -14,6 +14,8 @@ import {
   formatarDataISO,
   adicionarDiasISO,
   gerarId,
+  baixarFoto,
+  comprimirImagemParaArmazenamento,
 } from '../../utils';
 import {
   Calendar,
@@ -43,6 +45,7 @@ import {
   ExternalLink,
   Newspaper,
   Image as ImageIcon,
+  Download,
 } from 'lucide-react';
 
 interface MissoesDiariasTabProps {
@@ -347,15 +350,14 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
     });
   };
 
-  // Upload/captura de foto pelo policial (Câmera ou Galeria)
-  const handleUploadFoto = (
+  // Upload/captura de foto pelo policial (Câmera ou Galeria) com compressão inteligente
+  const handleUploadFoto = async (
     missaoId: string,
     tipo: 'antes' | 'depois',
     file: File
   ) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target?.result as string;
+    try {
+      const dataUrl = await comprimirImagemParaArmazenamento(file);
       const missaoAlvo = missoes.find((m) => m.id === missaoId);
       if (!missaoAlvo) return;
 
@@ -376,11 +378,12 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
 
       sincronizarComInformeMensal(missaoAtualizada, fotoAntes, fotoDepois);
       setMensagemSucesso(
-        `📸 Foto do ${tipo.toUpperCase()} registrada! Folha criada no padrão do Informe Mensal.`
+        `📸 Foto do ${tipo.toUpperCase()} salva e preservada com sucesso!`
       );
       setTimeout(() => setMensagemSucesso(null), 4000);
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Erro ao processar e salvar foto:', err);
+    }
   };
 
   // Remover foto registrada
@@ -1218,7 +1221,25 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
                     </div>
 
                     {(m.fotoAntesUrl || m.fotoDepoisUrl) && (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (m.fotoAntesUrl) {
+                              baixarFoto(m.fotoAntesUrl, `missao-${m.numeroOrdem || m.id}-ANTES.jpg`);
+                            }
+                            if (m.fotoDepoisUrl) {
+                              setTimeout(() => {
+                                baixarFoto(m.fotoDepoisUrl!, `missao-${m.numeroOrdem || m.id}-DEPOIS.jpg`);
+                              }, 300);
+                            }
+                          }}
+                          className="text-xs font-bold text-emerald-700 hover:text-emerald-900 flex items-center gap-1 cursor-pointer bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded border border-emerald-200 transition"
+                          title="Baixar arquivo(s) de foto para o seu aparelho"
+                        >
+                          <Download size={13} />
+                          <span>Baixar Foto(s)</span>
+                        </button>
                         <button
                           type="button"
                           onClick={() => setMissaoPreviaFolha(m)}
@@ -1251,15 +1272,26 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
                           FOTO DO ANTES (Situação Inicial / Problema)
                         </span>
                         {m.fotoAntesUrl && (
-                          <button
-                            type="button"
-                            onClick={() => handleRemoverFoto(m.id, 'antes')}
-                            className="text-red-600 hover:text-red-800 text-[10.5px] font-semibold flex items-center gap-0.5 cursor-pointer"
-                            title="Remover foto do Antes"
-                          >
-                            <Trash2 size={11} />
-                            <span>Remover</span>
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => baixarFoto(m.fotoAntesUrl!, `missao-${m.numeroOrdem || m.id}-ANTES.jpg`)}
+                              className="text-blue-700 hover:text-blue-900 text-[10.5px] font-semibold flex items-center gap-0.5 cursor-pointer bg-blue-50 hover:bg-blue-100 px-1.5 py-0.5 rounded border border-blue-200 transition"
+                              title="Salvar foto do Antes (Download)"
+                            >
+                              <Download size={11} />
+                              <span>Baixar Foto</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoverFoto(m.id, 'antes')}
+                              className="text-red-600 hover:text-red-800 text-[10.5px] font-semibold flex items-center gap-0.5 cursor-pointer"
+                              title="Remover foto do Antes"
+                            >
+                              <Trash2 size={11} />
+                              <span>Remover</span>
+                            </button>
+                          </div>
                         )}
                       </div>
 
@@ -1271,6 +1303,15 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
                             className="w-full h-full object-cover"
                           />
                           <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/foto:opacity-100 transition-opacity flex items-center justify-center gap-2 p-2">
+                            <button
+                              type="button"
+                              onClick={() => baixarFoto(m.fotoAntesUrl!, `missao-${m.numeroOrdem || m.id}-ANTES.jpg`)}
+                              className="cursor-pointer px-2 py-1 bg-white/95 hover:bg-white text-slate-900 text-[11px] font-bold rounded shadow flex items-center gap-1"
+                              title="Baixar esta foto"
+                            >
+                              <Download size={12} />
+                              <span>Baixar</span>
+                            </button>
                             <label className="cursor-pointer px-2 py-1 bg-white/95 hover:bg-white text-slate-900 text-[11px] font-bold rounded shadow flex items-center gap-1">
                               <Camera size={12} />
                               <span>Tirar Nova</span>
@@ -1350,15 +1391,26 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
                           FOTO DO DEPOIS (Serviço Concluído / Feito)
                         </span>
                         {m.fotoDepoisUrl && (
-                          <button
-                            type="button"
-                            onClick={() => handleRemoverFoto(m.id, 'depois')}
-                            className="text-red-600 hover:text-red-800 text-[10.5px] font-semibold flex items-center gap-0.5 cursor-pointer"
-                            title="Remover foto do Depois"
-                          >
-                            <Trash2 size={11} />
-                            <span>Remover</span>
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => baixarFoto(m.fotoDepoisUrl!, `missao-${m.numeroOrdem || m.id}-DEPOIS.jpg`)}
+                              className="text-blue-700 hover:text-blue-900 text-[10.5px] font-semibold flex items-center gap-0.5 cursor-pointer bg-blue-50 hover:bg-blue-100 px-1.5 py-0.5 rounded border border-blue-200 transition"
+                              title="Salvar foto do Depois (Download)"
+                            >
+                              <Download size={11} />
+                              <span>Baixar Foto</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoverFoto(m.id, 'depois')}
+                              className="text-red-600 hover:text-red-800 text-[10.5px] font-semibold flex items-center gap-0.5 cursor-pointer"
+                              title="Remover foto do Depois"
+                            >
+                              <Trash2 size={11} />
+                              <span>Remover</span>
+                            </button>
+                          </div>
                         )}
                       </div>
 
@@ -1370,6 +1422,15 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
                             className="w-full h-full object-cover"
                           />
                           <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/foto:opacity-100 transition-opacity flex items-center justify-center gap-2 p-2">
+                            <button
+                              type="button"
+                              onClick={() => baixarFoto(m.fotoDepoisUrl!, `missao-${m.numeroOrdem || m.id}-DEPOIS.jpg`)}
+                              className="cursor-pointer px-2 py-1 bg-white/95 hover:bg-white text-slate-900 text-[11px] font-bold rounded shadow flex items-center gap-1"
+                              title="Baixar esta foto"
+                            >
+                              <Download size={12} />
+                              <span>Baixar</span>
+                            </button>
                             <label className="cursor-pointer px-2 py-1 bg-white/95 hover:bg-white text-slate-900 text-[11px] font-bold rounded shadow flex items-center gap-1">
                               <Camera size={12} />
                               <span>Tirar Nova</span>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { InformeMensal, PaginaFotoServico, FotoCard } from '../../types';
-import { gerarId } from '../../utils';
-import { Plus, Trash2, Printer, Archive, Upload, Image as ImageIcon, CheckCircle, Grid, LayoutGrid, AlertTriangle, X } from 'lucide-react';
+import { gerarId, baixarFoto, comprimirImagemParaArmazenamento } from '../../utils';
+import { Plus, Trash2, Printer, Archive, Upload, Image as ImageIcon, CheckCircle, Grid, LayoutGrid, AlertTriangle, X, Download } from 'lucide-react';
 
 interface InformeMensalViewProps {
   informeAtual: InformeMensal;
@@ -31,12 +31,13 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
     onChangeInformeAtual({ ...informeAtual, [field]: val });
   };
 
-  const handleUploadCapa = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      handleUpdateField('capaUrl', e.target?.result as string);
-    };
-    reader.readAsDataURL(file);
+  const handleUploadCapa = async (file: File) => {
+    try {
+      const dataUrl = await comprimirImagemParaArmazenamento(file, 1200, 0.75);
+      handleUpdateField('capaUrl', dataUrl);
+    } catch (err) {
+      console.error('Erro ao processar capa:', err);
+    }
   };
 
   const handleAddPaginaFotos = () => {
@@ -76,18 +77,18 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
     );
   };
 
-  const handleUploadFotoPagina = (pagId: string, fotoId: string, file: File) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target?.result as string;
+  const handleUploadFotoPagina = async (pagId: string, fotoId: string, file: File) => {
+    try {
+      const dataUrl = await comprimirImagemParaArmazenamento(file, 1024, 0.72);
       const updated = informeAtual.paginas.map((p) => {
         if (p.id !== pagId) return p;
         const updatedFotos = p.fotos.map((f) => (f.id === fotoId ? { ...f, url: dataUrl } : f));
         return { ...p, fotos: updatedFotos };
       });
       handleUpdateField('paginas', updated);
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Erro ao processar foto da página:', err);
+    }
   };
 
   const handleUpdateLegendaFoto = (pagId: string, fotoId: string, legenda: string) => {
@@ -211,20 +212,34 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
                     className="w-full h-64 object-cover"
                   />
                 </div>
-                <label className="no-print absolute bottom-2 right-2 bg-white/90 hover:bg-white text-slate-800 text-[10px] font-bold px-2 py-1 rounded shadow cursor-pointer transition">
-                  Alterar Imagem da Capa
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      if (e.target.files && e.target.files[0]) {
-                        handleUploadCapa(e.target.files[0]);
-                        e.target.value = '';
-                      }
-                    }}
-                  />
-                </label>
+                <div className="no-print absolute bottom-2 right-2 flex items-center gap-1.5">
+                  {informeAtual.capaUrl && (
+                    <button
+                      type="button"
+                      onClick={() => baixarFoto(informeAtual.capaUrl, 'capa-informe-mensal.jpg')}
+                      className="bg-white/90 hover:bg-white text-slate-800 text-[10px] font-bold px-2 py-1 rounded shadow cursor-pointer transition flex items-center gap-1"
+                      title="Baixar imagem da capa"
+                    >
+                      <Download size={11} />
+                      <span>Baixar</span>
+                    </button>
+                  )}
+                  <label className="bg-white/90 hover:bg-white text-slate-800 text-[10px] font-bold px-2 py-1 rounded shadow cursor-pointer transition flex items-center gap-1">
+                    <Upload size={11} />
+                    <span>Alterar Imagem</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          handleUploadCapa(e.target.files[0]);
+                          e.target.value = '';
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
               </div>
 
               {/* Titles */}
@@ -294,6 +309,23 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
             <div key={pagina.id} className="relative group max-w-[820px] mx-auto">
               {/* Toolbar on page hover */}
               <div className="no-print absolute top-2 right-2 z-10 flex items-center gap-1.5 bg-white/90 p-1 rounded-md shadow border border-slate-200 opacity-90 group-hover:opacity-100 transition">
+                {pagina.fotos.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      pagina.fotos.forEach((foto, fIdx) => {
+                        setTimeout(() => {
+                          baixarFoto(foto.url, `pagina-${pagIdx + 1}-foto-${fIdx + 1}.jpg`);
+                        }, fIdx * 300);
+                      });
+                    }}
+                    className="px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-50 rounded flex items-center gap-1 cursor-pointer transition"
+                    title="Baixar todas as fotos desta página"
+                  >
+                    <Download size={13} />
+                    <span>Baixar Fotos</span>
+                  </button>
+                )}
                 <button
                   onClick={() =>
                     handleUpdatePagina(
@@ -378,20 +410,31 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
                               pagina.tipoGrid === '3' ? 'h-44' : 'h-64'
                             }`}
                           />
-                          <label className="no-print absolute top-1.5 right-1.5 bg-white/90 hover:bg-white text-slate-800 text-[10px] font-bold px-2 py-0.5 rounded shadow cursor-pointer transition">
-                            Substituir
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={(e) => {
-                                if (e.target.files && e.target.files[0]) {
-                                  handleUploadFotoPagina(pagina.id, foto.id, e.target.files[0]);
-                                  e.target.value = '';
-                                }
-                              }}
-                            />
-                          </label>
+                          <div className="no-print absolute top-1.5 right-1.5 flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => baixarFoto(foto.url, `pagina-${pagIdx + 1}-${foto.legenda ? foto.legenda.slice(0, 20).replace(/\s+/g, '_') : 'foto'}.jpg`)}
+                              className="bg-white/90 hover:bg-white text-slate-800 text-[10px] font-bold px-1.5 py-0.5 rounded shadow cursor-pointer transition flex items-center gap-0.5"
+                              title="Salvar foto no computador/celular"
+                            >
+                              <Download size={10} />
+                              <span>Baixar</span>
+                            </button>
+                            <label className="bg-white/90 hover:bg-white text-slate-800 text-[10px] font-bold px-2 py-0.5 rounded shadow cursor-pointer transition">
+                              Substituir
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  if (e.target.files && e.target.files[0]) {
+                                    handleUploadFotoPagina(pagina.id, foto.id, e.target.files[0]);
+                                    e.target.value = '';
+                                  }
+                                }}
+                              />
+                            </label>
+                          </div>
                         </div>
                         <div className="w-full bg-slate-50 border-t border-slate-200 p-2 text-center">
                           <input

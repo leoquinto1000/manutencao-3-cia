@@ -27,6 +27,103 @@ export function gerarId(): string {
   return Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
 }
 
+/**
+ * Faz o download de uma foto (Base64/DataURL ou link) no navegador do usuário
+ */
+export function baixarFoto(urlOuDataUrl: string, nomeArquivo: string): void {
+  if (!urlOuDataUrl) return;
+  try {
+    const link = document.createElement('a');
+    link.href = urlOuDataUrl;
+    const nomeLimpo =
+      nomeArquivo.toLowerCase().endsWith('.jpg') ||
+      nomeArquivo.toLowerCase().endsWith('.jpeg') ||
+      nomeArquivo.toLowerCase().endsWith('.png')
+        ? nomeArquivo
+        : `${nomeArquivo}.jpg`;
+    link.download = nomeLimpo;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  } catch (err) {
+    console.error('Erro ao baixar foto:', err);
+  }
+}
+
+/**
+ * Redimensiona e comprime uma foto (File ou DataURL) para JPEG otimizado
+ * (dimensão máxima de 1024px e qualidade 0.72).
+ * Isso reduz fotos pesadas de celulares (4MB-10MB) para apenas ~40KB-70KB,
+ * permitindo que sejam salvas no Firestore e no armazenamento local sem estourar limites
+ * e sem perder qualidade visual para exibição e relatórios A4.
+ */
+export function comprimirImagemParaArmazenamento(
+  arquivoOuDataUrl: File | string,
+  maxDimensao: number = 1024,
+  qualidade: number = 0.72
+): Promise<string> {
+  return new Promise((resolve) => {
+    const processarDataUrl = (dataUrl: string) => {
+      // Se for URL externa de internet (ex: https://), não precisa comprimir
+      if (dataUrl.startsWith('http://') || dataUrl.startsWith('https://')) {
+        resolve(dataUrl);
+        return;
+      }
+
+      const img = new Image();
+      img.onload = () => {
+        let largura = img.width;
+        let altura = img.height;
+
+        if (largura > maxDimensao || altura > maxDimensao) {
+          if (largura > altura) {
+            altura = Math.round((altura * maxDimensao) / largura);
+            largura = maxDimensao;
+          } else {
+            largura = Math.round((largura * maxDimensao) / altura);
+            altura = maxDimensao;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = largura;
+        canvas.height = altura;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(dataUrl);
+          return;
+        }
+
+        // Fundo branco para garantir que transparências de PNG fiquem brancas em JPEG
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, largura, altura);
+        ctx.drawImage(img, 0, 0, largura, altura);
+
+        try {
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', qualidade);
+          resolve(compressedDataUrl);
+        } catch (e) {
+          resolve(dataUrl);
+        }
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    };
+
+    if (typeof arquivoOuDataUrl === 'string') {
+      processarDataUrl(arquivoOuDataUrl);
+    } else {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const rawDataUrl = ev.target?.result as string;
+        processarDataUrl(rawDataUrl);
+      };
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(arquivoOuDataUrl);
+    }
+  });
+}
+
 export const DADOS_INICIAIS_NF1: NFInstance = {
   id: 1,
   label: 'NF 1 - Materiais Hidráulicos & Elétricos',
@@ -545,146 +642,173 @@ export const DADOS_INICIAIS_LISTA_COMPRAS: import('./types').ItemListaCompras[] 
 
 export const DADOS_INICIAIS_MEMBROS: import('./types').MembroEquipe[] = [
   {
-    id: 'membro-1',
+    id: 'membro-froes',
     graduacao: '1º Ten PM',
     nomeGuerra: '1º Ten PM Froes',
-    nomeCompleto: 'Lucas Froes de Oliveira',
+    nomeCompleto: '',
     re: '142.890-1',
     especialidade: 'Oficial Coordenador de Manutenção',
-    telefone: '(11) 98765-4321',
+    telefone: '(11) 981265643',
     anoCurso: 'Efetivo Permanente',
-    pelotao: 'A',
+    pelotao: '',
     ativo: true,
     tipoEfetivo: 'fixo',
   },
   {
-    id: 'membro-2',
-    graduacao: 'Cb PM',
-    nomeGuerra: 'Cb PM Ribeiro',
-    nomeCompleto: 'Marcio Ribeiro dos Santos',
-    re: '154.321-4',
-    especialidade: 'Elétrica & Infraestrutura',
-    telefone: '(11) 97654-3210',
-    anoCurso: 'Efetivo Permanente',
-    pelotao: 'B',
-    ativo: true,
-    tipoEfetivo: 'fixo',
-  },
-  {
-    id: 'membro-3',
-    graduacao: 'Sd PM',
-    nomeGuerra: 'Sd PM Santana',
-    nomeCompleto: 'Rodrigo Santana de Souza',
-    re: '168.745-9',
-    especialidade: 'Hidráulica & Chuveiros',
-    telefone: '(11) 96543-2109',
-    anoCurso: 'Efetivo Permanente',
-    pelotao: 'C',
-    ativo: true,
-    tipoEfetivo: 'fixo',
-  },
-  {
-    id: 'membro-4',
-    graduacao: 'Cb PM',
-    nomeGuerra: 'Cb PM Silva',
-    nomeCompleto: 'Alexandre da Silva',
-    re: '151.209-8',
-    especialidade: 'Alvenaria & Obras Civis',
-    telefone: '(11) 95432-1098',
-    anoCurso: 'Efetivo Permanente',
-    pelotao: 'D',
-    ativo: true,
-    tipoEfetivo: 'fixo',
-  },
-  {
-    id: 'membro-5',
-    graduacao: 'Sd PM',
-    nomeGuerra: 'Sd PM Pereira',
-    nomeCompleto: 'Gabriel Pereira Ramos',
-    re: '172.410-3',
-    especialidade: 'Pintura & Acabamento',
-    telefone: '(11) 94321-0987',
-    anoCurso: 'Efetivo Permanente',
-    pelotao: 'E',
-    ativo: true,
-    tipoEfetivo: 'fixo',
-  },
-  {
-    id: 'membro-6',
+    id: 'membro-perozin',
     graduacao: 'Cad PM',
-    nomeGuerra: 'Cad PM Cristian',
-    nomeCompleto: 'Cristian de Almeida',
-    re: '180.123-5',
-    especialidade: 'Apoio da Guarda & Logística',
-    telefone: '(11) 98111-2233',
+    nomeGuerra: 'Cad PM Perozin',
+    nomeCompleto: 'Gustavo Perozin',
+    re: '230060-5',
+    especialidade: 'Elétrica e Gestão',
+    telefone: '(14) 996556882',
     anoCurso: '2°CFO',
-    pelotao: 'F',
+    pelotao: '',
     ativo: true,
-    tipoEfetivo: 'apoio',
-    origemApoio: '2º Pelotão - Guarda do Quartel',
-    periodoApoio: 'Setembro/2026 (9º e 10º tempos)',
-    funcaoApoio: 'Apoio nas passagens de cabo e logística da Seção',
-    observacoesApoio: 'Disponível às terças e quintas',
+    tipoEfetivo: 'fixo',
   },
   {
-    id: 'membro-7',
+    id: 'membro-salvioni',
+    graduacao: 'Cad PM',
+    nomeGuerra: 'Cad PM Salvioni',
+    nomeCompleto: 'Lucas Batista Salvioni',
+    re: '252664-6',
+    especialidade: 'Pintura e Gestão',
+    telefone: '(17) 99753-2203',
+    anoCurso: '2°CFO',
+    pelotao: '',
+    ativo: true,
+    tipoEfetivo: 'fixo',
+  },
+  {
+    id: 'membro-diomazio',
     graduacao: 'Cad PM',
     nomeGuerra: 'Cad PM Diomazio',
-    nomeCompleto: 'Felipe Diomazio',
-    re: '180.456-7',
-    especialidade: 'Inspeção Predial & Vestiários',
-    telefone: '(11) 98222-3344',
+    nomeCompleto: 'Gabriel Fernando Diomazio Figueira',
+    re: '144966-4',
+    especialidade: 'Compras e Administração',
+    telefone: '(18) 997423001',
     anoCurso: '3°CFO',
-    pelotao: 'G',
+    pelotao: '',
     ativo: true,
-    tipoEfetivo: 'apoio',
-    origemApoio: '3º Pelotão - Alunos Oficiais',
-    periodoApoio: 'Missões Diárias / Escala Semanal',
-    funcaoApoio: 'Inspeção técnica de instalações e auxílio nos vestiários',
-    observacoesApoio: 'Reforço designado da Subunidade',
+    tipoEfetivo: 'fixo',
   },
   {
-    id: 'membro-8',
-    graduacao: 'Sd PM',
-    nomeGuerra: 'Sd PM Barros',
-    nomeCompleto: 'Lucas Barros Mendes',
-    re: '175.992-1',
-    especialidade: 'Pintura & Lixamento',
-    telefone: '(11) 98333-5566',
-    anoCurso: 'Efetivo Permanente',
-    pelotao: 'D',
+    id: 'membro-fabio',
+    graduacao: 'Cad PM',
+    nomeGuerra: 'Cad PM Fabio',
+    nomeCompleto: 'João Batista de Moura Fábio',
+    re: '252593-3',
+    especialidade: 'Elétrica e Hidráulica',
+    telefone: '(44) 998185606',
+    anoCurso: '2°CFO',
+    pelotao: '',
     ativo: true,
-    tipoEfetivo: 'apoio',
-    origemApoio: 'Pelotão de Comando e Serviços (Apoio Externo)',
-    periodoApoio: 'Período da Manhã (07h15 às 11h30)',
-    funcaoApoio: 'Reforço na reforma e pintura geral da 3ª Cia',
-    observacoesApoio: 'Militar com experiência prévia em carpintaria e pintura',
+    tipoEfetivo: 'fixo',
+  },
+  {
+    id: 'membro-freire',
+    graduacao: 'Cad PM',
+    nomeGuerra: 'Cad PM Freire',
+    nomeCompleto: 'Israel Freire Moreira',
+    re: '260062-5',
+    especialidade: 'Auxiliar em Geral',
+    telefone: '(21) 995925260',
+    anoCurso: '1°CFO',
+    pelotao: '',
+    ativo: true,
+    tipoEfetivo: 'fixo',
+  },
+  {
+    id: 'membro-ulisses',
+    graduacao: 'Cad PM',
+    nomeGuerra: 'Cad PM Ulisses Silveira',
+    nomeCompleto: 'Ulisses Silveira da Silva Gonçalves',
+    re: '180823-A',
+    especialidade: 'Elétrica e Auxiliar Geral',
+    telefone: '(16) 992846868',
+    anoCurso: '1°CFO',
+    pelotao: '',
+    ativo: true,
+    tipoEfetivo: 'fixo',
+  },
+  {
+    id: 'membro-ravely',
+    graduacao: 'Cad PM',
+    nomeGuerra: 'Cad PM Ravely',
+    nomeCompleto: 'César Ravely Moura da Silva',
+    re: '230342-6',
+    especialidade: 'Auxiliar em Geral',
+    telefone: '(11) 914811237',
+    anoCurso: '1°CFO',
+    pelotao: '',
+    ativo: true,
+    tipoEfetivo: 'fixo',
+  },
+  {
+    id: 'membro-isack',
+    graduacao: 'Cad PM',
+    nomeGuerra: 'Cad PM Isack',
+    nomeCompleto: 'Isack Soares Moreira',
+    re: '250021-3',
+    especialidade: 'Pintura e Auxiliar Geral',
+    telefone: '(19) 998402562',
+    anoCurso: '1°CFO',
+    pelotao: '',
+    ativo: true,
+    tipoEfetivo: 'fixo',
+  },
+  {
+    id: 'membro-augusto',
+    graduacao: 'Cad PM',
+    nomeGuerra: 'Cad PM Augusto',
+    nomeCompleto: 'Leonardo Augusto Quinto',
+    re: '170429-0',
+    especialidade: 'UGE',
+    telefone: '(17) 981193408',
+    anoCurso: '2°CFO',
+    pelotao: '',
+    ativo: true,
+    tipoEfetivo: 'fixo',
+  },
+  {
+    id: 'membro-peciukonis',
+    graduacao: 'Cad PM',
+    nomeGuerra: 'Cad PM Peciukonis',
+    nomeCompleto: 'Thiago Peciukonis',
+    re: '191800-1',
+    especialidade: 'UGE',
+    telefone: '(11) 981724414',
+    anoCurso: '2°CFO',
+    pelotao: '',
+    ativo: true,
+    tipoEfetivo: 'fixo',
   },
 ];
 
 export const DADOS_INICIAIS_EQUIPES: import('./types').EquipeManutencao[] = [
   {
     id: 'eq-1',
-    nome: 'Equipe Alfa - Elétrica & Rede',
-    encarregado: 'Cb PM Ribeiro',
-    especialidade: 'Instalações elétricas, canaletas, tomadas e iluminação',
-    membros: ['Cb PM Ribeiro', 'Cad PM Cristian'],
+    nome: 'Equipe Alfa - Elétrica & Gestão',
+    encarregado: 'Cad PM Perozin',
+    especialidade: 'Instalações elétricas, canaletas, tomadas e gestão',
+    membros: ['Cad PM Perozin', 'Cad PM Fabio', 'Cad PM Ulisses Silveira'],
     corBadge: 'blue',
   },
   {
     id: 'eq-2',
-    nome: 'Equipe Bravo - Hidrossanitária',
-    encarregado: 'Sd PM Santana',
-    especialidade: 'Chuveiros, encanamentos, torneiras e assentos',
-    membros: ['Sd PM Santana', 'Cad PM Diomazio'],
+    nome: 'Equipe Bravo - Compras & UGE',
+    encarregado: 'Cad PM Diomazio',
+    especialidade: 'Administração de materiais, compras e gestão UGE',
+    membros: ['Cad PM Diomazio', 'Cad PM Augusto', 'Cad PM Peciukonis'],
     corBadge: 'emerald',
   },
   {
     id: 'eq-3',
-    nome: 'Equipe Charlie - Pintura & Conservação',
-    encarregado: 'Cb PM Silva',
-    especialidade: 'Pintura de paredes, retoques, selamento e alvenaria',
-    membros: ['Cb PM Silva', 'Sd PM Pereira'],
+    nome: 'Equipe Charlie - Pintura & Auxiliar Geral',
+    encarregado: 'Cad PM Salvioni',
+    especialidade: 'Pintura, reformas gerais e conservação predial',
+    membros: ['Cad PM Salvioni', 'Cad PM Freire', 'Cad PM Ravely', 'Cad PM Isack'],
     corBadge: 'amber',
   },
 ];

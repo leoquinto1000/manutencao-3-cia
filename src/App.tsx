@@ -35,6 +35,7 @@ import {
   escutarDadosFirestore,
   DadosSistemaFirestore,
 } from './firebase';
+import { salvarItemIndexedDB, carregarItemIndexedDB } from './utils/indexedDbStorage';
 import { Header } from './components/Header';
 import { PrestacaoContasView } from './components/PrestacaoContas/PrestacaoContasView';
 import { MateriaisUsadosView } from './components/MateriaisUsados/MateriaisUsadosView';
@@ -168,13 +169,83 @@ export default function App() {
     return DADOS_INICIAIS_MISSOES;
   });
 
+  // Helper para garantir e sincronizar os 11 policiais militares reais da 3ª Cia no Efetivo Fixo
+  const sincronizarEfetivoOficial = (lista: MembroEquipe[]): MembroEquipe[] => {
+    if (!Array.isArray(lista) || lista.length === 0) {
+      return DADOS_INICIAIS_MEMBROS;
+    }
+    const temOficiaisReais = lista.some(
+      (m) =>
+        ['230060-5', '252664-6', '144966-4', '252593-3', '260062-5', '180823-A', '230342-6', '250021-3', '170429-0', '191800-1'].includes(
+          m.re || ''
+        ) ||
+        m.nomeGuerra.toLowerCase().includes('perozin') ||
+        m.nomeGuerra.toLowerCase().includes('salvioni')
+    );
+
+    if (!temOficiaisReais) {
+      return DADOS_INICIAIS_MEMBROS;
+    }
+
+    const converterParaCfo = (ano?: string) => {
+      if (!ano) return '1°CFO';
+      if (ano === '1º Ano' || ano.includes('1')) return '1°CFO';
+      if (ano === '2º Ano' || ano.includes('2')) return '2°CFO';
+      if (ano === '3º Ano' || ano.includes('3')) return '3°CFO';
+      if (ano === '4º Ano' || ano.includes('4')) return '4°CFO';
+      if (ano.toLowerCase().includes('permanente') || ano.toLowerCase().includes('efetivo')) return 'Efetivo Permanente';
+      return ano;
+    };
+
+    const resultado = [...lista].map((m) => {
+      if (m.anoCurso && m.anoCurso.includes('Ano')) {
+        return {
+          ...m,
+          anoCurso: converterParaCfo(m.anoCurso),
+        };
+      }
+      return m;
+    });
+
+    for (const oficial of DADOS_INICIAIS_MEMBROS) {
+      const idx = resultado.findIndex(
+        (m) =>
+          (m.re && oficial.re && m.re.replace(/\D/g, '') === oficial.re.replace(/\D/g, '')) ||
+          m.nomeGuerra.toLowerCase() === oficial.nomeGuerra.toLowerCase()
+      );
+      if (idx >= 0) {
+        resultado[idx] = {
+          ...oficial,
+          ...resultado[idx],
+          anoCurso: oficial.anoCurso,
+          tipoEfetivo: 'fixo',
+          ativo: true,
+        };
+      } else {
+        resultado.push(oficial);
+      }
+    }
+    return resultado;
+  };
+
+  const sincronizarEquipesOficiais = (lista: EquipeManutencao[]): EquipeManutencao[] => {
+    if (!Array.isArray(lista) || lista.length === 0) return DADOS_INICIAIS_EQUIPES;
+    const temEquipeAntiga = lista.some(
+      (eq) => eq.encarregado?.includes('Ribeiro') || eq.encarregado?.includes('Santana')
+    );
+    if (temEquipeAntiga) {
+      return DADOS_INICIAIS_EQUIPES;
+    }
+    return lista;
+  };
+
   // Estado das Equipes de Manutenção
   const [equipes, setEquipes] = useState<EquipeManutencao[]>(() => {
     try {
       const saved = localStorage.getItem('pmesp_equipes');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) return sincronizarEquipesOficiais(parsed);
       }
     } catch (e) {
       console.error(e);
@@ -189,26 +260,7 @@ export default function App() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map((m: any) => {
-            let ano = m.anoCurso;
-            if (ano === '1º Ano' || ano === '1º Ano (CFO / CFSd)') ano = '1°CFO';
-            else if (ano === '2º Ano' || ano === '2º Ano (CFO)' || ano === '2º Ano CFO') ano = '2°CFO';
-            else if (ano === '3º Ano' || ano === '3º Ano (CFO)' || ano === '3º Ano CFO') ano = '3°CFO';
-            else if (ano === '4º Ano' || ano === '4º Ano (CFO / Formando)') ano = '4°CFO';
-            else if (ano === 'Quadro Efetivo (Permanente)' || ano === 'Quadro de Oficiais') ano = 'Efetivo Permanente';
-            const tipoEfetivo =
-              m.tipoEfetivo === 'fixo' || m.tipoEfetivo === 'apoio'
-                ? m.tipoEfetivo
-                : m.anoCurso?.includes('CFO')
-                ? 'apoio'
-                : 'fixo';
-            return {
-              ...m,
-              anoCurso: ano || '1°CFO',
-              pelotao: m.pelotao || 'A',
-              tipoEfetivo,
-            };
-          });
+          return sincronizarEfetivoOficial(parsed);
         }
       }
     } catch (e) {
@@ -262,46 +314,105 @@ export default function App() {
     } catch (e) {}
   }, [materiaisUsados]);
 
+  // Carregamento inicial de segurança via IndexedDB (garante fotos preservadas mesmo que localStorage estoure a cota de 5MB)
+  useEffect(() => {
+    let isAtivo = true;
+    async function carregarCacheLocal() {
+      try {
+        const [missoesDB, informeDB, arquivadosDB] = await Promise.all([
+          carregarItemIndexedDB<MissaoDiaria[]>('pmesp_missoes'),
+          carregarItemIndexedDB<InformeMensal>('pmesp_informe_atual'),
+          carregarItemIndexedDB<InformeMensal[]>('pmesp_informes_arquivados'),
+        ]);
+
+        if (!isAtivo) return;
+
+        if (Array.isArray(missoesDB) && missoesDB.length > 0) {
+          setMissoes((atuais) => {
+            const fotosNoDB = missoesDB.some((m) => m.fotoAntesUrl || m.fotoDepoisUrl);
+            const fotosNosAtuais = atuais.some((m) => m.fotoAntesUrl || m.fotoDepoisUrl);
+            if (fotosNoDB && !fotosNosAtuais) {
+              return missoesDB;
+            }
+            return atuais;
+          });
+        }
+
+        if (informeDB && typeof informeDB === 'object') {
+          setInformeAtual((atual) => {
+            const fotosNoDB =
+              (informeDB.paginas || []).some((p) => (p.fotos || []).length > 0) ||
+              !!informeDB.capaUrl;
+            const fotosNoAtual =
+              (atual.paginas || []).some((p) => (p.fotos || []).length > 0) ||
+              !!atual.capaUrl;
+            if (fotosNoDB && !fotosNoAtual) {
+              return { ...DADOS_INICIAIS_INFORME, ...informeDB };
+            }
+            return atual;
+          });
+        }
+
+        if (Array.isArray(arquivadosDB) && arquivadosDB.length > 0) {
+          setInformesArquivados((atuais) => (atuais.length === 0 ? arquivadosDB : atuais));
+        }
+      } catch (e) {
+        console.warn('Aviso no carregamento do IndexedDB:', e);
+      }
+    }
+    carregarCacheLocal();
+    return () => {
+      isAtivo = false;
+    };
+  }, []);
+
   useEffect(() => {
     try {
       localStorage.setItem('pmesp_informe_atual', JSON.stringify(informeAtual));
     } catch (e) {}
+    salvarItemIndexedDB('pmesp_informe_atual', informeAtual);
   }, [informeAtual]);
 
   useEffect(() => {
     try {
       localStorage.setItem('pmesp_informes_arquivados', JSON.stringify(informesArquivados));
     } catch (e) {}
+    salvarItemIndexedDB('pmesp_informes_arquivados', informesArquivados);
   }, [informesArquivados]);
 
   useEffect(() => {
     try {
       localStorage.setItem('pmesp_projetos_arquivados', JSON.stringify(arquivosSalvos));
     } catch (e) {}
+    salvarItemIndexedDB('pmesp_projetos_arquivados', arquivosSalvos);
   }, [arquivosSalvos]);
 
   useEffect(() => {
     try {
       localStorage.setItem('pmesp_missoes', JSON.stringify(missoes));
     } catch (e) {}
+    salvarItemIndexedDB('pmesp_missoes', missoes);
   }, [missoes]);
 
   useEffect(() => {
     try {
       localStorage.setItem('pmesp_equipes', JSON.stringify(equipes));
     } catch (e) {}
+    salvarItemIndexedDB('pmesp_equipes', equipes);
   }, [equipes]);
 
   useEffect(() => {
     try {
       localStorage.setItem('pmesp_membros', JSON.stringify(membros));
     } catch (e) {}
+    salvarItemIndexedDB('pmesp_membros', membros);
   }, [membros]);
 
   useEffect(() => {
     try {
       localStorage.setItem('pmesp_banco_fornecedores', JSON.stringify(bancoFornecedores));
     } catch (e) {}
+    salvarItemIndexedDB('pmesp_banco_fornecedores', bancoFornecedores);
   }, [bancoFornecedores]);
 
   // Sincronização Inicial com o Firebase Firestore (manutencao-3-cia)
@@ -319,12 +430,55 @@ export default function App() {
           if (dados.balancete) setBalancete(dados.balancete);
           if (dados.textoParte) setTextoParte(dados.textoParte);
           if (Array.isArray(dados.materiaisUsados)) setMateriaisUsados(dados.materiaisUsados);
-          if (dados.informeAtual) setInformeAtual(dados.informeAtual);
+          if (dados.informeAtual) {
+            setInformeAtual((atual) => {
+              const fotosFirestore =
+                (dados.informeAtual.paginas || []).some((p: any) => (p.fotos || []).length > 0) ||
+                !!dados.informeAtual.capaUrl;
+              const fotosAtuais =
+                (atual.paginas || []).some((p) => (p.fotos || []).length > 0) ||
+                !!atual.capaUrl;
+              if (fotosFirestore || !fotosAtuais) {
+                return dados.informeAtual;
+              }
+              return {
+                ...dados.informeAtual,
+                capaUrl: atual.capaUrl || dados.informeAtual.capaUrl,
+                paginas: dados.informeAtual.paginas.map((p: any) => {
+                  const pagLocal = atual.paginas.find((pl) => pl.id === p.id);
+                  if (pagLocal && pagLocal.fotos?.length > 0 && (!p.fotos || p.fotos.length === 0)) {
+                    return { ...p, fotos: pagLocal.fotos };
+                  }
+                  return p;
+                }),
+              };
+            });
+          }
           if (Array.isArray(dados.informesArquivados)) setInformesArquivados(dados.informesArquivados);
           if (Array.isArray(dados.arquivosSalvos)) setArquivosSalvos(dados.arquivosSalvos);
-          if (Array.isArray(dados.missoes)) setMissoes(dados.missoes);
-          if (Array.isArray(dados.equipes)) setEquipes(dados.equipes);
-          if (Array.isArray(dados.membros) && dados.membros.length > 0) setMembros(dados.membros);
+          if (Array.isArray(dados.missoes)) {
+            setMissoes((atuais) => {
+              const fotosFirestore = dados.missoes.some((m: any) => m.fotoAntesUrl || m.fotoDepoisUrl);
+              const fotosAtuais = atuais.some((m) => m.fotoAntesUrl || m.fotoDepoisUrl);
+              if (fotosFirestore || !fotosAtuais) {
+                return dados.missoes;
+              }
+              return dados.missoes.map((m: any) => {
+                const local = atuais.find((al) => al.id === m.id);
+                if (local) {
+                  return {
+                    ...m,
+                    fotoAntesUrl: m.fotoAntesUrl || local.fotoAntesUrl,
+                    fotoDepoisUrl: m.fotoDepoisUrl || local.fotoDepoisUrl,
+                  };
+                }
+                return m;
+              });
+            });
+          }
+          if (Array.isArray(dados.equipes)) setEquipes(sincronizarEquipesOficiais(dados.equipes));
+          if (Array.isArray(dados.membros) && dados.membros.length > 0)
+            setMembros(sincronizarEfetivoOficial(dados.membros));
           if (Array.isArray(dados.bancoFornecedores)) setBancoFornecedores(dados.bancoFornecedores);
 
           if (dados.ultimaAtualizacao) {

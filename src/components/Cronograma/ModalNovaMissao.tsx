@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MissaoDiaria, EquipeManutencao, MembroEquipe } from '../../types';
-import { gerarId, formatarDataISO, adicionarDiasISO } from '../../utils';
+import { gerarId, formatarDataISO, adicionarDiasISO, baixarFoto, comprimirImagemParaArmazenamento } from '../../utils';
 import {
   Calendar,
   Clock,
@@ -19,6 +19,7 @@ import {
   Upload,
   Trash2,
   Image as ImageIcon,
+  Download,
 } from 'lucide-react';
 
 interface ModalNovaMissaoProps {
@@ -117,14 +118,14 @@ export const ModalNovaMissao: React.FC<ModalNovaMissaoProps> = ({
 
   if (!aberto) return null;
 
-  const handleCarregarFoto = (tipo: 'antes' | 'depois', file: File) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target?.result as string;
+  const handleCarregarFoto = async (tipo: 'antes' | 'depois', file: File) => {
+    try {
+      const dataUrl = await comprimirImagemParaArmazenamento(file);
       if (tipo === 'antes') setFotoAntesUrl(dataUrl);
       else setFotoDepoisUrl(dataUrl);
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Erro ao processar foto na missão:', err);
+    }
   };
 
   // Adicionar ou remover policial dos executores escalados
@@ -525,16 +526,26 @@ export const ModalNovaMissao: React.FC<ModalNovaMissaoProps> = ({
                   1. Foto do Antes (Situação Inicial)
                 </span>
                 {fotoAntesUrl ? (
-                  <div className="relative rounded overflow-hidden h-28 border border-slate-300 bg-white">
+                  <div className="relative rounded overflow-hidden h-28 border border-slate-300 bg-white group/foto">
                     <img src={fotoAntesUrl} alt="Antes" className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => setFotoAntesUrl('')}
-                      className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white p-1 rounded shadow text-xs"
-                      title="Remover foto"
-                    >
-                      <Trash2 size={12} />
-                    </button>
+                    <div className="absolute top-1 right-1 flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => baixarFoto(fotoAntesUrl, 'missao-foto-antes.jpg')}
+                        className="bg-blue-600 hover:bg-blue-700 text-white p-1 rounded shadow text-xs cursor-pointer"
+                        title="Baixar foto do Antes"
+                      >
+                        <Download size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFotoAntesUrl('')}
+                        className="bg-red-600 hover:bg-red-700 text-white p-1 rounded shadow text-xs cursor-pointer"
+                        title="Remover foto"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div className="flex flex-col gap-1.5">
@@ -575,16 +586,26 @@ export const ModalNovaMissao: React.FC<ModalNovaMissaoProps> = ({
                   2. Foto do Depois (Serviço Concluído)
                 </span>
                 {fotoDepoisUrl ? (
-                  <div className="relative rounded overflow-hidden h-28 border border-slate-300 bg-white">
+                  <div className="relative rounded overflow-hidden h-28 border border-slate-300 bg-white group/foto">
                     <img src={fotoDepoisUrl} alt="Depois" className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => setFotoDepoisUrl('')}
-                      className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white p-1 rounded shadow text-xs"
-                      title="Remover foto"
-                    >
-                      <Trash2 size={12} />
-                    </button>
+                    <div className="absolute top-1 right-1 flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => baixarFoto(fotoDepoisUrl, 'missao-foto-depois.jpg')}
+                        className="bg-blue-600 hover:bg-blue-700 text-white p-1 rounded shadow text-xs cursor-pointer"
+                        title="Baixar foto do Depois"
+                      >
+                        <Download size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFotoDepoisUrl('')}
+                        className="bg-red-600 hover:bg-red-700 text-white p-1 rounded shadow text-xs cursor-pointer"
+                        title="Remover foto"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div className="flex flex-col gap-1.5">
