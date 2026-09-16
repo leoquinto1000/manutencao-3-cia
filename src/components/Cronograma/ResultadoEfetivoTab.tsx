@@ -269,14 +269,6 @@ export const ResultadoEfetivoTab: React.FC<ResultadoEfetivoTabProps> = ({
             </div>
           </div>
         </div>
-
-        {/* Aviso Institucional sobre a Pauta Oficial */}
-        <div className="mt-4 bg-amber-50/80 border border-amber-300/80 rounded-lg p-3 flex items-start gap-2.5 text-xs text-amber-950">
-          <AlertTriangle size={16} className="text-amber-700 shrink-0 mt-0.5" />
-          <div className="leading-relaxed">
-            <strong>Regra de Integração PMESP:</strong> Todos os militares (do <strong>Efetivo Fixo da 3ª Cia</strong> e <strong>Policiais que prestam apoio</strong>) que possuírem <strong>Impedimento</strong> registrado nesta subaba aparecerão automaticamente listados no <strong>rodapé da Pauta Oficial PMESP (Tabela)</strong> de missões diárias para despacho do Oficial de Dia e Comando da Subunidade.
-          </div>
-        </div>
       </div>
 
       {/* Barra de Filtros e Busca */}

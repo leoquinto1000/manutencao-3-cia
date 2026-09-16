@@ -1090,14 +1090,9 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
             </div>
           )}
 
-          {/* Campo de Notações Oficiais / Despacho */}
-          <div className="mt-2.5 pt-2 border-t border-black text-[10.5px] text-black flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-            <div>
-              <strong>Observação:</strong> Relação consolidada do Efetivo Fixo (3ª Cia) e Policiais de Apoio sincronizada com a Subaba <strong>Resultado</strong>.
-            </div>
-            <div className="italic text-slate-700">
-              3ª Cia Escola • Manutenção Predial • APMBB
-            </div>
+          {/* Rodapé / Subunidade */}
+          <div className="mt-2.5 pt-2 border-t border-black text-[10.5px] text-right italic text-slate-700">
+            3ª Cia Escola • Manutenção Predial • APMBB
           </div>
         </div>
 
