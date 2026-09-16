@@ -1,13 +1,29 @@
 import React, { useState } from 'react';
 import { InformeMensal, PaginaFotoServico, FotoCard } from '../../types';
-import { gerarId, baixarFoto, comprimirImagemParaArmazenamento } from '../../utils';
-import { Plus, Trash2, Printer, Archive, Upload, Image as ImageIcon, CheckCircle, Grid, LayoutGrid, AlertTriangle, X, Download } from 'lucide-react';
+import { gerarId, baixarFoto, comprimirImagemParaArmazenamento, DADOS_INICIAIS_INFORME } from '../../utils';
+import {
+  Plus,
+  Trash2,
+  Printer,
+  Archive,
+  Upload,
+  Image as ImageIcon,
+  CheckCircle,
+  Grid,
+  LayoutGrid,
+  AlertTriangle,
+  X,
+  Download,
+  Eye,
+  Search,
+  FileText,
+} from 'lucide-react';
 
 interface InformeMensalViewProps {
   informeAtual: InformeMensal;
   onChangeInformeAtual: (informe: InformeMensal) => void;
   informesArquivados: InformeMensal[];
-  onArquivarInforme: (informe: InformeMensal) => void;
+  onArquivarInforme: (informe: InformeMensal, idExistenteParaAtualizar?: string) => void;
   onCarregarInformeArquivado: (informe: InformeMensal) => void;
   onExcluirInformeArquivado: (id: string) => void;
   onLimparHistoricoInformes: () => void;
@@ -24,8 +40,24 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
 }) => {
   const [subAba, setSubAba] = useState<'edicao' | 'arquivo'>('edicao');
   const [informeParaExcluir, setInformeParaExcluir] = useState<InformeMensal | null>(null);
+  const [informeParaVisualizar, setInformeParaVisualizar] = useState<InformeMensal | null>(null);
   const [modalLimparAberto, setModalLimparAberto] = useState<boolean>(false);
   const [mensagemSucesso, setMensagemSucesso] = useState<string | null>(null);
+  const [filtroPesquisa, setFiltroPesquisa] = useState<string>('');
+
+  const informeArquivadoCorrespondente = informeAtual.id
+    ? informesArquivados.find((x) => x.id === informeAtual.id)
+    : null;
+
+  const informesFiltrados = informesArquivados.filter((inf) => {
+    if (!filtroPesquisa.trim()) return true;
+    const termo = filtroPesquisa.toLowerCase();
+    return (
+      inf.titulo?.toLowerCase().includes(termo) ||
+      inf.mesAno?.toLowerCase().includes(termo) ||
+      inf.subtitulo?.toLowerCase().includes(termo)
+    );
+  });
 
   const handleUpdateField = (field: keyof InformeMensal, val: any) => {
     onChangeInformeAtual({ ...informeAtual, [field]: val });
@@ -148,7 +180,66 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
       </div>
 
       {subAba === 'edicao' && (
-        <div className="space-y-6">
+        <div className="space-y-4">
+          {/* Mensagem de Feedback */}
+          {mensagemSucesso && (
+            <div className="no-print bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-semibold px-4 py-2.5 rounded-lg flex items-center justify-between shadow-2xs animate-in fade-in duration-150 max-w-[820px] mx-auto">
+              <span>{mensagemSucesso}</span>
+              <button onClick={() => setMensagemSucesso(null)} className="text-emerald-600 hover:text-emerald-900 font-bold ml-2">✕</button>
+            </div>
+          )}
+
+          {/* Banner quando editando um informe carregado do arquivo histórico */}
+          {informeArquivadoCorrespondente && (
+            <div className="no-print bg-amber-50 border border-amber-300 rounded-lg p-3 max-w-[820px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-amber-950 shadow-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-base">📝</span>
+                <div>
+                  <span className="font-bold">Editando Informe Arquivado:</span>{' '}
+                  <span className="font-medium">"{informeArquivadoCorrespondente.titulo} - {informeArquivadoCorrespondente.mesAno}"</span>
+                  <div className="text-[11px] text-amber-800">
+                    Você pode salvar alterações atualizando o registro existente ou criando um novo arquivamento.
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onArquivarInforme(informeAtual, informeAtual.id);
+                    setMensagemSucesso('💾 Informe arquivado atualizado com sucesso no histórico!');
+                    setTimeout(() => setMensagemSucesso(null), 4000);
+                  }}
+                  className="bg-amber-700 hover:bg-amber-800 text-white font-semibold px-2.5 py-1.5 rounded transition cursor-pointer"
+                >
+                  Atualizar no Arquivo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onArquivarInforme(informeAtual);
+                    setMensagemSucesso('➕ Salvo como novo informe adicional no arquivo!');
+                    setTimeout(() => setMensagemSucesso(null), 4000);
+                  }}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-2.5 py-1.5 rounded transition cursor-pointer"
+                >
+                  Salvar Novo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChangeInformeAtual({ ...DADOS_INICIAIS_INFORME, id: gerarId() });
+                    setMensagemSucesso('📄 Novo informe em branco iniciado.');
+                    setTimeout(() => setMensagemSucesso(null), 3000);
+                  }}
+                  className="text-slate-600 hover:text-slate-900 underline text-xs cursor-pointer ml-1"
+                >
+                  Limpar
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Toolbar */}
           <div className="no-print bg-white p-3.5 rounded-lg border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-3 max-w-[820px] mx-auto">
             <div className="flex items-center gap-2">
@@ -179,8 +270,8 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
               <button
                 onClick={() => {
                   onArquivarInforme(informeAtual);
-                  setMensagemSucesso('📦 Informe arquivado com sucesso no histórico!');
-                  setTimeout(() => setMensagemSucesso(null), 4000);
+                  setMensagemSucesso('📦 Informe arquivado com sucesso! Salvo permanentemente para consultas futuras.');
+                  setTimeout(() => setMensagemSucesso(null), 4500);
                 }}
                 className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2 rounded-md transition shadow-sm cursor-pointer"
               >
@@ -484,25 +575,50 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
             </div>
           )}
 
-          <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-200">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 pb-4 border-b border-slate-200">
             <div>
               <h2 className="text-base font-bold text-[#1a2b4c]">
                 Arquivo Histórico de Informes Mensais
               </h2>
               <p className="text-xs text-slate-500">
-                Informes arquivados para auditoria, histórico da APMBB e relatórios ao Comando.
+                Informes arquivados permanentemente para consultas, auditorias e edições futuras.
               </p>
             </div>
-            {informesArquivados.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setModalLimparAberto(true)}
-                className="text-red-600 hover:text-red-800 text-xs font-semibold px-2 py-1 rounded hover:bg-red-50 transition cursor-pointer"
-              >
-                Limpar Histórico
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {informesArquivados.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setModalLimparAberto(true)}
+                  className="text-red-600 hover:text-red-800 text-xs font-semibold px-2.5 py-1.5 rounded hover:bg-red-50 transition cursor-pointer"
+                >
+                  Limpar Histórico
+                </button>
+              )}
+            </div>
           </div>
+
+          {/* Barra de Busca rápida para consultas */}
+          {informesArquivados.length > 0 && (
+            <div className="mb-4 relative max-w-md">
+              <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
+              <input
+                type="text"
+                value={filtroPesquisa}
+                onChange={(e) => setFiltroPesquisa(e.target.value)}
+                placeholder="Pesquisar por título, mês de referência..."
+                className="w-full pl-9 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-1 focus:ring-[#1a2b4c] focus:border-[#1a2b4c]"
+              />
+              {filtroPesquisa && (
+                <button
+                  type="button"
+                  onClick={() => setFiltroPesquisa('')}
+                  className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 text-xs cursor-pointer"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          )}
 
           <div className="space-y-3">
             {informesArquivados.length === 0 ? (
@@ -510,36 +626,73 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
                 <Archive className="mx-auto mb-2 text-slate-300" size={42} />
                 <p className="text-sm font-semibold text-slate-700">Nenhum informe arquivado ainda.</p>
                 <p className="text-xs text-slate-400 mt-1">
-                  Na aba "Edição do Informe do Mês", clique em "📦 Arquivar" para salvar uma edição permanente.
+                  Na aba "Edição do Informe do Mês", clique em "📦 Arquivar" para salvar edições no histórico seguro.
                 </p>
               </div>
+            ) : informesFiltrados.length === 0 ? (
+              <div className="text-center p-8 text-slate-400 bg-slate-50 rounded-lg">
+                <p className="text-sm">Nenhum informe corresponde à pesquisa "{filtroPesquisa}".</p>
+              </div>
             ) : (
-              informesArquivados.map((inf) => (
+              informesFiltrados.map((inf) => (
                 <div
                   key={inf.id}
-                  className="bg-slate-50 p-4 rounded-lg border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-[#1a2b4c] transition"
+                  className="bg-slate-50 p-4 rounded-lg border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:border-[#1a2b4c] transition"
                 >
-                  <div>
-                    <h3 className="text-sm font-bold text-[#1a2b4c] flex items-center gap-2">
-                      <span>📰 {inf.titulo} - {inf.mesAno}</span>
-                      <span className="bg-[#c9a84e]/20 text-[#1a2b4c] font-bold text-[10px] px-2 py-0.5 rounded">
-                        {inf.paginas.length + 1} páginas
-                      </span>
-                    </h3>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Arquivado em: {inf.criadoEm || 'Agosto 2026'} • Subtítulo: {inf.subtitulo}
-                    </p>
+                  <div className="flex items-start gap-3">
+                    {inf.capaUrl ? (
+                      <img
+                        src={inf.capaUrl}
+                        alt="Capa"
+                        className="w-14 h-14 object-cover rounded-md border border-slate-300 shrink-0"
+                      />
+                    ) : (
+                      <div className="w-14 h-14 bg-slate-200 rounded-md flex items-center justify-center shrink-0 text-slate-400">
+                        <FileText size={22} />
+                      </div>
+                    )}
+                    <div>
+                      <h3 className="text-sm font-bold text-[#1a2b4c] flex items-center gap-2 flex-wrap">
+                        <span>📰 {inf.titulo} - {inf.mesAno}</span>
+                        <span className="bg-[#c9a84e]/20 text-[#1a2b4c] font-bold text-[10px] px-2 py-0.5 rounded">
+                          {inf.paginas.length + 1} páginas
+                        </span>
+                        <span className="bg-emerald-100 text-emerald-800 text-[10px] font-semibold px-2 py-0.5 rounded">
+                          Salvo em Nuvem/Local
+                        </span>
+                      </h3>
+                      <p className="text-xs text-slate-600 mt-0.5 font-medium">
+                        Subtítulo: {inf.subtitulo}
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Arquivado em: {inf.criadoEm || 'Agosto 2026'} • ID: {inf.id}
+                      </p>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 self-end md:self-center shrink-0">
                     <button
+                      type="button"
+                      onClick={() => setInformeParaVisualizar(inf)}
+                      className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-800 text-white text-xs font-semibold px-3 py-1.5 rounded transition shadow-2xs cursor-pointer"
+                      title="Consultar e visualizar este relatório arquivado"
+                    >
+                      <Eye size={14} />
+                      <span>Consultar</span>
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => {
                         onCarregarInformeArquivado(inf);
                         setSubAba('edicao');
+                        setMensagemSucesso(`Informe "${inf.titulo} - {inf.mesAno}" carregado para edição.`);
+                        setTimeout(() => setMensagemSucesso(null), 3500);
                       }}
-                      className="bg-[#1a2b4c] hover:bg-[#2c4373] text-white text-xs font-semibold px-3 py-1.5 rounded transition shadow-sm cursor-pointer"
+                      className="flex items-center gap-1.5 bg-[#1a2b4c] hover:bg-[#2c4373] text-white text-xs font-semibold px-3 py-1.5 rounded transition shadow-2xs cursor-pointer"
+                      title="Carregar todos os dados deste informe na aba de edição"
                     >
-                      Carregar na Edição
+                      <Plus size={14} className="rotate-45" />
+                      <span>Carregar na Edição</span>
                     </button>
                     <button
                       type="button"
@@ -553,6 +706,147 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
                 </div>
               ))
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Consulta e Visualização Completa do Informe Arquivado */}
+      {informeParaVisualizar && (
+        <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-slate-100 rounded-xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col border border-slate-300 animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="bg-[#1a2b4c] text-white px-5 py-3.5 rounded-t-xl flex items-center justify-between shadow-xs">
+              <div className="flex items-center gap-2.5">
+                <FileText size={18} className="text-[#c9a84e]" />
+                <div>
+                  <h3 className="text-sm font-bold">
+                    Consulta de Informe Arquivado: {informeParaVisualizar.titulo} - {informeParaVisualizar.mesAno}
+                  </h3>
+                  <p className="text-[11px] text-slate-300">
+                    Arquivado em: {informeParaVisualizar.criadoEm || 'Agosto 2026'} • Total de páginas: {informeParaVisualizar.paginas.length + 1}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onCarregarInformeArquivado(informeParaVisualizar);
+                    setInformeParaVisualizar(null);
+                    setSubAba('edicao');
+                    setMensagemSucesso(`Informe "${informeParaVisualizar.titulo}" pronto para edição.`);
+                    setTimeout(() => setMensagemSucesso(null), 3500);
+                  }}
+                  className="bg-[#c9a84e] hover:bg-[#b89535] text-[#1a2b4c] text-xs font-bold px-3 py-1.5 rounded transition shadow-xs cursor-pointer flex items-center gap-1.5"
+                >
+                  <span>✏️ Carregar para Edição</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInformeParaVisualizar(null)}
+                  className="text-white/80 hover:text-white p-1"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Content Preview */}
+            <div className="p-4 overflow-y-auto space-y-6 flex-1 bg-slate-200/60">
+              {/* Capa */}
+              <div className="bg-white p-6 rounded-lg border border-slate-300 shadow-sm max-w-2xl mx-auto font-sans">
+                <div className="flex justify-between items-center border-b-2 border-black pb-2 mb-4 font-heading text-[10px] font-black uppercase">
+                  <span>ACADEMIA DE POLÍCIA MILITAR DO BARRO BRANCO - O003</span>
+                  <span className="text-right">MANUTENÇÃO 3ª CIA / CIA ES</span>
+                </div>
+
+                {informeParaVisualizar.capaUrl && (
+                  <div className="mb-4 rounded-lg overflow-hidden border border-slate-300 bg-black max-h-56">
+                    <img
+                      src={informeParaVisualizar.capaUrl}
+                      alt="Capa"
+                      className="w-full h-56 object-cover"
+                    />
+                  </div>
+                )}
+
+                <div className="text-center my-4 space-y-1">
+                  <h1 className="text-base font-black text-slate-900 uppercase tracking-wide">
+                    {informeParaVisualizar.titulo}
+                  </h1>
+                  <p className="text-xs font-bold text-[#b89535] uppercase">
+                    {informeParaVisualizar.subtitulo}
+                  </p>
+                  <p className="text-xs font-bold text-slate-700 uppercase">
+                    MÊS: {informeParaVisualizar.mesAno}
+                  </p>
+                </div>
+
+                <div className="border-t border-slate-200 pt-3 text-[11px] text-slate-500 text-center">
+                  CUIDADO COM O QUE É NOSSO • BERÇO DO OFICIALATO PAULISTA
+                </div>
+              </div>
+
+              {/* Páginas de Serviços e Fotos */}
+              {informeParaVisualizar.paginas.map((pag, idx) => (
+                <div key={pag.id} className="bg-white p-6 rounded-lg border border-slate-300 shadow-sm max-w-2xl mx-auto font-sans">
+                  <div className="flex justify-between items-center border-b-2 border-black pb-2 mb-4 font-heading text-[10px] font-black uppercase">
+                    <span>PÁGINA {idx + 2} • {pag.tituloServico}</span>
+                    <span>DATA: {pag.dataServico}</span>
+                  </div>
+
+                  <p className="text-xs text-slate-700 mb-4 leading-relaxed font-medium bg-slate-50 p-2.5 rounded border border-slate-200">
+                    {pag.descricao}
+                  </p>
+
+                  <div className={`grid gap-3 mb-4 ${pag.tipoGrid === '1' ? 'grid-cols-1' : pag.tipoGrid === '3' ? 'grid-cols-3' : pag.tipoGrid === '4' ? 'grid-cols-2' : 'grid-cols-2'}`}>
+                    {pag.fotos.map((f) => (
+                      <div key={f.id} className="border border-slate-300 rounded overflow-hidden bg-slate-50">
+                        <img src={f.url} alt={f.legenda} className="w-full h-40 object-cover" />
+                        <div className="p-2 text-[11px] font-bold text-slate-800 text-center border-t border-slate-200">
+                          {f.legenda}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {pag.anotacao && (
+                    <div className="border-2 border-black rounded-lg p-2.5 text-xs font-bold text-black text-center bg-slate-50">
+                      {pag.anotacao}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-white px-5 py-3 rounded-b-xl border-t border-slate-300 flex items-center justify-between">
+              <span className="text-xs text-slate-500">
+                Consulta segura • Dados preservados em armazenamento persistente
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onCarregarInformeArquivado(informeParaVisualizar);
+                    setInformeParaVisualizar(null);
+                    setSubAba('edicao');
+                    setMensagemSucesso(`Informe "${informeParaVisualizar.titulo}" carregado para edição.`);
+                    setTimeout(() => setMensagemSucesso(null), 3500);
+                  }}
+                  className="bg-[#1a2b4c] hover:bg-[#2c4373] text-white text-xs font-semibold px-4 py-2 rounded-lg transition cursor-pointer"
+                >
+                  ✏️ Carregar na Edição
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInformeParaVisualizar(null)}
+                  className="bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-semibold px-4 py-2 rounded-lg transition cursor-pointer"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

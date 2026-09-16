@@ -18,6 +18,7 @@ import {
   Clock,
   Sparkles,
   Save,
+  Eye,
 } from 'lucide-react';
 
 interface ArquivosSalvosViewProps {
@@ -59,6 +60,8 @@ export const ArquivosSalvosView: React.FC<ArquivosSalvosViewProps> = ({
   const [novoTituloRenomear, setNovoTituloRenomear] = useState('');
 
   const [projetoParaExcluir, setProjetoParaExcluir] = useState<ProjetoSalvo | null>(null);
+  const [projetoParaConsultar, setProjetoParaConsultar] = useState<ProjetoSalvo | null>(null);
+  const [termoBusca, setTermoBusca] = useState('');
   const [modalLimparAberto, setModalLimparAberto] = useState(false);
   const [modalNovoEmBrancoAberto, setModalNovoEmBrancoAberto] = useState(false);
 
@@ -77,6 +80,21 @@ export const ArquivosSalvosView: React.FC<ArquivosSalvosViewProps> = ({
       setToastMsg(null);
     }, 3800);
   };
+
+  // Filtragem de Projetos Salvos para rápida consulta
+  const arquivosFiltrados = arquivos.filter((proj) => {
+    if (!termoBusca.trim()) return true;
+    const termo = termoBusca.toLowerCase();
+    const tituloMatch = proj.titulo?.toLowerCase().includes(termo);
+    const dataMatch = proj.dataHora?.toLowerCase().includes(termo);
+    const nfMatch = (proj.nfs || []).some(
+      (nf) =>
+        nf.label?.toLowerCase().includes(termo) ||
+        nf.notaFiscalNumero?.toLowerCase().includes(termo) ||
+        nf.empresaNome?.toLowerCase().includes(termo)
+    );
+    return tituloMatch || dataMatch || nfMatch;
+  });
 
   // Cálculos do estado atual para exibição prévia no salvar
   const totalItensAtuais = nfsAtuais.reduce((acc, nf) => acc + (nf.items?.length || 0), 0);
@@ -338,6 +356,29 @@ export const ArquivosSalvosView: React.FC<ArquivosSalvosViewProps> = ({
         </div>
       </div>
 
+      {/* Barra de Busca rápida para consultas */}
+      {arquivos.length > 0 && (
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
+          <input
+            type="text"
+            value={termoBusca}
+            onChange={(e) => setTermoBusca(e.target.value)}
+            placeholder="Pesquisar por título, NF, empresa ou data..."
+            className="w-full pl-9 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-1 focus:ring-[#1a2b4c] focus:border-[#1a2b4c] bg-white"
+          />
+          {termoBusca && (
+            <button
+              type="button"
+              onClick={() => setTermoBusca('')}
+              className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 text-xs cursor-pointer"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Lista de Projetos Salvos */}
       <div className="space-y-3">
         {arquivos.length === 0 ? (
@@ -358,8 +399,12 @@ export const ArquivosSalvosView: React.FC<ArquivosSalvosViewProps> = ({
               <span>Salvar Agora</span>
             </button>
           </div>
+        ) : arquivosFiltrados.length === 0 ? (
+          <div className="bg-white p-8 text-center rounded-xl border border-slate-200 text-slate-500 text-sm">
+            Nenhum projeto encontrado para o termo <strong>"{termoBusca}"</strong>.
+          </div>
         ) : (
-          arquivos.map((proj) => {
+          arquivosFiltrados.map((proj) => {
             // Calcular métricas do projeto salvo
             const totalNFs = proj.nfs?.length || 1;
             const totalItens = (proj.nfs || []).reduce(
@@ -416,6 +461,17 @@ export const ArquivosSalvosView: React.FC<ArquivosSalvosViewProps> = ({
 
                 {/* Barra de Ações Rápidas */}
                 <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  {/* Botão Consultar */}
+                  <button
+                    type="button"
+                    onClick={() => setProjetoParaConsultar(proj)}
+                    className="flex items-center gap-1 bg-slate-700 hover:bg-slate-800 text-white text-xs font-semibold px-2.5 py-1.5 rounded-md shadow-2xs transition cursor-pointer"
+                    title="Consultar dados deste projeto salvo sem alterar o formulário atual"
+                  >
+                    <Eye size={13} />
+                    <span>Consultar</span>
+                  </button>
+
                   {/* Botão Carga Rápida Completa */}
                   <button
                     type="button"
@@ -868,6 +924,209 @@ export const ArquivosSalvosView: React.FC<ArquivosSalvosViewProps> = ({
               >
                 Limpar Tudo
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 7: Consulta Detalhada do Projeto Salvo                              */}
+      {/* ========================================================================= */}
+      {projetoParaConsultar && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-slate-100 rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col border border-slate-300 animate-in fade-in zoom-in-95 duration-150">
+            {/* Cabeçalho do Modal */}
+            <div className="bg-[#1a2b4c] text-white px-5 py-3.5 rounded-t-xl flex items-center justify-between shadow-xs">
+              <div className="flex items-center gap-2.5">
+                <FileSpreadsheet size={18} className="text-[#c9a84e]" />
+                <div>
+                  <h3 className="text-sm font-bold truncate max-w-lg">
+                    {projetoParaConsultar.titulo}
+                  </h3>
+                  <p className="text-[11px] text-slate-300">
+                    Salvo em: {projetoParaConsultar.dataHora} • ID: {projetoParaConsultar.id_arquivo}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleCarregarTudo(projetoParaConsultar);
+                    setProjetoParaConsultar(null);
+                  }}
+                  className="bg-[#c9a84e] hover:bg-[#b89535] text-[#1a2b4c] text-xs font-bold px-3 py-1.5 rounded transition shadow-xs cursor-pointer"
+                >
+                  ⚡ Carregar na Tela
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setProjetoParaConsultar(null)}
+                  className="text-white/80 hover:text-white p-1"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Conteúdo da Consulta */}
+            <div className="p-5 overflow-y-auto space-y-4 flex-1">
+              {/* Resumo de Métricas */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-2xs">
+                  <span className="text-[11px] text-slate-500 font-semibold uppercase">Notas Fiscais</span>
+                  <div className="text-base font-bold text-[#1a2b4c]">
+                    {projetoParaConsultar.nfs?.length || 0}
+                  </div>
+                </div>
+                <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-2xs">
+                  <span className="text-[11px] text-slate-500 font-semibold uppercase">Total de Itens</span>
+                  <div className="text-base font-bold text-slate-800">
+                    {(projetoParaConsultar.nfs || []).reduce((acc, nf) => acc + (nf.items?.length || 0), 0)}
+                  </div>
+                </div>
+                <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-2xs">
+                  <span className="text-[11px] text-slate-500 font-semibold uppercase">Cotações / Pesquisas</span>
+                  <div className="text-base font-bold text-amber-700">
+                    {projetoParaConsultar.pesquisas?.length || 0}
+                  </div>
+                </div>
+                <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-2xs">
+                  <span className="text-[11px] text-slate-500 font-semibold uppercase">Valor Total</span>
+                  <div className="text-base font-bold text-emerald-700">
+                    R$ {(projetoParaConsultar.nfs || [])
+                      .reduce((accNF, nf) => {
+                        const soma = (nf.items || []).reduce((accIt, it) => accIt + (Number(it.total) || 0), 0);
+                        return accNF + Math.max(0, soma - (Number(nf.descontoAplicado) || 0));
+                      }, 0)
+                      .toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Lista Detalhada das Notas Fiscais */}
+              <div className="bg-white rounded-lg border border-slate-200 p-4 shadow-2xs">
+                <h4 className="text-xs font-bold text-[#1a2b4c] uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                  <FileText size={14} />
+                  <span>Detalhamento das Notas Fiscais ({projetoParaConsultar.nfs?.length || 0})</span>
+                </h4>
+
+                <div className="space-y-3">
+                  {(projetoParaConsultar.nfs || []).map((nf, idx) => {
+                    const totalNF = (nf.items || []).reduce((acc, it) => acc + (Number(it.total) || 0), 0) - (Number(nf.descontoAplicado) || 0);
+                    return (
+                      <div key={nf.id || idx} className="bg-slate-50 p-3 rounded-md border border-slate-200 text-xs">
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2 mb-2 font-bold">
+                          <span className="text-[#1a2b4c]">
+                            {nf.label || `Nota Fiscal ${idx + 1}`} • Nº {nf.notaFiscalNumero || 'S/N'}
+                          </span>
+                          <span className="text-emerald-700">
+                            R$ {Math.max(0, totalNF).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-600 mb-2">
+                          <div><strong>Empresa:</strong> {nf.empresaNome || 'Não informada'}</div>
+                          <div><strong>CNPJ:</strong> {nf.empresaCnpj || 'Não informado'}</div>
+                          <div><strong>Data Emissão:</strong> {nf.dataEmissao || 'Não informada'}</div>
+                          <div><strong>Itens cadastrados:</strong> {nf.items?.length || 0}</div>
+                        </div>
+
+                        {/* Tabela resumida de itens da NF */}
+                        {nf.items && nf.items.length > 0 && (
+                          <div className="overflow-x-auto mt-2">
+                            <table className="w-full text-[11px] text-left border border-slate-200 bg-white">
+                              <thead className="bg-slate-100 text-slate-700 font-bold">
+                                <tr>
+                                  <th className="p-1.5 border-b">Descrição</th>
+                                  <th className="p-1.5 border-b text-center">Qtd</th>
+                                  <th className="p-1.5 border-b text-right">V. Unit</th>
+                                  <th className="p-1.5 border-b text-right">Total</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {nf.items.map((it, itIdx) => (
+                                  <tr key={it.id || itIdx} className="border-b border-slate-100">
+                                    <td className="p-1.5 font-medium">{it.descricao}</td>
+                                    <td className="p-1.5 text-center">{it.qtd} {it.unidade}</td>
+                                    <td className="p-1.5 text-right">R$ {Number(it.valorUnitario || 0).toFixed(2)}</td>
+                                    <td className="p-1.5 text-right font-bold">R$ {Number(it.total || 0).toFixed(2)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Balancete Resumo */}
+              {projetoParaConsultar.balancete && (
+                <div className="bg-white rounded-lg border border-slate-200 p-4 shadow-2xs text-xs">
+                  <h4 className="text-xs font-bold text-[#1a2b4c] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <Scale size={14} />
+                    <span>Resumo do Balancete Arquivado</span>
+                  </h4>
+                  <div className="grid grid-cols-3 gap-3 text-center">
+                    <div className="bg-slate-50 p-2 rounded border border-slate-200">
+                      <span className="text-[10px] text-slate-500 uppercase font-bold">Crédito</span>
+                      <p className="font-bold text-slate-800">
+                        R$ {Number(projetoParaConsultar.balancete.credito || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                    <div className="bg-slate-50 p-2 rounded border border-slate-200">
+                      <span className="text-[10px] text-slate-500 uppercase font-bold">Débito</span>
+                      <p className="font-bold text-red-700">
+                        R$ {Number(projetoParaConsultar.balancete.debito || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                    <div className="bg-slate-50 p-2 rounded border border-slate-200">
+                      <span className="text-[10px] text-slate-500 uppercase font-bold">Saldo</span>
+                      <p className="font-bold text-emerald-700">
+                        R$ {Number(projetoParaConsultar.balancete.saldo || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Rodapé do Modal */}
+            <div className="bg-white px-5 py-3 rounded-b-xl border-t border-slate-300 flex items-center justify-between">
+              <span className="text-xs text-slate-500">
+                Consulta segura • Registro intacto salvo no armazenamento
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleCarregarTudo(projetoParaConsultar);
+                    setProjetoParaConsultar(null);
+                  }}
+                  className="bg-[#1a2b4c] hover:bg-[#2c4373] text-white text-xs font-semibold px-3.5 py-1.5 rounded-lg transition cursor-pointer"
+                >
+                  ⚡ Carregar Tudo na Edição
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    abrirModalCargaSeletiva(projetoParaConsultar);
+                    setProjetoParaConsultar(null);
+                  }}
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-semibold px-3 py-1.5 rounded-lg transition cursor-pointer"
+                >
+                  Módulos...
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setProjetoParaConsultar(null)}
+                  className="bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-semibold px-3 py-1.5 rounded-lg transition cursor-pointer"
+                >
+                  Fechar
+                </button>
+              </div>
             </div>
           </div>
         </div>

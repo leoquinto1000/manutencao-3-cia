@@ -9,6 +9,7 @@ import {
 } from '../../types';
 import { ModalNovaMissao } from './ModalNovaMissao';
 import { ModalPreviaFolhaInforme } from './ModalPreviaFolhaInforme';
+import { formatarAnoPelotao } from './CadastroEquipesTab';
 import { imprimirEmNovaJanela } from '../../utils/pdfPrintHelper';
 import {
   formatarDataISO,
@@ -151,6 +152,20 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
 
     return { total, concluidas, pendentes, paraProximoDia, percentual };
   }, [missoes, dataSelecionada]);
+
+  // Militares com impedimento no efetivo fixo de manutenção (Militares da 3ª Cia) e policiais em apoio
+  const cadetesComImpedimento = useMemo(() => {
+    return membros.filter((m) => {
+      const temImpedimento =
+        m.impedimento &&
+        m.impedimento.trim().length > 0 &&
+        m.impedimento.toLowerCase() !== 'sem impedimento' &&
+        m.impedimento.toLowerCase() !== 'nenhum' &&
+        m.impedimento.toLowerCase() !== 'apto';
+
+      return temImpedimento;
+    });
+  }, [membros]);
 
   // Checkbox de conclusão
   const toggleConcluida = (id: string) => {
@@ -988,6 +1003,105 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
             </tbody>
           </table>
         </div>
+
+        {/* ============================================================ */}
+        {/* RODAPÉ DA PAUTA OFICIAL PMESP: CADETES COM IMPEDIMENTO       */}
+        {/* ============================================================ */}
+        <div className="mt-3 border-2 border-black p-3 bg-white text-black">
+          <div className="flex items-center justify-between border-b border-black pb-1 mb-2">
+            <div className="font-extrabold text-xs uppercase tracking-wider text-black flex items-center gap-1.5">
+              <span>EFETIVO DE MANUTENÇÃO & POLICIAIS EM APOIO — IMPEDIMENTOS / AFASTAMENTOS</span>
+            </div>
+            <span className="text-[11px] font-bold text-black uppercase">
+              {cadetesComImpedimento.length === 0
+                ? 'SEM IMPEDIMENTOS'
+                : `${cadetesComImpedimento.length} MILITAR(ES) COM IMPEDIMENTO (FIXO & APOIO)`}
+            </span>
+          </div>
+
+          {cadetesComImpedimento.length === 0 ? (
+            <div className="text-xs text-slate-700 italic py-1">
+              Todos os policiais militares do efetivo fixo da 3ª Cia e policiais que prestam apoio encontram-se aptos e disponíveis para as escalas e missões desta data.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs border-collapse border border-black table-fixed">
+                <thead>
+                  <tr className="bg-[#dde5ee] print:bg-slate-200 text-black">
+                    <th className="border border-black px-2.5 py-1.5 text-left font-bold w-[38%]">
+                      GRADUAÇÃO & NOME DE GUERRA
+                    </th>
+                    <th className="border border-black px-2.5 py-1.5 text-center font-bold w-[24%]">
+                      CFO / PELOTÃO / ORIGEM
+                    </th>
+                    <th className="border border-black px-2.5 py-1.5 text-left font-bold w-[38%]">
+                      MOTIVO DO IMPEDIMENTO
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cadetesComImpedimento.map((militar) => {
+                    const ehApoio = militar.tipoEfetivo === 'apoio';
+                    const anoPel = formatarAnoPelotao(militar.anoCurso, militar.pelotao);
+                    return (
+                      <tr key={militar.id} className="border-b border-black bg-white">
+                        <td className="border border-black px-2.5 py-1.5 font-bold text-black align-middle">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-mono text-[10.5px] px-1 py-0.2 bg-black text-white font-bold rounded print:border print:border-black print:text-black print:bg-transparent">
+                              {militar.graduacao || 'PM'}
+                            </span>
+                            <span>{militar.nomeGuerra}</span>
+                            {militar.re && (
+                              <span className="font-mono text-[10px] text-slate-700 font-normal">
+                                (RE {militar.re})
+                              </span>
+                            )}
+                            <span
+                              className={`text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded border ${
+                                ehApoio
+                                  ? 'bg-amber-100 text-amber-900 border-amber-400 print:border-black print:text-black print:bg-transparent'
+                                  : 'bg-slate-100 text-slate-800 border-slate-400 print:border-black print:text-black print:bg-transparent'
+                              }`}
+                            >
+                              {ehApoio ? 'Apoio' : 'Fixo 3ª Cia'}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="border border-black px-2.5 py-1.5 text-center font-bold text-black align-middle">
+                          <div>
+                            {anoPel !== '-' ? anoPel : (militar.pelotao ? `Pelotão ${militar.pelotao}` : '-')}
+                            {ehApoio && militar.origemApoio && (
+                              <div className="text-[10px] text-slate-600 font-normal mt-0.5">
+                                Origem: {militar.origemApoio}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="border border-black px-2.5 py-1.5 text-black font-semibold align-middle">
+                          <span className="inline-block border border-black bg-slate-100 px-2 py-0.5 rounded text-[11px] font-bold print:border-none print:bg-transparent print:p-0">
+                            {militar.impedimento}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Campo de Notações Oficiais / Despacho */}
+          <div className="mt-2.5 pt-2 border-t border-black text-[10.5px] text-black flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+            <div>
+              <strong>Observação:</strong> Relação consolidada do Efetivo Fixo (3ª Cia) e Policiais de Apoio sincronizada com a Subaba <strong>Resultado</strong>.
+            </div>
+            <div className="italic text-slate-700">
+              3ª Cia Escola • Manutenção Predial • APMBB
+            </div>
+          </div>
+        </div>
+
+
       </div>
 
       {/* ============================================================ */}

@@ -33,6 +33,7 @@ import {
   carregarDadosFirestore,
   salvarDadosFirestore,
   escutarDadosFirestore,
+  excluirInformeArquivadoFirestore,
   DadosSistemaFirestore,
 } from './firebase';
 import { salvarItemIndexedDB, carregarItemIndexedDB } from './utils/indexedDbStorage';
@@ -319,10 +320,11 @@ export default function App() {
     let isAtivo = true;
     async function carregarCacheLocal() {
       try {
-        const [missoesDB, informeDB, arquivadosDB] = await Promise.all([
+        const [missoesDB, informeDB, arquivadosDB, projetosDB] = await Promise.all([
           carregarItemIndexedDB<MissaoDiaria[]>('pmesp_missoes'),
           carregarItemIndexedDB<InformeMensal>('pmesp_informe_atual'),
           carregarItemIndexedDB<InformeMensal[]>('pmesp_informes_arquivados'),
+          carregarItemIndexedDB<ProjetoSalvo[]>('pmesp_projetos_arquivados'),
         ]);
 
         if (!isAtivo) return;
@@ -353,8 +355,36 @@ export default function App() {
           });
         }
 
+        // Garante que informes arquivados no IndexedDB sejam recuperados sem perder nada
         if (Array.isArray(arquivadosDB) && arquivadosDB.length > 0) {
-          setInformesArquivados((atuais) => (atuais.length === 0 ? arquivadosDB : atuais));
+          setInformesArquivados((atuais) => {
+            const map = new Map<string, InformeMensal>();
+            for (const inf of arquivadosDB) {
+              if (inf && inf.id) map.set(inf.id, inf);
+            }
+            for (const inf of atuais) {
+              if (inf && inf.id && !map.has(inf.id)) {
+                map.set(inf.id, inf);
+              }
+            }
+            return Array.from(map.values());
+          });
+        }
+
+        // Garante que projetos/arquivos salvos no IndexedDB sejam recuperados
+        if (Array.isArray(projetosDB) && projetosDB.length > 0) {
+          setArquivosSalvos((atuais) => {
+            const map = new Map<number, ProjetoSalvo>();
+            for (const proj of projetosDB) {
+              if (proj && proj.id_arquivo) map.set(proj.id_arquivo, proj);
+            }
+            for (const proj of atuais) {
+              if (proj && proj.id_arquivo && !map.has(proj.id_arquivo)) {
+                map.set(proj.id_arquivo, proj);
+              }
+            }
+            return Array.from(map.values());
+          });
         }
       } catch (e) {
         console.warn('Aviso no carregamento do IndexedDB:', e);
@@ -454,8 +484,47 @@ export default function App() {
               };
             });
           }
-          if (Array.isArray(dados.informesArquivados)) setInformesArquivados(dados.informesArquivados);
-          if (Array.isArray(dados.arquivosSalvos)) setArquivosSalvos(dados.arquivosSalvos);
+
+          // Mesclagem segura de Informes Arquivados (nunca apaga os informes existentes na máquina)
+          if (Array.isArray(dados.informesArquivados) && dados.informesArquivados.length > 0) {
+            setInformesArquivados((atuais) => {
+              const map = new Map<string, InformeMensal>();
+              for (const inf of dados.informesArquivados) {
+                if (inf && inf.id) map.set(inf.id, inf);
+              }
+              for (const inf of atuais) {
+                if (inf && inf.id) {
+                  if (!map.has(inf.id)) {
+                    map.set(inf.id, inf);
+                  } else {
+                    const fsInf = map.get(inf.id)!;
+                    const fotosLocal = (inf.paginas || []).reduce((acc, p) => acc + (p.fotos?.length || 0), 0) + (inf.capaUrl ? 1 : 0);
+                    const fotosFS = (fsInf.paginas || []).reduce((acc, p) => acc + (p.fotos?.length || 0), 0) + (fsInf.capaUrl ? 1 : 0);
+                    if (fotosLocal > fotosFS) {
+                      map.set(inf.id, inf);
+                    }
+                  }
+                }
+              }
+              return Array.from(map.values());
+            });
+          }
+
+          // Mesclagem segura de Arquivos Salvos da Prestação de Contas (nunca apaga arquivos locais)
+          if (Array.isArray(dados.arquivosSalvos) && dados.arquivosSalvos.length > 0) {
+            setArquivosSalvos((atuais) => {
+              const map = new Map<number, ProjetoSalvo>();
+              for (const proj of dados.arquivosSalvos) {
+                if (proj && proj.id_arquivo) map.set(proj.id_arquivo, proj);
+              }
+              for (const proj of atuais) {
+                if (proj && proj.id_arquivo && !map.has(proj.id_arquivo)) {
+                  map.set(proj.id_arquivo, proj);
+                }
+              }
+              return Array.from(map.values());
+            });
+          }
           if (Array.isArray(dados.missoes)) {
             setMissoes((atuais) => {
               const fotosFirestore = dados.missoes.some((m: any) => m.fotoAntesUrl || m.fotoDepoisUrl);
@@ -617,9 +686,10 @@ export default function App() {
   };
 
   // Project Archiving Handlers
-  const handleSalvarProjetoAtual = (tituloCustom?: string) => {
+  const handleSalvarProjetoAtual = (tituloCustom?: string | any) => {
+    const tituloString = typeof tituloCustom === 'string' ? tituloCustom.trim() : '';
     const nomePadrao = `Prestação: ${nfs[0]?.label || 'NF 1'} - ${new Date().toLocaleDateString('pt-BR')}`;
-    const titulo = (tituloCustom && tituloCustom.trim()) || nomePadrao;
+    const titulo = tituloString || nomePadrao;
 
     const novoArquivo: ProjetoSalvo = {
       id_arquivo: Date.now(),
@@ -631,7 +701,15 @@ export default function App() {
       textoParte: JSON.parse(JSON.stringify(textoParte)),
     };
 
-    setArquivosSalvos((prev) => [novoArquivo, ...prev]);
+    setArquivosSalvos((prev) => {
+      const novaLista = [novoArquivo, ...prev];
+      try {
+        localStorage.setItem('pmesp_projetos_arquivados', JSON.stringify(novaLista));
+      } catch (e) {}
+      salvarItemIndexedDB('pmesp_projetos_arquivados', novaLista);
+      salvarDadosFirestore({ arquivosSalvos: novaLista }).catch(console.error);
+      return novaLista;
+    });
   };
 
   const handleCarregarProjeto = (
@@ -653,9 +731,15 @@ export default function App() {
   };
 
   const handleRenomearProjeto = (id_arquivo: number, novoTitulo: string) => {
-    setArquivosSalvos((prev) =>
-      prev.map((p) => (p.id_arquivo === id_arquivo ? { ...p, titulo: novoTitulo } : p))
-    );
+    setArquivosSalvos((prev) => {
+      const novaLista = prev.map((p) => (p.id_arquivo === id_arquivo ? { ...p, titulo: novoTitulo } : p));
+      try {
+        localStorage.setItem('pmesp_projetos_arquivados', JSON.stringify(novaLista));
+      } catch (e) {}
+      salvarItemIndexedDB('pmesp_projetos_arquivados', novaLista);
+      salvarDadosFirestore({ arquivosSalvos: novaLista }).catch(console.error);
+      return novaLista;
+    });
   };
 
   const handleDuplicarProjeto = (id_arquivo: number) => {
@@ -667,7 +751,15 @@ export default function App() {
       titulo: `${alvo.titulo} (Cópia)`,
       dataHora: new Date().toLocaleString('pt-BR'),
     };
-    setArquivosSalvos((prev) => [duplicado, ...prev]);
+    setArquivosSalvos((prev) => {
+      const novaLista = [duplicado, ...prev];
+      try {
+        localStorage.setItem('pmesp_projetos_arquivados', JSON.stringify(novaLista));
+      } catch (e) {}
+      salvarItemIndexedDB('pmesp_projetos_arquivados', novaLista);
+      salvarDadosFirestore({ arquivosSalvos: novaLista }).catch(console.error);
+      return novaLista;
+    });
   };
 
   const handleCriarNovoProjetoEmBranco = () => {
@@ -691,25 +783,60 @@ export default function App() {
   };
 
   const handleExcluirProjeto = (id_arquivo: number) => {
-    setArquivosSalvos((prev) => prev.filter((p) => p.id_arquivo !== id_arquivo));
+    setArquivosSalvos((prev) => {
+      const novaLista = prev.filter((p) => p.id_arquivo !== id_arquivo);
+      try {
+        localStorage.setItem('pmesp_projetos_arquivados', JSON.stringify(novaLista));
+      } catch (e) {}
+      salvarItemIndexedDB('pmesp_projetos_arquivados', novaLista);
+      salvarDadosFirestore({ arquivosSalvos: novaLista }).catch(console.error);
+      return novaLista;
+    });
   };
 
   const handleLimparHistoricoProjetos = () => {
     setArquivosSalvos([]);
+    try {
+      localStorage.setItem('pmesp_projetos_arquivados', JSON.stringify([]));
+    } catch (e) {}
+    salvarItemIndexedDB('pmesp_projetos_arquivados', []);
+    salvarDadosFirestore({ arquivosSalvos: [] }).catch(console.error);
   };
 
   const handleImportarBackupJSON = (projetos: ProjetoSalvo[]) => {
-    setArquivosSalvos((prev) => [...projetos, ...prev]);
+    setArquivosSalvos((prev) => {
+      const novaLista = [...projetos, ...prev];
+      try {
+        localStorage.setItem('pmesp_projetos_arquivados', JSON.stringify(novaLista));
+      } catch (e) {}
+      salvarItemIndexedDB('pmesp_projetos_arquivados', novaLista);
+      salvarDadosFirestore({ arquivosSalvos: novaLista }).catch(console.error);
+      return novaLista;
+    });
   };
 
   // Monthly Report Archiving Handlers
-  const handleArquivarInforme = (informe: InformeMensal) => {
+  const handleArquivarInforme = (informe: InformeMensal, idExistenteParaAtualizar?: string) => {
+    const idFinal =
+      idExistenteParaAtualizar ||
+      (informe.id && informesArquivados.some((x) => x.id === informe.id) ? informe.id : gerarId());
+
     const arquivado: InformeMensal = {
-      ...informe,
-      id: gerarId(),
-      criadoEm: new Date().toLocaleDateString('pt-BR'),
+      ...JSON.parse(JSON.stringify(informe)),
+      id: idFinal,
+      criadoEm: informe.criadoEm || new Date().toLocaleDateString('pt-BR'),
     };
-    setInformesArquivados([arquivado, ...informesArquivados]);
+
+    setInformesArquivados((prev) => {
+      const filtrados = prev.filter((x) => x.id !== idFinal);
+      const novaLista = [arquivado, ...filtrados];
+      try {
+        localStorage.setItem('pmesp_informes_arquivados', JSON.stringify(novaLista));
+      } catch (e) {}
+      salvarItemIndexedDB('pmesp_informes_arquivados', novaLista);
+      salvarDadosFirestore({ informesArquivados: novaLista }).catch(console.error);
+      return novaLista;
+    });
   };
 
   const handleCarregarInformeArquivado = (informe: InformeMensal) => {
@@ -717,11 +844,25 @@ export default function App() {
   };
 
   const handleExcluirInformeArquivado = (id: string) => {
-    setInformesArquivados((prev) => prev.filter((inf) => inf.id !== id));
+    setInformesArquivados((prev) => {
+      const novaLista = prev.filter((inf) => inf.id !== id);
+      try {
+        localStorage.setItem('pmesp_informes_arquivados', JSON.stringify(novaLista));
+      } catch (e) {}
+      salvarItemIndexedDB('pmesp_informes_arquivados', novaLista);
+      salvarDadosFirestore({ informesArquivados: novaLista }).catch(console.error);
+      excluirInformeArquivadoFirestore(id).catch(console.error);
+      return novaLista;
+    });
   };
 
   const handleLimparHistoricoInformes = () => {
     setInformesArquivados([]);
+    try {
+      localStorage.setItem('pmesp_informes_arquivados', JSON.stringify([]));
+    } catch (e) {}
+    salvarItemIndexedDB('pmesp_informes_arquivados', []);
+    salvarDadosFirestore({ informesArquivados: [] }).catch(console.error);
   };
 
   return (

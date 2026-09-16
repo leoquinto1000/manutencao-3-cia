@@ -85,6 +85,7 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
   const [periodoApoioMilitar, setPeriodoApoioMilitar] = useState('');
   const [funcaoApoioMilitar, setFuncaoApoioMilitar] = useState('');
   const [observacoesApoioMilitar, setObservacoesApoioMilitar] = useState('');
+  const [impedimentoMilitar, setImpedimentoMilitar] = useState('');
 
   // Sub-aba da Seção de Efetivo: 'fixo' = Efetivo Fixo da Manutenção | 'apoio' = Policiais que prestam apoio
   const [abaEfetivoAtiva, setAbaEfetivoAtiva] = useState<'fixo' | 'apoio'>('fixo');
@@ -228,6 +229,7 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
     setPeriodoApoioMilitar(tipo === 'apoio' ? 'Setembro/2026' : '');
     setFuncaoApoioMilitar('');
     setObservacoesApoioMilitar('');
+    setImpedimentoMilitar('');
     setModalMilitarAberta(true);
   };
 
@@ -247,6 +249,7 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
     setPeriodoApoioMilitar(m.periodoApoio || '');
     setFuncaoApoioMilitar(m.funcaoApoio || '');
     setObservacoesApoioMilitar(m.observacoesApoio || '');
+    setImpedimentoMilitar(m.impedimento || '');
     setModalMilitarAberta(true);
   };
 
@@ -340,6 +343,7 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
                 periodoApoio: tipoEfetivoMilitar === 'apoio' ? periodoApoioMilitar.trim() : undefined,
                 funcaoApoio: tipoEfetivoMilitar === 'apoio' ? funcaoApoioMilitar.trim() : undefined,
                 observacoesApoio: tipoEfetivoMilitar === 'apoio' ? observacoesApoioMilitar.trim() : undefined,
+                impedimento: impedimentoMilitar.trim() || undefined,
               }
             : m
         )
@@ -361,6 +365,7 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
         periodoApoio: tipoEfetivoMilitar === 'apoio' ? periodoApoioMilitar.trim() : undefined,
         funcaoApoio: tipoEfetivoMilitar === 'apoio' ? funcaoApoioMilitar.trim() : undefined,
         observacoesApoio: tipoEfetivoMilitar === 'apoio' ? observacoesApoioMilitar.trim() : undefined,
+        impedimento: impedimentoMilitar.trim() || undefined,
       };
       onChangeMembros([...membros, novo]);
     }
@@ -780,9 +785,23 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
                         </div>
                       </td>
                       <td className="px-3 py-2 text-center">
-                        <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                          Ativo Fixo
-                        </span>
+                        {m.impedimento &&
+                        m.impedimento.trim().length > 0 &&
+                        m.impedimento.toLowerCase() !== 'sem impedimento' &&
+                        m.impedimento.toLowerCase() !== 'nenhum' &&
+                        m.impedimento.toLowerCase() !== 'apto' ? (
+                          <span
+                            className="bg-red-100 text-red-800 border border-red-300 text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 shadow-2xs"
+                            title={`Impedimento: ${m.impedimento}`}
+                          >
+                            <AlertTriangle size={10} className="text-red-700 shrink-0" />
+                            <span className="max-w-[120px] truncate">{m.impedimento}</span>
+                          </span>
+                        ) : (
+                          <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                            Ativo Fixo
+                          </span>
+                        )}
                       </td>
                       <td className="px-3 py-2 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center gap-1.5 flex-wrap">
@@ -917,9 +936,23 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
                         {m.observacoesApoio || '-'}
                       </td>
                       <td className="px-3 py-2 text-center">
-                        <span className="bg-amber-100 text-amber-900 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-200">
-                          Em Apoio
-                        </span>
+                        {m.impedimento &&
+                        m.impedimento.trim().length > 0 &&
+                        m.impedimento.toLowerCase() !== 'sem impedimento' &&
+                        m.impedimento.toLowerCase() !== 'nenhum' &&
+                        m.impedimento.toLowerCase() !== 'apto' ? (
+                          <span
+                            className="bg-red-100 text-red-800 border border-red-300 text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 shadow-2xs"
+                            title={`Impedimento: ${m.impedimento}`}
+                          >
+                            <AlertTriangle size={10} className="text-red-700 shrink-0" />
+                            <span className="max-w-[120px] truncate">{m.impedimento}</span>
+                          </span>
+                        ) : (
+                          <span className="bg-amber-100 text-amber-900 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-200">
+                            Em Apoio
+                          </span>
+                        )}
                       </td>
                       <td className="px-3 py-2 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center gap-1.5 flex-wrap">
@@ -1513,6 +1546,25 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
                     className="w-full px-3 py-1.5 border border-slate-300 rounded-md focus:ring-1 focus:ring-[#1a2b4c]"
                   />
                 </div>
+              </div>
+
+              {/* Campo Impedimento / Afastamento */}
+              <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                <label className="block font-bold text-slate-700 mb-1 flex items-center gap-1.5 text-xs">
+                  <AlertTriangle size={13} className="text-amber-600" />
+                  <span>Impedimento / Afastamento Temporário:</span>
+                  <span className="text-[11px] text-slate-400 font-normal">(Opcional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={impedimentoMilitar}
+                  onChange={(e) => setImpedimentoMilitar(e.target.value)}
+                  placeholder="Ex: Dispensa Médica, Escala de Guarda, LTS (Deixe em branco se Apto)"
+                  className="w-full px-3 py-1.5 border border-slate-300 rounded-md focus:ring-1 focus:ring-[#1a2b4c] text-xs bg-white"
+                />
+                <p className="text-[10.5px] text-slate-500 mt-1">
+                  💡 Cadetes com impedimento constam na subaba <strong>Resultado</strong> e no <strong>rodapé da Pauta Oficial PMESP (Tabela)</strong>.
+                </p>
               </div>
 
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">

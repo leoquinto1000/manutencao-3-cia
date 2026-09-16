@@ -199,6 +199,7 @@ export interface MembroEquipe {
   periodoApoio?: string; // Período de apoio (ex: 'Setembro/2026', '15/09 a 20/09', 'Apoio Diário')
   funcaoApoio?: string; // Atividade ou reforço prestado (ex: Pintura geral, Apoio hidráulico)
   observacoesApoio?: string;
+  impedimento?: string; // Motivo de impedimento/afastamento temporário (ex: 'Dispensa médica', 'Escala de serviço', etc.)
 }
 
 export interface EquipeManutencao {

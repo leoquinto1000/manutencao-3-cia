@@ -1,5 +1,14 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  setDoc,
+  deleteDoc,
+  collection,
+  getDocs,
+  onSnapshot,
+} from 'firebase/firestore';
 import {
   NFInstance,
   PesquisaPrecoItem,
@@ -35,6 +44,7 @@ export const FIRESTORE_DOC_ID = 'dados_gerais';
 export const FIRESTORE_DOC_MISSOES = 'dados_missoes';
 export const FIRESTORE_DOC_INFORME = 'dados_informe';
 export const FIRESTORE_DOC_HISTORICO = 'dados_historico';
+export const FIRESTORE_DOC_ARQUIVOS_SALVOS = 'dados_arquivos_salvos';
 
 export interface DadosSistemaFirestore {
   nfs: NFInstance[];
@@ -74,15 +84,33 @@ export async function carregarDadosFirestore(): Promise<DadosSistemaFirestore | 
     const refMissoes = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_MISSOES);
     const refInforme = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_INFORME);
     const refHistorico = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_HISTORICO);
+    const refArquivosSalvos = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_ARQUIVOS_SALVOS);
+    const colInformesIndividuais = collection(db, FIRESTORE_COLLECTION, 'dados_historico', 'informes');
 
-    const [snapGeral, snapMissoes, snapInforme, snapHistorico] = await Promise.all([
+    const [
+      snapGeral,
+      snapMissoes,
+      snapInforme,
+      snapHistorico,
+      snapArquivosSalvos,
+      snapColInformes,
+    ] = await Promise.all([
       getDoc(refGeral).catch(() => null),
       getDoc(refMissoes).catch(() => null),
       getDoc(refInforme).catch(() => null),
       getDoc(refHistorico).catch(() => null),
+      getDoc(refArquivosSalvos).catch(() => null),
+      getDocs(colInformesIndividuais).catch(() => null),
     ]);
 
-    if (!snapGeral?.exists() && !snapMissoes?.exists() && !snapInforme?.exists()) {
+    if (
+      !snapGeral?.exists() &&
+      !snapMissoes?.exists() &&
+      !snapInforme?.exists() &&
+      !snapHistorico?.exists() &&
+      !snapArquivosSalvos?.exists() &&
+      (!snapColInformes || snapColInformes.empty)
+    ) {
       return null;
     }
 
@@ -90,13 +118,40 @@ export async function carregarDadosFirestore(): Promise<DadosSistemaFirestore | 
     const dadosMissoes = snapMissoes?.exists() ? snapMissoes.data() : null;
     const dadosInforme = snapInforme?.exists() ? snapInforme.data() : null;
     const dadosHistorico = snapHistorico?.exists() ? snapHistorico.data() : null;
+    const dadosArquivosSalvos = snapArquivosSalvos?.exists() ? snapArquivosSalvos.data() : null;
 
     const missoesFinais = (dadosMissoes?.missoes as MissaoDiaria[]) || dadosGerais.missoes;
     const informeFinal = (dadosInforme?.informeAtual as InformeMensal) || dadosGerais.informeAtual;
-    const informesArquivadosFinais =
+
+    // Recupera informes arquivados tanto da subcoleção individual quanto do documento consolidado
+    const mapInformes = new Map<string, InformeMensal>();
+    if (snapColInformes && !snapColInformes.empty) {
+      snapColInformes.forEach((docSnap) => {
+        if (docSnap.exists()) {
+          const inf = docSnap.data() as InformeMensal;
+          if (inf && inf.id) {
+            mapInformes.set(inf.id, inf);
+          }
+        }
+      });
+    }
+
+    const informesHistoricoDoc =
       (dadosHistorico?.informesArquivados as InformeMensal[]) || dadosGerais.informesArquivados;
+    if (Array.isArray(informesHistoricoDoc)) {
+      for (const inf of informesHistoricoDoc) {
+        if (inf && inf.id && !mapInformes.has(inf.id)) {
+          mapInformes.set(inf.id, inf);
+        }
+      }
+    }
+    const informesArquivadosFinais = Array.from(mapInformes.values());
+
+    // Recupera projetos/arquivos salvos
     const arquivosSalvosFinais =
-      (dadosHistorico?.arquivosSalvos as ProjetoSalvo[]) || dadosGerais.arquivosSalvos;
+      (dadosArquivosSalvos?.arquivosSalvos as ProjetoSalvo[]) ||
+      (dadosHistorico?.arquivosSalvos as ProjetoSalvo[]) ||
+      dadosGerais.arquivosSalvos;
 
     return {
       nfs: dadosGerais.nfs || [],
@@ -183,15 +238,14 @@ export async function salvarDadosFirestore(dados: Partial<DadosSistemaFirestore>
       );
     }
 
-    // 4. Arquivos históricos
-    if (informesArquivados !== undefined || arquivosSalvos !== undefined) {
-      const refHistorico = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_HISTORICO);
+    // 4. Arquivos Salvos da Prestação de Contas (salvo em documento dedicado sem concorrência de fotos)
+    if (arquivosSalvos !== undefined) {
+      const refArquivos = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_ARQUIVOS_SALVOS);
       promises.push(
         setDoc(
-          refHistorico,
+          refArquivos,
           limparParaFirestore({
-            ...(informesArquivados !== undefined ? { informesArquivados } : {}),
-            ...(arquivosSalvos !== undefined ? { arquivosSalvos } : {}),
+            arquivosSalvos,
             ultimaAtualizacao: timestamp,
           }),
           { merge: true }
@@ -199,10 +253,53 @@ export async function salvarDadosFirestore(dados: Partial<DadosSistemaFirestore>
       );
     }
 
+    // 5. Informes Arquivados (salva cada informe em documento próprio na subcoleção para nunca estourar 1MB)
+    if (informesArquivados !== undefined) {
+      for (const inf of informesArquivados) {
+        if (inf && inf.id) {
+          const refInfItem = doc(db, FIRESTORE_COLLECTION, 'dados_historico', 'informes', inf.id);
+          promises.push(
+            setDoc(refInfItem, limparParaFirestore(inf), { merge: true }).catch((err) => {
+              console.warn(`Aviso ao salvar informe individual ${inf.id} no Firestore:`, err);
+            })
+          );
+        }
+      }
+
+      // Salva também índice consolidado no documento geral de histórico
+      const refHistorico = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_HISTORICO);
+      promises.push(
+        setDoc(
+          refHistorico,
+          limparParaFirestore({
+            informesArquivados,
+            ...(arquivosSalvos !== undefined ? { arquivosSalvos } : {}),
+            ultimaAtualizacao: timestamp,
+          }),
+          { merge: true }
+        ).catch((err) => {
+          // Se estourar 1MB no consolidado, as subcoleções já garantiram a gravação
+          console.warn('Documento consolidado de histórico atingiu cota; subcoleções ativas:', err);
+        })
+      );
+    }
+
     await Promise.all(promises);
   } catch (error) {
     console.error('Erro ao salvar no Firestore:', error);
     throw error;
+  }
+}
+
+/**
+ * Remove um informe arquivado do Firestore
+ */
+export async function excluirInformeArquivadoFirestore(id: string): Promise<void> {
+  try {
+    const refInfItem = doc(db, FIRESTORE_COLLECTION, 'dados_historico', 'informes', id);
+    await deleteDoc(refInfItem);
+  } catch (err) {
+    console.warn(`Aviso ao excluir informe arquivado ${id} do Firestore:`, err);
   }
 }
 
