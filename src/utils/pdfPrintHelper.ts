@@ -137,10 +137,13 @@ export function imprimirEmNovaJanela(containerElement: HTMLElement, titulo: stri
             .pauta-diaria-page td {
               box-sizing: border-box !important;
               word-break: break-word !important;
-              overflow-wrap: break-word !important;
+              overflow-wrap: anywhere !important;
+              overflow: hidden !important;
+              hyphens: auto;
             }
             .pauta-diaria-page div {
-              overflow: visible !important;
+              box-sizing: border-box !important;
+              max-width: 100% !important;
             }
             .break-inside-avoid {
               page-break-inside: avoid !important;

@@ -237,7 +237,10 @@ export default function App() {
     if (temEquipeAntiga) {
       return DADOS_INICIAIS_EQUIPES;
     }
-    return lista;
+    return lista.map((eq) => ({
+      ...eq,
+      supervisor: eq.supervisor || '1º Ten PM Froes',
+    }));
   };
 
   // Estado das Equipes de Manutenção

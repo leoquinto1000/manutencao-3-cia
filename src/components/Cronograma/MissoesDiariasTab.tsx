@@ -801,35 +801,35 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
         {/* Linha divisória horizontal preta separando o cabeçalho da tabela */}
         <div className="border-t border-black my-3.5 w-full" />
 
-        {/* Tabela de Missões e Determinações (6 colunas com dimensões proporcionais exatas para A4) */}
+        {/* Tabela de Missões e Determinações (6 colunas com dimensões proporcionais exatas para A4 e quebra estrita de linha) */}
         <div className="overflow-x-auto print:overflow-visible">
           <table className="w-full text-xs border-collapse border border-black mb-4 table-fixed">
             <colgroup>
-              <col style={{ width: '5%' }} />
-              <col style={{ width: '37%' }} />
+              <col style={{ width: '6%' }} />
+              <col style={{ width: '36%' }} />
               <col style={{ width: '18%' }} />
-              <col style={{ width: '22%' }} />
-              <col style={{ width: '10%' }} />
+              <col style={{ width: '23%' }} />
+              <col style={{ width: '9%' }} />
               <col style={{ width: '8%' }} />
             </colgroup>
             <thead>
               <tr className="bg-[#dde5ee] print:bg-slate-200 text-black">
-                <th className="border border-black px-1 py-1.5 text-center font-bold text-[11px] uppercase tracking-tight">
+                <th className="border border-black px-1 py-1.5 text-center font-bold text-[11px] uppercase tracking-tight overflow-hidden break-words">
                   CHECK
                 </th>
-                <th className="border border-black px-2 py-1.5 text-left font-bold text-[11px] uppercase tracking-tight">
+                <th className="border border-black px-2 py-1.5 text-left font-bold text-[11px] uppercase tracking-tight overflow-hidden break-words">
                   DETERMINAÇÃO / MISSÃO
                 </th>
-                <th className="border border-black px-2 py-1.5 text-left font-bold text-[11px] uppercase tracking-tight">
+                <th className="border border-black px-2 py-1.5 text-left font-bold text-[11px] uppercase tracking-tight overflow-hidden break-words">
                   LOCAL / SETOR
                 </th>
-                <th className="border border-black px-2 py-1.5 text-left font-bold text-[11px] uppercase tracking-tight">
+                <th className="border border-black px-2 py-1.5 text-left font-bold text-[11px] uppercase tracking-tight overflow-hidden break-words">
                   POLICIAIS EXECUTORES
                 </th>
-                <th className="border border-black px-1.5 py-1.5 text-center font-bold text-[11px] uppercase tracking-tight">
+                <th className="border border-black px-1 py-1.5 text-center font-bold text-[11px] uppercase tracking-tight overflow-hidden break-words">
                   TURNO
                 </th>
-                <th className="border border-black px-1 py-1.5 text-center font-bold text-[11px] uppercase tracking-tight">
+                <th className="border border-black px-1 py-1.5 text-center font-bold text-[11px] uppercase tracking-tight overflow-hidden break-words">
                   PRÓX. DIA?
                 </th>
               </tr>
@@ -867,7 +867,7 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
                     className="hover:bg-slate-50/70 transition group relative"
                   >
                     {/* CHECK [ ] ou [X] - Sem desalinhamento, largura e altura perfeitamente rígidas */}
-                    <td className="border border-black p-0 text-center align-middle h-9">
+                    <td className="border border-black p-0 text-center align-middle h-9 overflow-hidden">
                       <button
                         type="button"
                         onClick={() => toggleConcluida(m.id)}
@@ -881,34 +881,34 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
                     </td>
 
                     {/* DETERMINAÇÃO / MISSÃO */}
-                    <td className="border border-black px-2 py-1.5 align-top">
-                      <div className="flex items-start justify-between gap-1.5">
-                        <div className="flex-1 min-w-0">
+                    <td className="border border-black px-2 py-1.5 align-top overflow-hidden break-words [overflow-wrap:anywhere]">
+                      <div className="flex items-start justify-between gap-1.5 w-full min-w-0">
+                        <div className="flex-1 min-w-0 break-words [overflow-wrap:anywhere]">
                           <div
                             onClick={() => {
                               setMissaoEmEdicao(m);
                               setModalAberta(true);
                             }}
-                            className="font-bold text-black text-xs sm:text-[12.5px] leading-tight cursor-pointer hover:text-blue-800"
+                            className="font-bold text-black text-xs sm:text-[12.5px] leading-tight cursor-pointer hover:text-blue-800 break-words [overflow-wrap:anywhere]"
                             title="Clique para editar determinação"
                           >
                             {idx + 1}. {m.titulo}
                           </div>
 
                           {m.descricao && (
-                            <div className="text-[11px] text-slate-800 mt-0.5 leading-snug break-words">
+                            <div className="text-[11px] text-slate-800 mt-0.5 leading-snug break-words [overflow-wrap:anywhere]">
                               {m.descricao}
                             </div>
                           )}
 
                           {m.materiaisNecessarios && (
-                            <div className="text-[10px] text-slate-700 italic mt-0.5 leading-tight break-words">
+                            <div className="text-[10px] text-slate-700 italic mt-0.5 leading-tight break-words [overflow-wrap:anywhere]">
                               <strong>Materiais:</strong> {m.materiaisNecessarios}
                             </div>
                           )}
 
                           {m.observacoes && (
-                            <div className="text-[10px] text-slate-600 mt-0.5 leading-tight break-words">
+                            <div className="text-[10px] text-slate-600 mt-0.5 leading-tight break-words [overflow-wrap:anywhere]">
                               <strong>Obs:</strong> {m.observacoes}
                             </div>
                           )}
@@ -974,17 +974,17 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
                     </td>
 
                     {/* LOCAL / SETOR */}
-                    <td className="border border-black px-2 py-1.5 align-top text-xs text-black break-words leading-tight">
+                    <td className="border border-black px-2 py-1.5 align-top text-xs text-black break-words [overflow-wrap:anywhere] overflow-hidden leading-tight">
                       {m.local}
                     </td>
 
                     {/* POLICIAIS EXECUTORES */}
-                    <td className="border border-black px-2 py-1.5 align-top text-xs leading-tight">
-                      <div className="font-bold text-black break-words">
+                    <td className="border border-black px-2 py-1.5 align-top text-xs leading-tight break-words [overflow-wrap:anywhere] overflow-hidden">
+                      <div className="font-bold text-black break-words [overflow-wrap:anywhere]">
                         {m.membrosDesignados || (!m.equipeNome ? 'A definir' : '')}
                       </div>
                       {m.equipeNome && (
-                        <div className="text-[10.5px] text-slate-600 mt-0.5 leading-tight">
+                        <div className="text-[10.5px] text-slate-600 mt-0.5 leading-tight break-words [overflow-wrap:anywhere]">
                           Equipe: {m.equipeNome}
                         </div>
                       )}
@@ -994,12 +994,12 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
                     </td>
 
                     {/* TURNO */}
-                    <td className="border border-black px-1.5 py-1.5 text-center align-middle text-xs font-semibold text-black whitespace-nowrap">
+                    <td className="border border-black px-1 py-1.5 text-center align-middle text-xs font-semibold text-black break-words [overflow-wrap:anywhere] overflow-hidden leading-tight">
                       {m.turno}
                     </td>
 
                     {/* PRÓX. DIA? */}
-                    <td className="border border-black px-1 py-1.5 text-center align-middle text-xs whitespace-nowrap">
+                    <td className="border border-black px-1 py-1.5 text-center align-middle text-xs break-words [overflow-wrap:anywhere] overflow-hidden leading-tight">
                       <button
                         type="button"
                         onClick={() => toggleAdiadaParaProximoDia(m.id)}
@@ -1039,19 +1039,19 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
             <div className="overflow-x-auto print:overflow-visible">
               <table className="w-full text-xs border-collapse border border-black table-fixed">
                 <colgroup>
-                  <col style={{ width: '40%' }} />
-                  <col style={{ width: '25%' }} />
-                  <col style={{ width: '35%' }} />
+                  <col style={{ width: '38%' }} />
+                  <col style={{ width: '24%' }} />
+                  <col style={{ width: '38%' }} />
                 </colgroup>
                 <thead>
                   <tr className="bg-[#dde5ee] print:bg-slate-200 text-black">
-                    <th className="border border-black px-2 py-1 text-left font-bold text-[11px] uppercase">
+                    <th className="border border-black px-2 py-1 text-left font-bold text-[11px] uppercase overflow-hidden break-words">
                       GRADUAÇÃO & NOME DE GUERRA
                     </th>
-                    <th className="border border-black px-2 py-1 text-center font-bold text-[11px] uppercase">
+                    <th className="border border-black px-2 py-1 text-center font-bold text-[11px] uppercase overflow-hidden break-words">
                       CFO / PELOTÃO / ORIGEM
                     </th>
-                    <th className="border border-black px-2 py-1 text-left font-bold text-[11px] uppercase">
+                    <th className="border border-black px-2 py-1 text-left font-bold text-[11px] uppercase overflow-hidden break-words">
                       MOTIVO DO IMPEDIMENTO
                     </th>
                   </tr>
@@ -1062,35 +1062,35 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
                     const anoPel = formatarAnoPelotao(militar.anoCurso, militar.pelotao);
                     return (
                       <tr key={militar.id} className="border-b border-black bg-white">
-                        <td className="border border-black px-2 py-1.5 font-bold text-black align-middle">
+                        <td className="border border-black px-2 py-1.5 font-bold text-black align-middle overflow-hidden break-words [overflow-wrap:anywhere] leading-tight">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-mono text-[10px] px-1 py-0.2 border border-black text-black font-bold rounded">
+                            <span className="font-mono text-[10px] px-1 py-0.2 border border-black text-black font-bold rounded shrink-0">
                               {militar.graduacao || 'PM'}
                             </span>
-                            <span>{militar.nomeGuerra}</span>
+                            <span className="break-words">{militar.nomeGuerra}</span>
                             {militar.re && (
-                              <span className="font-mono text-[10px] text-slate-700 font-normal">
+                              <span className="font-mono text-[10px] text-slate-700 font-normal shrink-0">
                                 (RE {militar.re})
                               </span>
                             )}
                             <span
-                              className="text-[9px] font-bold uppercase px-1.5 py-0.2 rounded border border-black text-black"
+                              className="text-[9px] font-bold uppercase px-1.5 py-0.2 rounded border border-black text-black shrink-0"
                             >
                               {ehApoio ? 'Apoio' : 'Fixo 3ª Cia'}
                             </span>
                           </div>
                         </td>
-                        <td className="border border-black px-2 py-1.5 text-center font-bold text-black align-middle">
-                          <div>
+                        <td className="border border-black px-2 py-1.5 text-center font-bold text-black align-middle overflow-hidden break-words [overflow-wrap:anywhere] leading-tight">
+                          <div className="break-words">
                             {anoPel !== '-' ? anoPel : (militar.pelotao ? `Pelotão ${militar.pelotao}` : '-')}
                             {ehApoio && militar.origemApoio && (
-                              <div className="text-[10px] text-slate-600 font-normal mt-0.5">
+                              <div className="text-[10px] text-slate-600 font-normal mt-0.5 break-words">
                                 Origem: {militar.origemApoio}
                               </div>
                             )}
                           </div>
                         </td>
-                        <td className="border border-black px-2 py-1.5 text-black font-semibold align-middle text-xs">
+                        <td className="border border-black px-2 py-1.5 text-black font-semibold align-middle text-xs overflow-hidden break-words [overflow-wrap:anywhere] leading-tight">
                           {militar.impedimento}
                         </td>
                       </tr>

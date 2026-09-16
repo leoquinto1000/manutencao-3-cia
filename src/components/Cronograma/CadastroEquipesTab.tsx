@@ -67,6 +67,7 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
   const [modalEquipeAberta, setModalEquipeAberta] = useState(false);
   const [equipeEmEdicao, setEquipeEmEdicao] = useState<EquipeManutencao | null>(null);
   const [nomeEquipe, setNomeEquipe] = useState('');
+  const [supervisorEquipe, setSupervisorEquipe] = useState('');
   const [encarregadoEquipe, setEncarregadoEquipe] = useState('');
   const [especialidadeEquipe, setEspecialidadeEquipe] = useState('');
   const [membrosEquipeSelecionados, setMembrosEquipeSelecionados] = useState<string[]>([]);
@@ -124,6 +125,10 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
   const abrirNovaEquipe = () => {
     setEquipeEmEdicao(null);
     setNomeEquipe('');
+    const oficialOuPrimeiro =
+      membros.find((m) => m.graduacao?.includes('Ten') || m.graduacao?.includes('Cap'))?.nomeGuerra ||
+      '1º Ten PM Froes';
+    setSupervisorEquipe(oficialOuPrimeiro);
     setEncarregadoEquipe(membros[0]?.nomeGuerra || '');
     setEspecialidadeEquipe('');
     setMembrosEquipeSelecionados([]);
@@ -137,6 +142,7 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
   const abrirEditarEquipe = (eq: EquipeManutencao) => {
     setEquipeEmEdicao(eq);
     setNomeEquipe(eq.nome);
+    setSupervisorEquipe(eq.supervisor || '1º Ten PM Froes');
     setEncarregadoEquipe(eq.encarregado);
     setEspecialidadeEquipe(eq.especialidade);
     setMembrosEquipeSelecionados(eq.membros || []);
@@ -158,6 +164,7 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
             ? {
                 ...eq,
                 nome: nomeEquipe.trim(),
+                supervisor: supervisorEquipe.trim() || '1º Ten PM Froes',
                 encarregado: encarregadoEquipe.trim(),
                 especialidade: especialidadeEquipe.trim(),
                 membros: membrosEquipeSelecionados,
@@ -170,6 +177,7 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
       const nova: EquipeManutencao = {
         id: gerarId(),
         nome: nomeEquipe.trim(),
+        supervisor: supervisorEquipe.trim() || '1º Ten PM Froes',
         encarregado: encarregadoEquipe.trim(),
         especialidade: especialidadeEquipe.trim(),
         membros: membrosEquipeSelecionados,
@@ -535,6 +543,12 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
                 </div>
 
                 <div className="mt-3 space-y-1.5 text-xs text-slate-700">
+                  <div className="flex items-center gap-1.5">
+                    <UserCheck size={13} className="text-amber-600 shrink-0" />
+                    <span className="font-semibold text-slate-900">Supervisor:</span>
+                    <span className="font-bold text-[#1a2b4c]">{eq.supervisor || '1º Ten PM Froes'}</span>
+                  </div>
+
                   <div className="flex items-center gap-1.5">
                     <Shield size={13} className="text-blue-600 shrink-0" />
                     <span className="font-semibold text-slate-900">Encarregado:</span>
@@ -1053,15 +1067,44 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
                 />
               </div>
 
+              {/* Supervisor da Equipe (acima do Encarregado) */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1 flex items-center gap-1.5">
+                  <UserCheck size={14} className="text-amber-600" />
+                  <span>Supervisor da Equipe:</span>
+                </label>
+                <select
+                  value={supervisorEquipe}
+                  onChange={(e) => setSupervisorEquipe(e.target.value)}
+                  className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md focus:ring-1 focus:ring-[#1a2b4c] bg-white font-medium text-slate-900"
+                >
+                  <option value="">-- Selecione o Supervisor (Oficial / Responsável) --</option>
+                  {!membros.some((m) => m.nomeGuerra.includes('Froes')) && (
+                    <option value="1º Ten PM Froes">1º Ten PM Froes (Oficial Coordenador / Supervisor)</option>
+                  )}
+                  {membros.map((m) => (
+                    <option key={m.id} value={m.nomeGuerra}>
+                      {m.nomeGuerra} {m.graduacao ? `(${m.graduacao})` : ''} - {m.especialidade}
+                    </option>
+                  ))}
+                  {supervisorEquipe &&
+                    !membros.some((m) => m.nomeGuerra === supervisorEquipe) &&
+                    supervisorEquipe !== '1º Ten PM Froes' && (
+                      <option value={supervisorEquipe}>{supervisorEquipe}</option>
+                    )}
+                </select>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">
-                    Encarregado / Líder da Equipe:
+                  <label className="block font-bold text-slate-700 mb-1 flex items-center gap-1.5">
+                    <Shield size={14} className="text-blue-600" />
+                    <span>Encarregado / Líder da Equipe:</span>
                   </label>
                   <select
                     value={encarregadoEquipe}
                     onChange={(e) => setEncarregadoEquipe(e.target.value)}
-                    className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md focus:ring-1 focus:ring-[#1a2b4c] bg-white font-medium"
+                    className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md focus:ring-1 focus:ring-[#1a2b4c] bg-white font-medium text-slate-900"
                   >
                     <option value="">-- Selecione o Encarregado (Militar da 3ª Cia) --</option>
                     {membros.map((m) => (

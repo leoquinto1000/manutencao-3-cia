@@ -206,6 +206,7 @@ export interface MembroEquipe {
 export interface EquipeManutencao {
   id: string;
   nome: string;
+  supervisor?: string;
   encarregado: string;
   especialidade: string;
   membros: string[];

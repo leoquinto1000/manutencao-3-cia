@@ -790,6 +790,7 @@ export const DADOS_INICIAIS_EQUIPES: import('./types').EquipeManutencao[] = [
   {
     id: 'eq-1',
     nome: 'Equipe Alfa - Elétrica & Gestão',
+    supervisor: '1º Ten PM Froes',
     encarregado: 'Cad PM Perozin',
     especialidade: 'Instalações elétricas, canaletas, tomadas e gestão',
     membros: ['Cad PM Perozin', 'Cad PM Fabio', 'Cad PM Ulisses Silveira'],
@@ -798,6 +799,7 @@ export const DADOS_INICIAIS_EQUIPES: import('./types').EquipeManutencao[] = [
   {
     id: 'eq-2',
     nome: 'Equipe Bravo - Compras & UGE',
+    supervisor: '1º Ten PM Froes',
     encarregado: 'Cad PM Diomazio',
     especialidade: 'Administração de materiais, compras e gestão UGE',
     membros: ['Cad PM Diomazio', 'Cad PM Augusto', 'Cad PM Peciukonis'],
@@ -806,6 +808,7 @@ export const DADOS_INICIAIS_EQUIPES: import('./types').EquipeManutencao[] = [
   {
     id: 'eq-3',
     nome: 'Equipe Charlie - Pintura & Auxiliar Geral',
+    supervisor: '1º Ten PM Froes',
     encarregado: 'Cad PM Salvioni',
     especialidade: 'Pintura, reformas gerais e conservação predial',
     membros: ['Cad PM Salvioni', 'Cad PM Freire', 'Cad PM Ravely', 'Cad PM Isack'],
