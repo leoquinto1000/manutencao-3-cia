@@ -87,7 +87,39 @@ export const ModalVisualizadorPDF: React.FC<ModalVisualizadorPDFProps> = ({
     resultadoPdf.pdf.save(nomeArquivo);
   };
 
-  const handleImprimirJanela = () => {
+  const handleImprimir = () => {
+    if (resultadoPdf?.blobUrl) {
+      try {
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'fixed';
+        iframe.style.right = '0';
+        iframe.style.bottom = '0';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = '0';
+        iframe.src = resultadoPdf.blobUrl;
+        document.body.appendChild(iframe);
+        iframe.onload = () => {
+          setTimeout(() => {
+            try {
+              iframe.contentWindow?.focus();
+              iframe.contentWindow?.print();
+            } catch (e) {
+              if (targetElement) imprimirEmNovaJanela(targetElement, titulo);
+            }
+            setTimeout(() => {
+              try {
+                document.body.removeChild(iframe);
+              } catch {}
+            }, 60000);
+          }, 300);
+        };
+        return;
+      } catch (err) {
+        console.warn('Impressão via iframe falhou:', err);
+      }
+    }
+
     if (targetElement) {
       imprimirEmNovaJanela(targetElement, titulo);
     } else {
@@ -126,9 +158,9 @@ export const ModalVisualizadorPDF: React.FC<ModalVisualizadorPDFProps> = ({
 
             {/* Botão Imprimir */}
             <button
-              onClick={handleImprimirJanela}
+              onClick={handleImprimir}
               className="flex items-center gap-1.5 bg-[#c9a84e] hover:bg-[#b8973f] text-[#1a2b4c] text-xs font-bold px-3 py-1.5 rounded-lg transition shadow-sm"
-              title="Imprimir em nova janela (sem bloqueios do navegador)"
+              title="Imprimir documento ou salvar como PDF"
             >
               <Printer size={14} />
               <span>Imprimir</span>
@@ -170,7 +202,7 @@ export const ModalVisualizadorPDF: React.FC<ModalVisualizadorPDFProps> = ({
               <p className="text-xs text-slate-600 mb-4">{erro}</p>
               <div className="flex justify-center gap-2">
                 <button
-                  onClick={handleImprimirJanela}
+                  onClick={handleImprimir}
                   className="bg-[#1a2b4c] text-white text-xs font-semibold px-4 py-2 rounded-lg hover:bg-[#2c4373]"
                 >
                   Imprimir Diretamente

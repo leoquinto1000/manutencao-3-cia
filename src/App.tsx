@@ -465,26 +465,24 @@ export default function App() {
           if (Array.isArray(dados.materiaisUsados)) setMateriaisUsados(dados.materiaisUsados);
           if (dados.informeAtual) {
             setInformeAtual((atual) => {
-              const fotosFirestore =
-                (dados.informeAtual.paginas || []).some((p: any) => (p.fotos || []).length > 0) ||
-                !!dados.informeAtual.capaUrl;
-              const fotosAtuais =
-                (atual.paginas || []).some((p) => (p.fotos || []).length > 0) ||
-                !!atual.capaUrl;
-              if (fotosFirestore || !fotosAtuais) {
-                return dados.informeAtual;
+              const temCapaLocalCustomizada =
+                atual.capaUrl && atual.capaUrl !== DADOS_INICIAIS_INFORME.capaUrl;
+              const temFotosLocais = (atual.paginas || []).some((p) => (p.fotos || []).length > 0);
+
+              // Se o usuário já adicionou fotos ou alterou a capa localmente, preserva os dados locais
+              const capaFinal = temCapaLocalCustomizada
+                ? atual.capaUrl
+                : dados.informeAtual.capaUrl || atual.capaUrl || DADOS_INICIAIS_INFORME.capaUrl;
+
+              if (temFotosLocais || temCapaLocalCustomizada) {
+                return {
+                  ...DADOS_INICIAIS_INFORME,
+                  ...dados.informeAtual,
+                  ...atual,
+                  capaUrl: capaFinal,
+                };
               }
-              return {
-                ...dados.informeAtual,
-                capaUrl: atual.capaUrl || dados.informeAtual.capaUrl,
-                paginas: dados.informeAtual.paginas.map((p: any) => {
-                  const pagLocal = atual.paginas.find((pl) => pl.id === p.id);
-                  if (pagLocal && pagLocal.fotos?.length > 0 && (!p.fotos || p.fotos.length === 0)) {
-                    return { ...p, fotos: pagLocal.fotos };
-                  }
-                  return p;
-                }),
-              };
+              return { ...DADOS_INICIAIS_INFORME, ...dados.informeAtual, capaUrl: capaFinal };
             });
           }
 
@@ -920,6 +918,7 @@ export default function App() {
             onCarregarInformeArquivado={handleCarregarInformeArquivado}
             onExcluirInformeArquivado={handleExcluirInformeArquivado}
             onLimparHistoricoInformes={handleLimparHistoricoInformes}
+            membros={membros}
           />
         )}
 

@@ -1,4 +1,4 @@
-import html2canvas from 'html2canvas';
+import html2canvas from 'html2canvas-pro';
 import jsPDF from 'jspdf';
 
 export interface GerarPdfOptions {
@@ -163,7 +163,24 @@ export function imprimirEmNovaJanela(containerElement: HTMLElement, titulo: stri
               overflow: hidden !important;
               box-sizing: border-box !important;
             }
-            .textoparte-page, .apmbb-page {
+            .apmbb-page {
+              border: none !important;
+              box-shadow: none !important;
+              padding: 10mm 12mm 8mm 12mm !important;
+              margin: 0 auto !important;
+              page-break-before: auto !important;
+              page-break-after: always !important;
+              page-break-inside: avoid !important;
+              break-inside: avoid !important;
+              width: 210mm !important;
+              max-width: 210mm !important;
+              min-height: 297mm !important;
+              height: 297mm !important;
+              max-height: 297mm !important;
+              overflow: hidden !important;
+              box-sizing: border-box !important;
+            }
+            .textoparte-page {
               border: none !important;
               box-shadow: none !important;
               padding: 8mm 10mm !important;
@@ -195,14 +212,29 @@ export function imprimirEmNovaJanela(containerElement: HTMLElement, titulo: stri
           </style>
         </head>
         <body>
+          <div class="no-print" style="position: fixed; top: 12px; right: 12px; z-index: 99999; background: #1a2b4c; padding: 6px 14px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.2);">
+            <button type="button" onclick="window.focus(); window.print();" style="color: #ffffff; font-weight: bold; font-size: 13px; cursor: pointer; border: none; background: transparent; display: flex; items-center; gap: 6px;">
+              🖨️ Clique para Imprimir / Salvar PDF
+            </button>
+          </div>
           ${conteudo}
           <script>
-            window.addEventListener('load', function() {
+            function executarImpressao() {
               setTimeout(function() {
-                window.focus();
-                window.print();
+                try {
+                  window.focus();
+                  window.print();
+                } catch (e) {
+                  console.error('Erro ao acionar impressão:', e);
+                }
               }, 400);
-            });
+            }
+            if (document.readyState === 'complete' || document.readyState === 'interactive') {
+              executarImpressao();
+            } else {
+              window.addEventListener('DOMContentLoaded', executarImpressao);
+              window.addEventListener('load', executarImpressao);
+            }
           </script>
         </body>
       </html>
@@ -255,7 +287,9 @@ export async function gerarDocumentoPdf(
       onProgresso(`Processando página ${i + 1} de ${paginas.length}...`, Math.round(((i) / paginas.length) * 100));
     }
 
-    // Cria canvas de alta resolução
+    // Cria canvas de alta resolução com suporte a oklch e sincronização de campos
+    const isA4Formatada = pagina.classList.contains('apmbb-page') || pagina.classList.contains('pesquisa-page');
+
     const canvas = await html2canvas(pagina, {
       scale: 2, // 2x para boa nitidez
       useCORS: true,
@@ -263,7 +297,31 @@ export async function gerarDocumentoPdf(
       backgroundColor: '#ffffff',
       logging: false,
       ignoreElements: (element) => element.classList.contains('no-print'),
-      windowWidth: 1024,
+      windowWidth: isA4Formatada ? 794 : 1024,
+      onclone: (clonedDoc) => {
+        // Sincroniza valores de inputs e textareas no DOM clonado
+        try {
+          const origInputs = pagina.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea');
+          const clonedInputs = clonedDoc.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea');
+          origInputs.forEach((orig, idx) => {
+            const clone = clonedInputs[idx];
+            if (clone) {
+              clone.value = orig.value;
+              clone.setAttribute('value', orig.value);
+              if (clone instanceof HTMLTextAreaElement) {
+                clone.textContent = orig.value;
+              }
+            }
+          });
+
+          // Oculta elementos que não devem sair na impressão
+          clonedDoc.querySelectorAll('.no-print').forEach((el) => {
+            (el as HTMLElement).style.display = 'none';
+          });
+        } catch (e) {
+          console.warn('Aviso ao sincronizar elementos clonados:', e);
+        }
+      },
     });
 
     const imgData = canvas.toDataURL('image/jpeg', 0.95);
@@ -272,8 +330,9 @@ export async function gerarDocumentoPdf(
       pdf.addPage('a4', orientacao);
     }
 
-    // Calcula proporções preservando margem
-    const margem = 5; // 5mm de margem
+    // Se a página já está estritamente dimensionada em A4 (como .apmbb-page),
+    // ela já possui seus próprios paddings internos que atuam como margens da folha.
+    const margem = isA4Formatada ? 0 : 5;
     const larguraDisponivel = pdfLargura - (margem * 2);
     const alturaDisponivel = pdfAltura - (margem * 2);
 
@@ -287,7 +346,7 @@ export async function gerarDocumentoPdf(
     }
 
     const posX = margem + (larguraDisponivel - renderW) / 2;
-    const posY = margem;
+    const posY = margem + (alturaDisponivel - renderH) / 2;
 
     pdf.addImage(imgData, 'JPEG', posX, posY, renderW, renderH, undefined, 'FAST');
   }

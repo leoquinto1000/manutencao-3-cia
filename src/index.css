@@ -96,18 +96,20 @@
 .apmbb-page {
   background: #ffffff;
   width: 100%;
-  max-width: 794px; /* 210mm */
-  min-height: 1123px; /* 297mm */
-  margin: 0 auto 35px auto;
-  padding: 40px 50px 30px 50px;
-  border-radius: 4px;
+  max-width: 210mm; /* Dimensão A4 estrita */
+  min-height: 297mm; /* Dimensão A4 estrita */
+  height: 297mm; /* Fixado para padrão de folha A4 */
+  margin: 0 auto 30px auto;
+  padding: 10mm 12mm 8mm 12mm; /* Margens internas oficiais A4 */
+  border-radius: 2px;
   border: 1px solid #cbd5e1;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   position: relative;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 /* Colors for table cells */
@@ -197,7 +199,25 @@
     break-inside: avoid !important;
   }
 
-  .apmbb-page, .textoparte-page {
+  .apmbb-page {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 10mm 12mm 8mm 12mm !important;
+    margin: 0 auto !important;
+    page-break-before: auto !important;
+    page-break-after: always !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    width: 210mm !important;
+    max-width: 210mm !important;
+    min-height: 297mm !important;
+    height: 297mm !important;
+    max-height: 297mm !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+  }
+
+  .textoparte-page {
     border: none !important;
     box-shadow: none !important;
     padding: 8mm 10mm !important;
@@ -208,6 +228,17 @@
     width: 100% !important;
     max-width: 194mm !important;
     box-sizing: border-box !important;
+  }
+
+  .apmbb-page input,
+  .apmbb-page textarea {
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    resize: none !important;
+    overflow: visible !important;
+    padding: 0 !important;
   }
 
   .balancete-page {

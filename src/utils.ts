@@ -318,10 +318,14 @@ export const DADOS_INICIAIS_INFORME: InformeMensal = {
   id: 'informe-agosto-2026',
   mesAno: 'AGOSTO 2026',
   capaUrl: 'https://images.unsplash.com/photo-1541888946425-d0fbb18086f6?w=900&auto=format&fit=crop&q=60',
+  capaAltura: 195,
+  cabecalhoEsquerda: 'ACADEMIA DE POLÍCIA MILITAR DO BARRO BRANCO - O003',
+  cabecalhoDireita: 'MANUTENÇÃO 3ª CIA\nCIA ES',
+  rodapeTexto: 'BERÇO DO OFICIALATO PAULISTA',
+  tituloDestaques: 'Dentre as principais atividades executadas, destacam-se:',
   titulo: 'INFORME DE SERVIÇOS REALIZADOS',
   subtitulo: 'REALIZAÇÕES AGOSTO 2026 • CUIDADO COM O QUE É NOSSO',
-  equipeTexto: `DE
-CAP PM IVANOV
+  equipeTexto: `CAP PM IVANOV
 1° TEN PM FROES
 CAD PM CRISTIAN
 CAD PM DIOMAZIO

@@ -164,6 +164,11 @@ export interface InformeMensal {
   id: string;
   mesAno: string;
   capaUrl: string;
+  capaAltura?: number;
+  cabecalhoEsquerda?: string;
+  cabecalhoDireita?: string;
+  rodapeTexto?: string;
+  tituloDestaques?: string;
   titulo: string;
   subtitulo: string;
   equipeTexto: string;
