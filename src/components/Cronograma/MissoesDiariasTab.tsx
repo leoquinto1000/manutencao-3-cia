@@ -1107,34 +1107,7 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
           </div>
         </div>
 
-        {/* ============================================================ */}
-        {/* ASSINATURAS OFICIAIS PMESP / APMBB (RODAPÉ DE APROVAÇÃO)    */}
-        {/* ============================================================ */}
-        <div className="mt-6 pt-3 border-t border-black text-black break-inside-avoid print:mt-4 print:pt-2">
-          <div className="grid grid-cols-2 gap-8 text-center text-xs">
-            <div>
-              <div className="border-b border-black w-3/4 mx-auto mb-1"></div>
-              <p className="font-bold uppercase tracking-wide text-[10.5px]">
-                Encarregado da Manutenção Predial
-              </p>
-              <p className="text-[9.5px] text-slate-700">
-                Seção de Manutenção • 3ª Cia Escola
-              </p>
-            </div>
-            <div>
-              <div className="border-b border-black w-3/4 mx-auto mb-1"></div>
-              <p className="font-bold uppercase tracking-wide text-[10.5px]">
-                Comandante da 3ª Companhia Escola
-              </p>
-              <p className="text-[9.5px] text-slate-700">
-                Academia de Polícia Militar do Barro Branco
-              </p>
-            </div>
-          </div>
-          <div className="mt-2.5 text-[9px] text-right italic text-slate-600">
-            Documento emitido via SIS-APMBB • 3ª Cia Escola • {formatarDataCurta(dataSelecionada)}
-          </div>
-        </div>
+
 
 
       </div>
