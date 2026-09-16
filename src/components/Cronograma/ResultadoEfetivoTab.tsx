@@ -2,27 +2,40 @@ import React, { useState, useMemo } from 'react';
 import { MembroEquipe } from '../../types';
 import { formatarAnoPelotao } from './CadastroEquipesTab';
 import {
+  formatarDataISO,
+  adicionarDiasISO,
+  formatarDataCabecalho,
+  formatarDataCurta,
+  getImpedimentoMembroNoDia,
+  temImpedimentoNoDia,
+} from '../../utils';
+import {
   Shield,
   AlertTriangle,
   CheckCircle2,
   Edit2,
   FileSpreadsheet,
   Search,
-  UserCheck,
-  UserX,
-  Filter,
   GraduationCap,
   Save,
   X,
   Plus,
   Clock,
-  Printer,
   Handshake,
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  RotateCcw,
+  Check,
+  CalendarDays,
 } from 'lucide-react';
 
 interface ResultadoEfetivoTabProps {
   membros: MembroEquipe[];
   onChangeMembros: (membros: MembroEquipe[]) => void;
+  dataSelecionada?: string;
+  onChangeDataSelecionada?: (data: string) => void;
   onNavegarParaPauta?: () => void;
 }
 
@@ -39,37 +52,53 @@ const PRESETS_IMPEDIMENTO = [
 export const ResultadoEfetivoTab: React.FC<ResultadoEfetivoTabProps> = ({
   membros,
   onChangeMembros,
+  dataSelecionada: dataSelecionadaProp,
+  onChangeDataSelecionada,
   onNavegarParaPauta,
 }) => {
+  const hoje = formatarDataISO();
+  const [dataInterna, setDataInterna] = useState<string>(hoje);
+  const dataAtiva = dataSelecionadaProp || dataInterna;
+
+  const setDataAtiva = (novaData: string) => {
+    if (onChangeDataSelecionada) {
+      onChangeDataSelecionada(novaData);
+    } else {
+      setDataInterna(novaData);
+    }
+  };
+
+  const diaAnterior = adicionarDiasISO(dataAtiva, -1);
+  const diaSeguinte = adicionarDiasISO(dataAtiva, 1);
+  const ehHoje = dataAtiva === hoje;
+
+  // Navegação de dias
+  const mudarDia = (delta: number) => {
+    setDataAtiva(adicionarDiasISO(dataAtiva, delta));
+  };
+
+  const irParaHoje = () => {
+    setDataAtiva(hoje);
+  };
+
   const [busca, setBusca] = useState('');
   const [filtroTipo, setFiltroTipo] = useState<'todos' | 'fixo' | 'apoio'>('todos');
   const [filtroStatus, setFiltroStatus] = useState<'todos' | 'impedidos' | 'disponiveis'>('todos');
   const [filtroPelotao, setFiltroPelotao] = useState('todos');
 
-  // Estado para modal / edição de impedimento rápido
+  // Estado para modal / edição de impedimento do dia
   const [militarEditandoImpedimento, setMilitarEditandoImpedimento] = useState<MembroEquipe | null>(null);
   const [textoImpedimento, setTextoImpedimento] = useState('');
 
-  // Verificação de impedimento ativo
-  const temImpedimentoAtivo = (m: MembroEquipe) => {
-    return Boolean(
-      m.impedimento &&
-      m.impedimento.trim().length > 0 &&
-      m.impedimento.toLowerCase() !== 'sem impedimento' &&
-      m.impedimento.toLowerCase() !== 'nenhum' &&
-      m.impedimento.toLowerCase() !== 'apto'
-    );
-  };
-
-  // Contadores e métricas globais
+  // Contadores e métricas para o dia ativo
   const metricas = useMemo(() => {
     const total = membros.length;
     const fixos = membros.filter((m) => m.tipoEfetivo !== 'apoio');
     const apoio = membros.filter((m) => m.tipoEfetivo === 'apoio');
 
-    const impedidos = membros.filter(temImpedimentoAtivo);
-    const impedidosFixos = fixos.filter(temImpedimentoAtivo);
-    const impedidosApoio = apoio.filter(temImpedimentoAtivo);
+    const impedidos = membros.filter((m) => temImpedimentoNoDia(m, dataAtiva));
+    const impedidosFixos = fixos.filter((m) => temImpedimentoNoDia(m, dataAtiva));
+    const impedidosApoio = apoio.filter((m) => temImpedimentoNoDia(m, dataAtiva));
 
     const disponiveis = total - impedidos.length;
     const disponiveisFixos = fixos.length - impedidosFixos.length;
@@ -86,9 +115,9 @@ export const ResultadoEfetivoTab: React.FC<ResultadoEfetivoTabProps> = ({
       impedidosFixos: impedidosFixos.length,
       impedidosApoio: impedidosApoio.length,
     };
-  }, [membros]);
+  }, [membros, dataAtiva]);
 
-  // Lista filtrada para a tabela
+  // Lista filtrada para a tabela no dia ativo
   const membrosFiltrados = useMemo(() => {
     return membros.filter((m) => {
       // Filtro de Tipo (Fixo vs Apoio)
@@ -96,8 +125,8 @@ export const ResultadoEfetivoTab: React.FC<ResultadoEfetivoTabProps> = ({
       if (filtroTipo === 'fixo' && ehApoio) return false;
       if (filtroTipo === 'apoio' && !ehApoio) return false;
 
-      // Filtro de Status
-      const comImpedimento = temImpedimentoAtivo(m);
+      // Filtro de Status para o dia ativo
+      const comImpedimento = temImpedimentoNoDia(m, dataAtiva);
       if (filtroStatus === 'impedidos' && !comImpedimento) return false;
       if (filtroStatus === 'disponiveis' && comImpedimento) return false;
 
@@ -114,7 +143,7 @@ export const ResultadoEfetivoTab: React.FC<ResultadoEfetivoTabProps> = ({
         const origem = (m.origemApoio || '').toLowerCase();
         const funcao = (m.funcaoApoio || m.especialidade || '').toLowerCase();
         const re = (m.re || '').toLowerCase();
-        const imp = (m.impedimento || '').toLowerCase();
+        const imp = getImpedimentoMembroNoDia(m, dataAtiva).toLowerCase();
 
         return (
           nomeGuerra.includes(termo) ||
@@ -130,24 +159,31 @@ export const ResultadoEfetivoTab: React.FC<ResultadoEfetivoTabProps> = ({
 
       return true;
     });
-  }, [membros, filtroTipo, filtroStatus, filtroPelotao, busca]);
+  }, [membros, dataAtiva, filtroTipo, filtroStatus, filtroPelotao, busca]);
 
-  // Abertura do modal de edição de impedimento
+  // Abertura do modal de edição de impedimento para a data ativa
   const abrirEdicaoImpedimento = (militar: MembroEquipe) => {
     setMilitarEditandoImpedimento(militar);
-    setTextoImpedimento(militar.impedimento || '');
+    setTextoImpedimento(getImpedimentoMembroNoDia(militar, dataAtiva));
   };
 
-  // Salvar alteração de impedimento
+  // Salvar alteração de impedimento para o dia ativo
   const salvarImpedimento = () => {
     if (!militarEditandoImpedimento) return;
 
     const valorLimpo = textoImpedimento.trim();
     const novosMembros = membros.map((m) => {
       if (m.id === militarEditandoImpedimento.id) {
+        const mapaAtualizado = { ...(m.impedimentosPorData || {}) };
+        if (valorLimpo) {
+          mapaAtualizado[dataAtiva] = valorLimpo;
+        } else {
+          delete mapaAtualizado[dataAtiva];
+        }
         return {
           ...m,
-          impedimento: valorLimpo,
+          ...(dataAtiva === hoje ? { impedimento: valorLimpo } : {}),
+          impedimentosPorData: mapaAtualizado,
         };
       }
       return m;
@@ -158,13 +194,16 @@ export const ResultadoEfetivoTab: React.FC<ResultadoEfetivoTabProps> = ({
     setTextoImpedimento('');
   };
 
-  // Limpar impedimento direto
+  // Limpar impedimento direto para o dia ativo
   const limparImpedimentoDireto = (militarId: string) => {
     const novosMembros = membros.map((m) => {
       if (m.id === militarId) {
+        const mapaAtualizado = { ...(m.impedimentosPorData || {}) };
+        delete mapaAtualizado[dataAtiva];
         return {
           ...m,
-          impedimento: '',
+          ...(dataAtiva === hoje ? { impedimento: '' } : {}),
+          impedimentosPorData: mapaAtualizado,
         };
       }
       return m;
@@ -173,44 +212,187 @@ export const ResultadoEfetivoTab: React.FC<ResultadoEfetivoTabProps> = ({
     onChangeMembros(novosMembros);
   };
 
+  // Copiar impedimentos do dia anterior para o dia ativo
+  const copiarDoDiaAnterior = () => {
+    const qtdImpedimentosAnterior = membros.filter((m) =>
+      temImpedimentoNoDia(m, diaAnterior)
+    ).length;
+
+    const confirmacao = window.confirm(
+      `Deseja copiar os impedimentos de ${formatarDataCurta(diaAnterior)} (${qtdImpedimentosAnterior} registrado(s)) para ${formatarDataCurta(dataAtiva)}?`
+    );
+    if (!confirmacao) return;
+
+    const novosMembros = membros.map((m) => {
+      const impAnterior = getImpedimentoMembroNoDia(m, diaAnterior);
+      const mapaAtualizado = { ...(m.impedimentosPorData || {}) };
+      if (impAnterior) {
+        mapaAtualizado[dataAtiva] = impAnterior;
+      } else {
+        delete mapaAtualizado[dataAtiva];
+      }
+      return {
+        ...m,
+        ...(dataAtiva === hoje ? { impedimento: impAnterior } : {}),
+        impedimentosPorData: mapaAtualizado,
+      };
+    });
+
+    onChangeMembros(novosMembros);
+  };
+
+  // Limpar todos os impedimentos do dia ativo (todos aptos)
+  const limparTodosDoDia = () => {
+    if (metricas.impedidos === 0) return;
+    const confirmacao = window.confirm(
+      `Deseja marcar todos os militares como aptos no dia ${formatarDataCurta(dataAtiva)}? Isso removerá todos os ${metricas.impedidos} impedimento(s) registrados exclusivamente nesta data.`
+    );
+    if (!confirmacao) return;
+
+    const novosMembros = membros.map((m) => {
+      const mapaAtualizado = { ...(m.impedimentosPorData || {}) };
+      delete mapaAtualizado[dataAtiva];
+      return {
+        ...m,
+        ...(dataAtiva === hoje ? { impedimento: '' } : {}),
+        impedimentosPorData: mapaAtualizado,
+      };
+    });
+
+    onChangeMembros(novosMembros);
+  };
+
   return (
     <div className="space-y-4">
-      {/* Cabeçalho do Resultado */}
+      {/* ========================================================================= */}
+      {/* PAINEL SUPERIOR: CONTROLE DE DATA DIÁRIA & AÇÕES RÁPIDAS                 */}
+      {/* ========================================================================= */}
       <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-4 sm:p-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-200">
           <div>
             <div className="flex items-center gap-2">
               <span className="bg-[#1a2b4c] text-[#c9a84e] p-1.5 rounded-md">
                 <GraduationCap size={20} />
               </span>
-              <h2 className="text-base sm:text-lg font-bold text-[#1a2b4c]">
-                Resultado — Efetivo de Manutenção & Policiais em Apoio
-              </h2>
+              <div>
+                <h2 className="text-base sm:text-lg font-bold text-[#1a2b4c]">
+                  Resultado Diário — Efetivo de Manutenção & Apoio
+                </h2>
+                <div className="text-xs text-slate-500 mt-0.5">
+                  Preenchimento diário dos impedimentos. Os dados refletem automaticamente na <strong>Pauta Oficial PMESP (Tabela)</strong> da respectiva data.
+                </div>
+              </div>
             </div>
-            <p className="text-xs text-slate-500 mt-1">
-              Relação consolidada do <strong>Efetivo Fixo (Militares da 3ª Cia)</strong> e dos <strong>Policiais que prestam apoio</strong>, seus respectivos <strong>CFO/Pelotão/Origem</strong> e controle de <strong>Impedimentos</strong>.
-            </p>
           </div>
 
-          {onNavegarParaPauta && (
+          {/* Navegador de Dias & Seletor de Data */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex items-center bg-slate-100 rounded-lg p-1 border border-slate-300 shadow-2xs">
+              <button
+                type="button"
+                onClick={() => mudarDia(-1)}
+                className="p-1.5 hover:bg-white rounded-md text-slate-700 hover:text-[#1a2b4c] transition cursor-pointer"
+                title={`Ir para dia anterior (${formatarDataCurta(diaAnterior)})`}
+              >
+                <ChevronLeft size={16} />
+              </button>
+
+              <div className="flex items-center gap-1.5 px-2">
+                <Calendar size={14} className="text-[#1a2b4c]" />
+                <input
+                  type="date"
+                  value={dataAtiva}
+                  onChange={(e) => {
+                    if (e.target.value) setDataAtiva(e.target.value);
+                  }}
+                  className="text-xs font-bold text-[#1a2b4c] bg-transparent border-none focus:outline-hidden cursor-pointer"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => mudarDia(1)}
+                className="p-1.5 hover:bg-white rounded-md text-slate-700 hover:text-[#1a2b4c] transition cursor-pointer"
+                title={`Ir para dia seguinte (${formatarDataCurta(diaSeguinte)})`}
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+
             <button
               type="button"
-              onClick={onNavegarParaPauta}
-              className="px-3.5 py-2 text-xs font-bold bg-[#1a2b4c] hover:bg-[#2c4373] text-white rounded-md shadow-xs transition flex items-center gap-2 self-start sm:self-auto cursor-pointer"
-              title="Ir para a Pauta Oficial PMESP (Tabela)"
+              onClick={irParaHoje}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition cursor-pointer ${
+                ehHoje
+                  ? 'bg-[#1a2b4c] text-white border-[#1a2b4c] shadow-2xs'
+                  : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300'
+              }`}
             >
-              <FileSpreadsheet size={15} className="text-[#c9a84e]" />
-              <span>Ver Pauta Oficial PMESP</span>
+              Hoje
             </button>
-          )}
+
+            {onNavegarParaPauta && (
+              <button
+                type="button"
+                onClick={onNavegarParaPauta}
+                className="px-3.5 py-1.5 text-xs font-bold bg-[#1a2b4c] hover:bg-[#2c4373] text-white rounded-lg shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                title="Ir para a Pauta Oficial desta data"
+              >
+                <FileSpreadsheet size={14} className="text-[#c9a84e]" />
+                <span>Ver Pauta do Dia ({formatarDataCurta(dataAtiva)})</span>
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Cards de Métricas */}
+        {/* Faixa com Data por Extenso e Ações Rápidas do Dia */}
+        <div className="mt-3.5 pt-1 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-extrabold uppercase tracking-wide text-slate-800 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
+              📅 {formatarDataCabecalho(dataAtiva)}
+            </span>
+            {ehHoje ? (
+              <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                Dia Atual
+              </span>
+            ) : (
+              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+                Resultado Programado
+              </span>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={copiarDoDiaAnterior}
+              className="px-2.5 py-1 text-xs font-semibold bg-white hover:bg-slate-50 text-slate-700 rounded-md border border-slate-300 shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
+              title={`Copiar impedimentos de ${formatarDataCurta(diaAnterior)} para ${formatarDataCurta(dataAtiva)}`}
+            >
+              <Copy size={13} className="text-slate-500" />
+              <span>Copiar do Dia Anterior ({formatarDataCurta(diaAnterior)})</span>
+            </button>
+
+            {metricas.impedidos > 0 && (
+              <button
+                type="button"
+                onClick={limparTodosDoDia}
+                className="px-2.5 py-1 text-xs font-semibold bg-white hover:bg-red-50 text-red-700 rounded-md border border-red-300 shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
+                title="Limpar todos os impedimentos desta data específica"
+              >
+                <RotateCcw size={13} className="text-red-600" />
+                <span>Zerar Impedimentos do Dia</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Cards de Métricas para o dia selecionado */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4">
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 flex items-center justify-between">
             <div>
               <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                Total do Efetivo
+                Total do Efetivo Cadastrado
               </div>
               <div className="text-xl font-extrabold text-[#1a2b4c] mt-0.5">
                 {metricas.total}
@@ -227,7 +409,7 @@ export const ResultadoEfetivoTab: React.FC<ResultadoEfetivoTabProps> = ({
           <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 flex items-center justify-between">
             <div>
               <div className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">
-                Aptos / Disponíveis
+                Aptos em {formatarDataCurta(dataAtiva)}
               </div>
               <div className="text-xl font-extrabold text-emerald-700 mt-0.5">
                 {metricas.disponiveis}
@@ -250,7 +432,7 @@ export const ResultadoEfetivoTab: React.FC<ResultadoEfetivoTabProps> = ({
           >
             <div>
               <div className="text-[11px] font-bold text-red-800 uppercase tracking-wider flex items-center gap-1">
-                <span>Com Impedimento</span>
+                <span>Com Impedimento em {formatarDataCurta(dataAtiva)}</span>
                 {metricas.impedidos > 0 && (
                   <span className="animate-pulse w-2 h-2 rounded-full bg-red-600 inline-block" />
                 )}
@@ -260,8 +442,8 @@ export const ResultadoEfetivoTab: React.FC<ResultadoEfetivoTabProps> = ({
               </div>
               <div className="text-[11px] text-red-700 font-medium">
                 {metricas.impedidos > 0
-                  ? `${metricas.impedidosFixos} Fixo • ${metricas.impedidosApoio} Apoio (Constam na Pauta)`
-                  : 'Nenhum impedimento registrado'}
+                  ? `${metricas.impedidosFixos} Fixo • ${metricas.impedidosApoio} Apoio (Constam na Pauta deste dia)`
+                  : 'Nenhum impedimento para este dia (todos aptos)'}
               </div>
             </div>
             <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-700">
@@ -271,7 +453,9 @@ export const ResultadoEfetivoTab: React.FC<ResultadoEfetivoTabProps> = ({
         </div>
       </div>
 
-      {/* Barra de Filtros e Busca */}
+      {/* ========================================================================= */}
+      {/* BARRA DE FILTROS E BUSCA                                                  */}
+      {/* ========================================================================= */}
       <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-3 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         {/* Campo de Busca */}
         <div className="relative flex-1 max-w-md">
@@ -335,7 +519,7 @@ export const ResultadoEfetivoTab: React.FC<ResultadoEfetivoTabProps> = ({
             </button>
           </div>
 
-          {/* Filtro Status (Impedidos vs Aptos) */}
+          {/* Filtro Status (Impedidos vs Aptos) para o dia ativo */}
           <div className="flex items-center bg-slate-100 p-0.5 rounded-md border border-slate-200 text-xs font-semibold">
             <button
               type="button"
@@ -388,7 +572,9 @@ export const ResultadoEfetivoTab: React.FC<ResultadoEfetivoTabProps> = ({
         </div>
       </div>
 
-      {/* Tabela Oficial do Resultado */}
+      {/* ========================================================================= */}
+      {/* TABELA OFICIAL DO RESULTADO NO DIA SELECIONADO                            */}
+      {/* ========================================================================= */}
       <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left border-collapse">
@@ -405,10 +591,10 @@ export const ResultadoEfetivoTab: React.FC<ResultadoEfetivoTabProps> = ({
                   Vínculo / Função
                 </th>
                 <th className="py-3 px-4 border-b border-[#1a2b4c]">
-                  Impedimento
+                  Status no Dia ({formatarDataCurta(dataAtiva)})
                 </th>
-                <th className="py-3 px-3 border-b border-[#1a2b4c] w-28 text-center">
-                  Ações
+                <th className="py-3 px-3 border-b border-[#1a2b4c] w-32 text-center">
+                  Ações do Dia
                 </th>
               </tr>
             </thead>
@@ -421,14 +607,15 @@ export const ResultadoEfetivoTab: React.FC<ResultadoEfetivoTabProps> = ({
                       Nenhum militar encontrado para os filtros selecionados
                     </p>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      Verifique se há militares cadastrados no Efetivo Fixo ou Policiais de Apoio na aba Equipes.
+                      Verifique os termos de busca ou altere os filtros de status e vínculo.
                     </p>
                   </td>
                 </tr>
               ) : (
                 membrosFiltrados.map((militar, idx) => {
                   const ehApoio = militar.tipoEfetivo === 'apoio';
-                  const temImpedimento = temImpedimentoAtivo(militar);
+                  const temImpedimento = temImpedimentoNoDia(militar, dataAtiva);
+                  const motivoImpedimento = getImpedimentoMembroNoDia(militar, dataAtiva);
                   const anoPelotao = formatarAnoPelotao(militar.anoCurso, militar.pelotao);
 
                   return (
@@ -534,24 +721,24 @@ export const ResultadoEfetivoTab: React.FC<ResultadoEfetivoTabProps> = ({
                         )}
                       </td>
 
-                      {/* Impedimento */}
+                      {/* Status / Impedimento no dia */}
                       <td className="py-3 px-4">
                         {temImpedimento ? (
                           <div className="flex items-start gap-2 bg-red-50 border border-red-300 p-2 rounded-md">
                             <AlertTriangle size={15} className="text-red-600 shrink-0 mt-0.5" />
                             <div>
                               <div className="font-bold text-red-900 text-xs">
-                                {militar.impedimento}
+                                {motivoImpedimento}
                               </div>
                               <div className="text-[10px] text-red-700 font-medium">
-                                ⚠️ Consta no rodapé da Pauta Oficial PMESP (Tabela)
+                                Consta na Pauta Diária de {formatarDataCurta(dataAtiva)}
                               </div>
                             </div>
                           </div>
                         ) : (
-                          <div className="flex items-center gap-1.5 text-emerald-700 font-semibold text-xs">
+                          <div className="flex items-center gap-1.5 text-emerald-700 font-semibold text-xs bg-emerald-50/60 border border-emerald-200/80 px-2.5 py-1.5 rounded-md">
                             <CheckCircle2 size={14} className="text-emerald-600" />
-                            <span>Apto / Sem Impedimento</span>
+                            <span>Apto / Disponível no dia {formatarDataCurta(dataAtiva)}</span>
                           </div>
                         )}
                       </td>
@@ -562,19 +749,19 @@ export const ResultadoEfetivoTab: React.FC<ResultadoEfetivoTabProps> = ({
                           <button
                             type="button"
                             onClick={() => abrirEdicaoImpedimento(militar)}
-                            className="p-1.5 rounded text-slate-600 hover:text-[#1a2b4c] hover:bg-slate-100 transition cursor-pointer font-semibold text-xs flex items-center gap-1"
-                            title="Editar / Alterar Impedimento"
+                            className="p-1.5 rounded text-slate-600 hover:text-[#1a2b4c] hover:bg-slate-100 transition cursor-pointer font-semibold text-xs flex items-center gap-1 border border-slate-200"
+                            title={`Definir ou alterar impedimento para ${formatarDataCurta(dataAtiva)}`}
                           >
                             <Edit2 size={13} />
-                            <span className="hidden sm:inline">Editar</span>
+                            <span>{temImpedimento ? 'Alterar' : 'Impedir'}</span>
                           </button>
 
                           {temImpedimento && (
                             <button
                               type="button"
                               onClick={() => limparImpedimentoDireto(militar.id)}
-                              className="p-1.5 rounded text-emerald-700 hover:bg-emerald-50 transition cursor-pointer text-xs font-bold"
-                              title="Tornar Apto (Limpar Impedimento)"
+                              className="p-1.5 rounded text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 transition cursor-pointer text-xs font-bold"
+                              title="Tornar Apto nesta data específica"
                             >
                               ✓ Apto
                             </button>
@@ -591,7 +778,7 @@ export const ResultadoEfetivoTab: React.FC<ResultadoEfetivoTabProps> = ({
       </div>
 
       {/* ========================================================================= */}
-      {/* MODAL: Edição Rápida de Impedimento do Militar                            */}
+      {/* MODAL: Edição de Impedimento para a Data Específica                       */}
       {/* ========================================================================= */}
       {militarEditandoImpedimento && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
@@ -622,9 +809,20 @@ export const ResultadoEfetivoTab: React.FC<ResultadoEfetivoTabProps> = ({
 
             {/* Conteúdo do Modal */}
             <div className="p-5 space-y-4">
+              {/* Data de Aplicação em Destaque */}
+              <div className="bg-slate-100 p-2.5 rounded-lg border border-slate-200 flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <Calendar size={14} className="text-[#1a2b4c]" />
+                  <span>Data de Aplicação:</span>
+                </span>
+                <span className="text-xs font-extrabold text-[#1a2b4c]">
+                  {formatarDataCurta(dataAtiva)} ({formatarDataCabecalho(dataAtiva).split(',')[0]})
+                </span>
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Motivo do Impedimento / Afastamento:
+                  Motivo do Impedimento / Afastamento nesta data:
                 </label>
                 <input
                   type="text"
@@ -635,14 +833,14 @@ export const ResultadoEfetivoTab: React.FC<ResultadoEfetivoTabProps> = ({
                   autoFocus
                 />
                 <p className="text-[11px] text-slate-500 mt-1">
-                  Se deixar em branco, o militar será considerado <strong>Apto / Sem Impedimento</strong>.
+                  Se deixar em branco ou limpar, o militar será considerado <strong>Apto</strong> nesta data.
                 </p>
               </div>
 
               {/* Sugestões Rápidas (Presets) */}
               <div>
                 <span className="block text-[11px] font-bold text-slate-600 mb-1.5 uppercase">
-                  Motivos Comuns (Clique para preencher):
+                  Motivos Comuns (Clique para selecionar):
                 </span>
                 <div className="flex flex-wrap gap-1.5">
                   {PRESETS_IMPEDIMENTO.map((preset) => (
@@ -664,14 +862,14 @@ export const ResultadoEfetivoTab: React.FC<ResultadoEfetivoTabProps> = ({
                     onClick={() => setTextoImpedimento('')}
                     className="text-[11px] px-2.5 py-1 rounded-md border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold transition cursor-pointer"
                   >
-                    ✓ Limpar (Apto)
+                    ✓ Limpar (Apto neste dia)
                   </button>
                 </div>
               </div>
 
-              {/* Informação */}
-              <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-[11px] text-slate-600">
-                ⚠️ Ao confirmar um impedimento, este militar constará automaticamente no <strong>rodapé da Pauta Oficial PMESP (Tabela)</strong>.
+              {/* Informação sobre sincronismo com a Pauta Oficial */}
+              <div className="bg-amber-50 p-2.5 rounded-lg border border-amber-200 text-[11px] text-amber-900">
+                💡 Este impedimento será aplicado para o dia <strong>{formatarDataCurta(dataAtiva)}</strong> e constará na Pauta Diária de Missões desta mesma data.
               </div>
             </div>
 
@@ -690,7 +888,7 @@ export const ResultadoEfetivoTab: React.FC<ResultadoEfetivoTabProps> = ({
                 className="px-4 py-1.5 text-xs font-bold bg-[#1a2b4c] hover:bg-[#2c4373] text-white rounded-md shadow-sm transition flex items-center gap-1.5 cursor-pointer"
               >
                 <Save size={13} />
-                <span>Salvar Impedimento</span>
+                <span>Salvar para {formatarDataCurta(dataAtiva)}</span>
               </button>
             </div>
           </div>

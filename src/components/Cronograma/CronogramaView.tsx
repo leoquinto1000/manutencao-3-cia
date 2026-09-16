@@ -3,7 +3,7 @@ import { MissaoDiaria, EquipeManutencao, MembroEquipe, InformeMensal } from '../
 import { MissoesDiariasTab } from './MissoesDiariasTab';
 import { CadastroEquipesTab } from './CadastroEquipesTab';
 import { ResultadoEfetivoTab } from './ResultadoEfetivoTab';
-import { formatarDataISO } from '../../utils';
+import { formatarDataISO, temImpedimentoNoDia } from '../../utils';
 import {
   CalendarDays,
   Users,
@@ -39,36 +39,31 @@ export const CronogramaView: React.FC<CronogramaViewProps> = ({
   onNavegarParaInforme,
 }) => {
   const [subAbaAtiva, setSubAbaAtiva] = useState<'missoes' | 'equipes' | 'resultado'>('missoes');
-
   const hoje = formatarDataISO();
+  const [dataSelecionada, setDataSelecionada] = useState<string>(hoje);
 
   // Contadores para os badges das abas
   const contadores = useMemo(() => {
-    const missoesHoje = missoes.filter((m) => m.data === hoje);
-    const pendentesHoje = missoesHoje.filter((m) => !m.concluida).length;
-    const concluidasHoje = missoesHoje.filter((m) => m.concluida).length;
+    const missoesDia = missoes.filter((m) => m.data === dataSelecionada);
+    const pendentesDia = missoesDia.filter((m) => !m.concluida).length;
+    const concluidasDia = missoesDia.filter((m) => m.concluida).length;
     const totalEquipes = equipes.length;
     const totalMilitares = membros.length;
 
-    const impedidosEfetivo = membros.filter(
-      (m) =>
-        m.impedimento &&
-        m.impedimento.trim().length > 0 &&
-        m.impedimento.toLowerCase() !== 'sem impedimento' &&
-        m.impedimento.toLowerCase() !== 'nenhum' &&
-        m.impedimento.toLowerCase() !== 'apto'
+    const impedidosEfetivo = membros.filter((m) =>
+      temImpedimentoNoDia(m, dataSelecionada)
     ).length;
 
     return {
-      totalHoje: missoesHoje.length,
-      pendentesHoje,
-      concluidasHoje,
+      totalHoje: missoesDia.length,
+      pendentesHoje: pendentesDia,
+      concluidasHoje: concluidasDia,
       totalEquipes,
       totalMilitares,
       totalEfetivoResultado: membros.length,
       impedidosEfetivo,
     };
-  }, [missoes, hoje, equipes, membros]);
+  }, [missoes, dataSelecionada, equipes, membros]);
 
   return (
     <div className="space-y-4 max-w-7xl mx-auto">
@@ -179,6 +174,8 @@ export const CronogramaView: React.FC<CronogramaViewProps> = ({
             informeAtual={informeAtual}
             onChangeInformeAtual={onChangeInformeAtual}
             onNavegarParaInforme={onNavegarParaInforme}
+            dataSelecionada={dataSelecionada}
+            onChangeDataSelecionada={setDataSelecionada}
           />
         )}
 
@@ -195,6 +192,8 @@ export const CronogramaView: React.FC<CronogramaViewProps> = ({
           <ResultadoEfetivoTab
             membros={membros}
             onChangeMembros={onChangeMembros}
+            dataSelecionada={dataSelecionada}
+            onChangeDataSelecionada={setDataSelecionada}
             onNavegarParaPauta={() => setSubAbaAtiva('missoes')}
           />
         )}

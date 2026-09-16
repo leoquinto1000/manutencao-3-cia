@@ -17,6 +17,8 @@ import {
   gerarId,
   baixarFoto,
   comprimirImagemParaArmazenamento,
+  getImpedimentoMembroNoDia,
+  temImpedimentoNoDia,
 } from '../../utils';
 import {
   Calendar,
@@ -57,6 +59,8 @@ interface MissoesDiariasTabProps {
   informeAtual?: InformeMensal;
   onChangeInformeAtual?: (informe: InformeMensal) => void;
   onNavegarParaInforme?: () => void;
+  dataSelecionada?: string;
+  onChangeDataSelecionada?: (data: string) => void;
 }
 
 export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
@@ -67,9 +71,21 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
   informeAtual,
   onChangeInformeAtual,
   onNavegarParaInforme,
+  dataSelecionada: dataSelecionadaProp,
+  onChangeDataSelecionada,
 }) => {
   const hoje = formatarDataISO();
-  const [dataSelecionada, setDataSelecionada] = useState<string>(hoje);
+  const [dataInterna, setDataInterna] = useState<string>(hoje);
+  const dataSelecionada = dataSelecionadaProp || dataInterna;
+
+  const setDataSelecionada = (novaData: string | ((prev: string) => string)) => {
+    const valor = typeof novaData === 'function' ? novaData(dataSelecionada) : novaData;
+    if (onChangeDataSelecionada) {
+      onChangeDataSelecionada(valor);
+    } else {
+      setDataInterna(valor);
+    }
+  };
   const [mostrarApenasPendentes, setMostrarApenasPendentes] = useState(false);
   const [filtroEquipe, setFiltroEquipe] = useState<string>('todas');
   const [filtroPrioridade, setFiltroPrioridade] = useState<string>('todas');
@@ -153,19 +169,15 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
     return { total, concluidas, pendentes, paraProximoDia, percentual };
   }, [missoes, dataSelecionada]);
 
-  // Militares com impedimento no efetivo fixo de manutenção (Militares da 3ª Cia) e policiais em apoio
+  // Militares com impedimento no efetivo fixo de manutenção (Militares da 3ª Cia) e policiais em apoio na data selecionada
   const cadetesComImpedimento = useMemo(() => {
-    return membros.filter((m) => {
-      const temImpedimento =
-        m.impedimento &&
-        m.impedimento.trim().length > 0 &&
-        m.impedimento.toLowerCase() !== 'sem impedimento' &&
-        m.impedimento.toLowerCase() !== 'nenhum' &&
-        m.impedimento.toLowerCase() !== 'apto';
-
-      return temImpedimento;
-    });
-  }, [membros]);
+    return membros
+      .filter((m) => temImpedimentoNoDia(m, dataSelecionada))
+      .map((m) => ({
+        ...m,
+        impedimento: getImpedimentoMembroNoDia(m, dataSelecionada),
+      }));
+  }, [membros, dataSelecionada]);
 
   // Checkbox de conclusão
   const toggleConcluida = (id: string) => {
@@ -782,42 +794,42 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
             PAUTA DIÁRIA DE MISSÕES E DETERMINAÇÕES DE MANUTENÇÃO
           </div>
           <div className="text-xs sm:text-sm mt-1 text-black font-normal">
-            Data de Execução: <strong>{formatarDataCurta(dataSelecionada)}</strong>
+            Data de Execução: <strong>{formatarDataCurta(dataSelecionada)}</strong> • <span className="uppercase">{formatarDataCabecalho(dataSelecionada)}</span>
           </div>
         </div>
 
         {/* Linha divisória horizontal preta separando o cabeçalho da tabela */}
         <div className="border-t border-black my-3.5 w-full" />
 
-        {/* Tabela de Missões e Determinações (6 colunas fixas com alinhamento rigoroso) */}
-        <div className="overflow-x-auto">
+        {/* Tabela de Missões e Determinações (6 colunas com dimensões proporcionais exatas para A4) */}
+        <div className="overflow-x-auto print:overflow-visible">
           <table className="w-full text-xs border-collapse border border-black mb-4 table-fixed">
             <colgroup>
-              <col style={{ width: '56px' }} />
-              <col />
-              <col style={{ width: '180px' }} />
-              <col style={{ width: '220px' }} />
-              <col style={{ width: '120px' }} />
-              <col style={{ width: '90px' }} />
+              <col style={{ width: '5%' }} />
+              <col style={{ width: '37%' }} />
+              <col style={{ width: '18%' }} />
+              <col style={{ width: '22%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '8%' }} />
             </colgroup>
             <thead>
-              <tr className="bg-[#dde5ee] text-black">
-                <th className="border border-black px-1 py-2 text-center w-14 font-bold tracking-tight">
+              <tr className="bg-[#dde5ee] print:bg-slate-200 text-black">
+                <th className="border border-black px-1 py-1.5 text-center font-bold text-[11px] uppercase tracking-tight">
                   CHECK
                 </th>
-                <th className="border border-black px-2.5 py-2 text-left font-bold tracking-tight">
+                <th className="border border-black px-2 py-1.5 text-left font-bold text-[11px] uppercase tracking-tight">
                   DETERMINAÇÃO / MISSÃO
                 </th>
-                <th className="border border-black px-2.5 py-2 text-left w-[180px] font-bold tracking-tight">
+                <th className="border border-black px-2 py-1.5 text-left font-bold text-[11px] uppercase tracking-tight">
                   LOCAL / SETOR
                 </th>
-                <th className="border border-black px-2.5 py-2 text-left w-[220px] font-bold tracking-tight">
+                <th className="border border-black px-2 py-1.5 text-left font-bold text-[11px] uppercase tracking-tight">
                   POLICIAIS EXECUTORES
                 </th>
-                <th className="border border-black px-2 py-2 text-center w-[120px] font-bold tracking-tight">
+                <th className="border border-black px-1.5 py-1.5 text-center font-bold text-[11px] uppercase tracking-tight">
                   TURNO
                 </th>
-                <th className="border border-black px-2 py-2 text-center w-[90px] font-bold tracking-tight">
+                <th className="border border-black px-1 py-1.5 text-center font-bold text-[11px] uppercase tracking-tight">
                   PRÓX. DIA?
                 </th>
               </tr>
@@ -855,63 +867,63 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
                     className="hover:bg-slate-50/70 transition group relative"
                   >
                     {/* CHECK [ ] ou [X] - Sem desalinhamento, largura e altura perfeitamente rígidas */}
-                    <td className="border border-black p-0 text-center align-middle w-14 h-10">
+                    <td className="border border-black p-0 text-center align-middle h-9">
                       <button
                         type="button"
                         onClick={() => toggleConcluida(m.id)}
                         title={m.concluida ? 'Marcar como Pendente [ ]' : 'Marcar como Concluída [X]'}
-                        className="w-full h-full min-h-[40px] flex items-center justify-center cursor-pointer text-black hover:bg-slate-100 transition-colors select-none focus:outline-none"
+                        className="w-full h-full min-h-[36px] flex items-center justify-center cursor-pointer text-black hover:bg-slate-100 transition-colors select-none focus:outline-hidden"
                       >
-                        <span className="font-mono font-bold text-sm tracking-wider inline-block w-8 text-center select-none leading-none">
+                        <span className="font-mono font-bold text-xs sm:text-sm tracking-wider inline-block text-center select-none leading-none">
                           {m.concluida ? '[X]' : '[ ]'}
                         </span>
                       </button>
                     </td>
 
                     {/* DETERMINAÇÃO / MISSÃO */}
-                    <td className="border border-black px-2.5 py-2 align-top">
-                      <div className="flex items-start justify-between gap-2">
+                    <td className="border border-black px-2 py-1.5 align-top">
+                      <div className="flex items-start justify-between gap-1.5">
                         <div className="flex-1 min-w-0">
                           <div
                             onClick={() => {
                               setMissaoEmEdicao(m);
                               setModalAberta(true);
                             }}
-                            className="font-bold text-black text-xs sm:text-[13px] leading-tight cursor-pointer hover:text-blue-800"
+                            className="font-bold text-black text-xs sm:text-[12.5px] leading-tight cursor-pointer hover:text-blue-800"
                             title="Clique para editar determinação"
                           >
                             {idx + 1}. {m.titulo}
                           </div>
 
                           {m.descricao && (
-                            <div className="text-[11px] text-slate-700 mt-0.5 leading-snug">
+                            <div className="text-[11px] text-slate-800 mt-0.5 leading-snug break-words">
                               {m.descricao}
                             </div>
                           )}
 
                           {m.materiaisNecessarios && (
-                            <div className="text-[10px] text-slate-700 italic mt-0.5">
-                              Mat: {m.materiaisNecessarios}
+                            <div className="text-[10px] text-slate-700 italic mt-0.5 leading-tight break-words">
+                              <strong>Materiais:</strong> {m.materiaisNecessarios}
                             </div>
                           )}
 
                           {m.observacoes && (
-                            <div className="text-[10px] text-slate-600 mt-0.5">
-                              Obs: {m.observacoes}
+                            <div className="text-[10px] text-slate-600 mt-0.5 leading-tight break-words">
+                              <strong>Obs:</strong> {m.observacoes}
                             </div>
                           )}
 
                           {/* Se tiver fotos anexadas, exibe tag de atalho para a Folha do Informe Mensal */}
                           {(m.fotoAntesUrl || m.fotoDepoisUrl) && (
-                            <div className="mt-1.5 flex items-center gap-1.5 no-print">
+                            <div className="mt-1 flex items-center gap-1.5 no-print">
                               <button
                                 type="button"
                                 onClick={() => setMissaoPreviaFolha(m)}
-                                className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-900 text-[10px] font-bold rounded cursor-pointer transition"
+                                className="no-print inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-900 text-[9.5px] font-bold rounded cursor-pointer transition"
                                 title="Ver folha gerada nos padrões do Informe Mensal"
                               >
                                 <Camera size={11} className="text-blue-700" />
-                                <span>Folha do Informe Gerada ({[m.fotoAntesUrl, m.fotoDepoisUrl].filter(Boolean).length} foto(s))</span>
+                                <span>Folha do Informe ({[m.fotoAntesUrl, m.fotoDepoisUrl].filter(Boolean).length} foto(s))</span>
                               </button>
                             </div>
                           )}
@@ -962,17 +974,17 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
                     </td>
 
                     {/* LOCAL / SETOR */}
-                    <td className="border border-black px-2.5 py-2 align-top text-xs text-black">
+                    <td className="border border-black px-2 py-1.5 align-top text-xs text-black break-words leading-tight">
                       {m.local}
                     </td>
 
                     {/* POLICIAIS EXECUTORES */}
-                    <td className="border border-black px-2.5 py-2 align-top text-xs">
-                      <div className="font-bold text-black">
+                    <td className="border border-black px-2 py-1.5 align-top text-xs leading-tight">
+                      <div className="font-bold text-black break-words">
                         {m.membrosDesignados || (!m.equipeNome ? 'A definir' : '')}
                       </div>
                       {m.equipeNome && (
-                        <div className="text-[11px] text-slate-500 leading-tight">
+                        <div className="text-[10.5px] text-slate-600 mt-0.5 leading-tight">
                           Equipe: {m.equipeNome}
                         </div>
                       )}
@@ -982,19 +994,19 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
                     </td>
 
                     {/* TURNO */}
-                    <td className="border border-black px-2 py-2 text-center align-top text-xs text-black whitespace-nowrap">
+                    <td className="border border-black px-1.5 py-1.5 text-center align-middle text-xs font-semibold text-black whitespace-nowrap">
                       {m.turno}
                     </td>
 
                     {/* PRÓX. DIA? */}
-                    <td className="border border-black px-2 py-2 text-center align-top text-xs whitespace-nowrap">
+                    <td className="border border-black px-1 py-1.5 text-center align-middle text-xs whitespace-nowrap">
                       <button
                         type="button"
                         onClick={() => toggleAdiadaParaProximoDia(m.id)}
                         title="Clique para alternar se vai para o próximo dia"
-                        className="hover:font-bold cursor-pointer text-black"
+                        className="cursor-pointer text-black font-semibold hover:underline"
                       >
-                        {m.adiadaParaProximoDia ? 'SIM (Amanhã)' : '-'}
+                        {m.adiadaParaProximoDia ? 'SIM' : '-'}
                       </button>
                     </td>
                   </tr>
@@ -1007,15 +1019,15 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
         {/* ============================================================ */}
         {/* RODAPÉ DA PAUTA OFICIAL PMESP: CADETES COM IMPEDIMENTO       */}
         {/* ============================================================ */}
-        <div className="mt-3 border-2 border-black p-3 bg-white text-black">
-          <div className="flex items-center justify-between border-b border-black pb-1 mb-2">
-            <div className="font-extrabold text-xs uppercase tracking-wider text-black flex items-center gap-1.5">
+        <div className="mt-4 border border-black p-2.5 bg-white text-black break-inside-avoid print:mt-3">
+          <div className="flex items-center justify-between border-b border-black pb-1 mb-1.5">
+            <div className="font-extrabold text-[11px] sm:text-xs uppercase tracking-wider text-black flex items-center gap-1.5">
               <span>EFETIVO DE MANUTENÇÃO & POLICIAIS EM APOIO — IMPEDIMENTOS / AFASTAMENTOS</span>
             </div>
-            <span className="text-[11px] font-bold text-black uppercase">
+            <span className="text-[10px] sm:text-[11px] font-bold text-black uppercase">
               {cadetesComImpedimento.length === 0
-                ? 'SEM IMPEDIMENTOS'
-                : `${cadetesComImpedimento.length} MILITAR(ES) COM IMPEDIMENTO (FIXO & APOIO)`}
+                ? 'SEM ALTERAÇÃO / TODOS APTOS'
+                : `${cadetesComImpedimento.length} MILITAR(ES) COM IMPEDIMENTO`}
             </span>
           </div>
 
@@ -1024,17 +1036,22 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
               Todos os policiais militares do efetivo fixo da 3ª Cia e policiais que prestam apoio encontram-se aptos e disponíveis para as escalas e missões desta data.
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto print:overflow-visible">
               <table className="w-full text-xs border-collapse border border-black table-fixed">
+                <colgroup>
+                  <col style={{ width: '40%' }} />
+                  <col style={{ width: '25%' }} />
+                  <col style={{ width: '35%' }} />
+                </colgroup>
                 <thead>
                   <tr className="bg-[#dde5ee] print:bg-slate-200 text-black">
-                    <th className="border border-black px-2.5 py-1.5 text-left font-bold w-[38%]">
+                    <th className="border border-black px-2 py-1 text-left font-bold text-[11px] uppercase">
                       GRADUAÇÃO & NOME DE GUERRA
                     </th>
-                    <th className="border border-black px-2.5 py-1.5 text-center font-bold w-[24%]">
+                    <th className="border border-black px-2 py-1 text-center font-bold text-[11px] uppercase">
                       CFO / PELOTÃO / ORIGEM
                     </th>
-                    <th className="border border-black px-2.5 py-1.5 text-left font-bold w-[38%]">
+                    <th className="border border-black px-2 py-1 text-left font-bold text-[11px] uppercase">
                       MOTIVO DO IMPEDIMENTO
                     </th>
                   </tr>
@@ -1045,9 +1062,9 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
                     const anoPel = formatarAnoPelotao(militar.anoCurso, militar.pelotao);
                     return (
                       <tr key={militar.id} className="border-b border-black bg-white">
-                        <td className="border border-black px-2.5 py-1.5 font-bold text-black align-middle">
+                        <td className="border border-black px-2 py-1.5 font-bold text-black align-middle">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-mono text-[10.5px] px-1 py-0.2 bg-black text-white font-bold rounded print:border print:border-black print:text-black print:bg-transparent">
+                            <span className="font-mono text-[10px] px-1 py-0.2 border border-black text-black font-bold rounded">
                               {militar.graduacao || 'PM'}
                             </span>
                             <span>{militar.nomeGuerra}</span>
@@ -1057,17 +1074,13 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
                               </span>
                             )}
                             <span
-                              className={`text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded border ${
-                                ehApoio
-                                  ? 'bg-amber-100 text-amber-900 border-amber-400 print:border-black print:text-black print:bg-transparent'
-                                  : 'bg-slate-100 text-slate-800 border-slate-400 print:border-black print:text-black print:bg-transparent'
-                              }`}
+                              className="text-[9px] font-bold uppercase px-1.5 py-0.2 rounded border border-black text-black"
                             >
                               {ehApoio ? 'Apoio' : 'Fixo 3ª Cia'}
                             </span>
                           </div>
                         </td>
-                        <td className="border border-black px-2.5 py-1.5 text-center font-bold text-black align-middle">
+                        <td className="border border-black px-2 py-1.5 text-center font-bold text-black align-middle">
                           <div>
                             {anoPel !== '-' ? anoPel : (militar.pelotao ? `Pelotão ${militar.pelotao}` : '-')}
                             {ehApoio && militar.origemApoio && (
@@ -1077,10 +1090,8 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
                             )}
                           </div>
                         </td>
-                        <td className="border border-black px-2.5 py-1.5 text-black font-semibold align-middle">
-                          <span className="inline-block border border-black bg-slate-100 px-2 py-0.5 rounded text-[11px] font-bold print:border-none print:bg-transparent print:p-0">
-                            {militar.impedimento}
-                          </span>
+                        <td className="border border-black px-2 py-1.5 text-black font-semibold align-middle text-xs">
+                          {militar.impedimento}
                         </td>
                       </tr>
                     );
@@ -1091,8 +1102,37 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
           )}
 
           {/* Rodapé / Subunidade */}
-          <div className="mt-2.5 pt-2 border-t border-black text-[10.5px] text-right italic text-slate-700">
+          <div className="mt-2 pt-1 border-t border-black text-[10px] text-right italic text-slate-700">
             3ª Cia Escola • Manutenção Predial • APMBB
+          </div>
+        </div>
+
+        {/* ============================================================ */}
+        {/* ASSINATURAS OFICIAIS PMESP / APMBB (RODAPÉ DE APROVAÇÃO)    */}
+        {/* ============================================================ */}
+        <div className="mt-6 pt-3 border-t border-black text-black break-inside-avoid print:mt-4 print:pt-2">
+          <div className="grid grid-cols-2 gap-8 text-center text-xs">
+            <div>
+              <div className="border-b border-black w-3/4 mx-auto mb-1"></div>
+              <p className="font-bold uppercase tracking-wide text-[10.5px]">
+                Encarregado da Manutenção Predial
+              </p>
+              <p className="text-[9.5px] text-slate-700">
+                Seção de Manutenção • 3ª Cia Escola
+              </p>
+            </div>
+            <div>
+              <div className="border-b border-black w-3/4 mx-auto mb-1"></div>
+              <p className="font-bold uppercase tracking-wide text-[10.5px]">
+                Comandante da 3ª Companhia Escola
+              </p>
+              <p className="text-[9.5px] text-slate-700">
+                Academia de Polícia Militar do Barro Branco
+              </p>
+            </div>
+          </div>
+          <div className="mt-2.5 text-[9px] text-right italic text-slate-600">
+            Documento emitido via SIS-APMBB • 3ª Cia Escola • {formatarDataCurta(dataSelecionada)}
           </div>
         </div>
 

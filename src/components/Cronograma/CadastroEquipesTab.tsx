@@ -1,6 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { EquipeManutencao, MembroEquipe } from '../../types';
-import { gerarId } from '../../utils';
+import {
+  gerarId,
+  formatarDataISO,
+  getImpedimentoMembroNoDia,
+  temImpedimentoNoDia,
+} from '../../utils';
 import {
   Users,
   UserPlus,
@@ -324,6 +329,9 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
       ? nomeGuerraMilitar
       : `${graduacaoMilitar} ${nomeGuerraMilitar}`;
 
+    const hoje = formatarDataISO();
+    const impedimentoValor = impedimentoMilitar.trim() || undefined;
+
     if (militarEmEdicao) {
       onChangeMembros(
         membros.map((m) =>
@@ -343,7 +351,11 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
                 periodoApoio: tipoEfetivoMilitar === 'apoio' ? periodoApoioMilitar.trim() : undefined,
                 funcaoApoio: tipoEfetivoMilitar === 'apoio' ? funcaoApoioMilitar.trim() : undefined,
                 observacoesApoio: tipoEfetivoMilitar === 'apoio' ? observacoesApoioMilitar.trim() : undefined,
-                impedimento: impedimentoMilitar.trim() || undefined,
+                impedimento: impedimentoValor,
+                impedimentosPorData: {
+                  ...(m.impedimentosPorData || {}),
+                  [hoje]: impedimentoValor || '',
+                },
               }
             : m
         )
@@ -365,7 +377,8 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
         periodoApoio: tipoEfetivoMilitar === 'apoio' ? periodoApoioMilitar.trim() : undefined,
         funcaoApoio: tipoEfetivoMilitar === 'apoio' ? funcaoApoioMilitar.trim() : undefined,
         observacoesApoio: tipoEfetivoMilitar === 'apoio' ? observacoesApoioMilitar.trim() : undefined,
-        impedimento: impedimentoMilitar.trim() || undefined,
+        impedimento: impedimentoValor,
+        impedimentosPorData: impedimentoValor ? { [hoje]: impedimentoValor } : {},
       };
       onChangeMembros([...membros, novo]);
     }
@@ -785,17 +798,15 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
                         </div>
                       </td>
                       <td className="px-3 py-2 text-center">
-                        {m.impedimento &&
-                        m.impedimento.trim().length > 0 &&
-                        m.impedimento.toLowerCase() !== 'sem impedimento' &&
-                        m.impedimento.toLowerCase() !== 'nenhum' &&
-                        m.impedimento.toLowerCase() !== 'apto' ? (
+                        {temImpedimentoNoDia(m, formatarDataISO()) ? (
                           <span
                             className="bg-red-100 text-red-800 border border-red-300 text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 shadow-2xs"
-                            title={`Impedimento: ${m.impedimento}`}
+                            title={`Impedimento Hoje: ${getImpedimentoMembroNoDia(m, formatarDataISO())}`}
                           >
                             <AlertTriangle size={10} className="text-red-700 shrink-0" />
-                            <span className="max-w-[120px] truncate">{m.impedimento}</span>
+                            <span className="max-w-[120px] truncate">
+                              {getImpedimentoMembroNoDia(m, formatarDataISO())}
+                            </span>
                           </span>
                         ) : (
                           <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
@@ -936,17 +947,15 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
                         {m.observacoesApoio || '-'}
                       </td>
                       <td className="px-3 py-2 text-center">
-                        {m.impedimento &&
-                        m.impedimento.trim().length > 0 &&
-                        m.impedimento.toLowerCase() !== 'sem impedimento' &&
-                        m.impedimento.toLowerCase() !== 'nenhum' &&
-                        m.impedimento.toLowerCase() !== 'apto' ? (
+                        {temImpedimentoNoDia(m, formatarDataISO()) ? (
                           <span
                             className="bg-red-100 text-red-800 border border-red-300 text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 shadow-2xs"
-                            title={`Impedimento: ${m.impedimento}`}
+                            title={`Impedimento Hoje: ${getImpedimentoMembroNoDia(m, formatarDataISO())}`}
                           >
                             <AlertTriangle size={10} className="text-red-700 shrink-0" />
-                            <span className="max-w-[120px] truncate">{m.impedimento}</span>
+                            <span className="max-w-[120px] truncate">
+                              {getImpedimentoMembroNoDia(m, formatarDataISO())}
+                            </span>
                           </span>
                         ) : (
                           <span className="bg-amber-100 text-amber-900 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-200">

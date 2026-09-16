@@ -44,7 +44,7 @@ export function imprimirEmNovaJanela(containerElement: HTMLElement, titulo: stri
       }
     });
 
-    const conteudo = containerElement.innerHTML;
+    const conteudo = containerElement.outerHTML || containerElement.innerHTML;
 
     printWindow.document.open();
     printWindow.document.write(`
@@ -58,19 +58,33 @@ export function imprimirEmNovaJanela(containerElement: HTMLElement, titulo: stri
           <style>
             @page {
               size: A4 portrait;
-              margin: 8mm;
+              margin: 10mm 10mm 12mm 10mm;
+            }
+            * {
+              box-sizing: border-box !important;
             }
             body {
               background: #ffffff !important;
               color: #000000 !important;
-              margin: 0;
-              padding: 0;
-              font-family: Arial, Helvetica, sans-serif;
+              margin: 0 !important;
+              padding: 0 !important;
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+              font-size: 11px;
               -webkit-print-color-adjust: exact !important;
               print-color-adjust: exact !important;
             }
-            .no-print, button, input[type="file"] {
+            .no-print, input[type="file"], button.no-print {
               display: none !important;
+            }
+            button:not(.no-print) {
+              background: transparent !important;
+              border: none !important;
+              box-shadow: none !important;
+              padding: 0 !important;
+              margin: 0 !important;
+              font: inherit !important;
+              color: inherit !important;
+              cursor: default !important;
             }
             .only-print {
               display: block !important;
@@ -105,12 +119,32 @@ export function imprimirEmNovaJanela(containerElement: HTMLElement, titulo: stri
             .pauta-diaria-page {
               border: none !important;
               box-shadow: none !important;
-              padding: 4mm !important;
+              border-radius: 0 !important;
+              padding: 0 !important;
               margin: 0 auto !important;
               width: 100% !important;
-              max-width: 100% !important;
+              max-width: 190mm !important;
               background: #ffffff !important;
               box-sizing: border-box !important;
+            }
+            .pauta-diaria-page table {
+              width: 100% !important;
+              max-width: 100% !important;
+              table-layout: fixed !important;
+              border-collapse: collapse !important;
+            }
+            .pauta-diaria-page th,
+            .pauta-diaria-page td {
+              box-sizing: border-box !important;
+              word-break: break-word !important;
+              overflow-wrap: break-word !important;
+            }
+            .pauta-diaria-page div {
+              overflow: visible !important;
+            }
+            .break-inside-avoid {
+              page-break-inside: avoid !important;
+              break-inside: avoid !important;
             }
             .balancete-page {
               border: none !important;
@@ -141,6 +175,9 @@ export function imprimirEmNovaJanela(containerElement: HTMLElement, titulo: stri
             table {
               border-collapse: collapse !important;
               page-break-inside: auto;
+            }
+            thead {
+              display: table-header-group;
             }
             tr {
               page-break-inside: avoid;

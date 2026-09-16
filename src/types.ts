@@ -200,6 +200,7 @@ export interface MembroEquipe {
   funcaoApoio?: string; // Atividade ou reforço prestado (ex: Pintura geral, Apoio hidráulico)
   observacoesApoio?: string;
   impedimento?: string; // Motivo de impedimento/afastamento temporário (ex: 'Dispensa médica', 'Escala de serviço', etc.)
+  impedimentosPorData?: Record<string, string>; // Histórico diário: { 'YYYY-MM-DD': 'Motivo do impedimento' }
 }
 
 export interface EquipeManutencao {

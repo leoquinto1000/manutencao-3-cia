@@ -828,6 +828,57 @@ export const adicionarDiasISO = (dataISO: string, dias: number): string => {
   return formatarDataISO(data);
 };
 
+export const formatarDataCabecalho = (dataISO: string): string => {
+  try {
+    const [ano, mes, dia] = dataISO.split('-').map(Number);
+    const dataObj = new Date(ano, mes - 1, dia);
+    const diaSemana = dataObj.toLocaleDateString('pt-BR', { weekday: 'long' });
+    const diaFormatado = String(dia).padStart(2, '0');
+    const mesNome = dataObj.toLocaleDateString('pt-BR', { month: 'long' });
+    return `${diaSemana.toUpperCase()}, ${diaFormatado} de ${mesNome.toUpperCase()} de ${ano}`;
+  } catch {
+    return dataISO;
+  }
+};
+
+export const formatarDataCurta = (dataISO: string): string => {
+  try {
+    const [ano, mes, dia] = dataISO.split('-');
+    return `${dia}/${mes}/${ano}`;
+  } catch {
+    return dataISO;
+  }
+};
+
+export const getImpedimentoMembroNoDia = (
+  membro: import('./types').MembroEquipe,
+  dataISO: string
+): string => {
+  if (membro.impedimentosPorData && membro.impedimentosPorData[dataISO] !== undefined) {
+    return membro.impedimentosPorData[dataISO] || '';
+  }
+  // Se ainda não tiver registro específico para esta data, e for a data de hoje:
+  const hoje = formatarDataISO();
+  if (dataISO === hoje && membro.impedimento) {
+    return membro.impedimento;
+  }
+  return '';
+};
+
+export const temImpedimentoNoDia = (
+  membro: import('./types').MembroEquipe,
+  dataISO: string
+): boolean => {
+  const imp = getImpedimentoMembroNoDia(membro, dataISO);
+  return Boolean(
+    imp &&
+    imp.trim().length > 0 &&
+    imp.toLowerCase() !== 'sem impedimento' &&
+    imp.toLowerCase() !== 'nenhum' &&
+    imp.toLowerCase() !== 'apto'
+  );
+};
+
 const hojeStr = formatarDataISO();
 const ontemStr = adicionarDiasISO(hojeStr, -1);
 const amanhaStr = adicionarDiasISO(hojeStr, 1);
