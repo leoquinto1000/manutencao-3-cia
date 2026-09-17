@@ -20,6 +20,8 @@ import {
   getImpedimentoMembroNoDia,
   temImpedimentoNoDia,
   MISSOES_OFICIAIS_HISTORICAS,
+  DADOS_INICIAIS_MISSOES,
+  DADOS_INICIAIS_EQUIPES,
   DADOS_INICIAIS_MEMBROS,
 } from '../../utils';
 import {
@@ -51,13 +53,13 @@ import {
   Newspaper,
   Image as ImageIcon,
   Download,
-  RotateCcw,
 } from 'lucide-react';
 
 interface MissoesDiariasTabProps {
   missoes: MissaoDiaria[];
   onChangeMissoes: (missoes: MissaoDiaria[]) => void;
   equipes: EquipeManutencao[];
+  onChangeEquipes?: (equipes: EquipeManutencao[]) => void;
   membros: MembroEquipe[];
   onChangeMembros?: (membros: MembroEquipe[]) => void;
   informeAtual?: InformeMensal;
@@ -71,6 +73,7 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
   missoes,
   onChangeMissoes,
   equipes,
+  onChangeEquipes,
   membros,
   onChangeMembros,
   informeAtual,
@@ -307,81 +310,6 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
   const excluirMissao = (id: string) => {
     if (confirm('Deseja realmente remover esta missão do cronograma?')) {
       onChangeMissoes(missoes.filter((m) => m.id !== id));
-    }
-  };
-
-  // Restaurar missões e determinações oficiais dos dias 16/09 e 17/09 conforme os anexos
-  const handleRestaurarPautasOficiais = () => {
-    if (
-      confirm(
-        'Deseja restaurar as Missões e Determinações Oficiais dos dias 16/09 e 17/09 conforme os registros e anexos oficiais da 3ª Cia Escola?'
-      )
-    ) {
-      // 1. Remove quaisquer dados corrompidos das datas 16 e 17 e reimplanta os oficiais
-      const outrasMissoes = missoes.filter(
-        (m) => m.data !== '2026-09-16' && m.data !== '2026-09-17'
-      );
-
-      // Preserva fotos caso o usuário já tenha anexado
-      const restauradas = MISSOES_OFICIAIS_HISTORICAS.map((oficial) => {
-        const existente = missoes.find(
-          (m) =>
-            m.id === oficial.id ||
-            (m.data === oficial.data && m.titulo.toLowerCase() === oficial.titulo.toLowerCase())
-        );
-        if (existente) {
-          return {
-            ...oficial,
-            fotoAntesUrl: existente.fotoAntesUrl || oficial.fotoAntesUrl,
-            fotoDepoisUrl: existente.fotoDepoisUrl || oficial.fotoDepoisUrl,
-          };
-        }
-        return oficial;
-      });
-
-      onChangeMissoes([...outrasMissoes, ...restauradas]);
-
-      // 2. Restaura também os impedimentos do efetivo correspondentes aos dias 16 e 17
-      if (onChangeMembros) {
-        const membrosAtualizados = membros.map((m) => {
-          const dadosOficiais = DADOS_INICIAIS_MEMBROS.find(
-            (o) =>
-              (o.re && m.re && o.re.replace(/\D/g, '') === o.re.replace(/\D/g, '')) ||
-              o.nomeGuerra.toLowerCase() === m.nomeGuerra.toLowerCase()
-          );
-          if (dadosOficiais) {
-            return {
-              ...m,
-              pelotao: dadosOficiais.pelotao || m.pelotao,
-              tipoEfetivo: dadosOficiais.tipoEfetivo || m.tipoEfetivo || 'fixo',
-              origemApoio: dadosOficiais.origemApoio || m.origemApoio,
-              impedimentosPorData: {
-                ...(m.impedimentosPorData || {}),
-                ...(dadosOficiais.impedimentosPorData || {}),
-              },
-            };
-          }
-          return m;
-        });
-
-        for (const oficial of DADOS_INICIAIS_MEMBROS) {
-          const existe = membrosAtualizados.some(
-            (m) =>
-              (m.re && oficial.re && m.re.replace(/\D/g, '') === oficial.re.replace(/\D/g, '')) ||
-              m.nomeGuerra.toLowerCase() === oficial.nomeGuerra.toLowerCase()
-          );
-          if (!existe) {
-            membrosAtualizados.push(oficial);
-          }
-        }
-
-        onChangeMembros(membrosAtualizados);
-      }
-
-      setDataSelecionada('2026-09-17');
-      setMensagemSucesso(
-        'Missões, determinações e impedimentos dos dias 16 e 17 de setembro restaurados com êxito conforme o anexo oficial!'
-      );
     }
   };
 
@@ -721,17 +649,6 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
 
           {/* Botões de Ação */}
           <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-start lg:justify-end">
-            {/* Restaurar Pautas Oficiais dos dias 16 e 17 de setembro */}
-            <button
-              type="button"
-              onClick={handleRestaurarPautasOficiais}
-              title="Restaurar missões, determinações e impedimentos oficiais dos dias 16/09 e 17/09 conforme os anexos"
-              className="px-3 py-1.5 text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-md transition flex items-center gap-1.5 shadow-xs"
-            >
-              <RotateCcw size={13} className="text-amber-700 shrink-0" />
-              <span>Restaurar 16 e 17/09</span>
-            </button>
-
             <button
               type="button"
               onClick={handleMoverTodasPendentesParaAmanha}

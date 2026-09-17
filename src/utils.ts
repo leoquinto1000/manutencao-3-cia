@@ -1006,8 +1006,100 @@ export const MISSOES_OFICIAIS_HISTORICAS: import('./types').MissaoDiaria[] = [
   },
 ];
 
+const hojeDataISO = formatarDataISO();
+const amanhaDataISO = adicionarDiasISO(hojeDataISO, 1);
+
+const MISSOES_OPERACIONAIS_COMPLEMENTARES: import('./types').MissaoDiaria[] = [
+  {
+    id: 'mis-op-1',
+    data: hojeDataISO,
+    titulo: 'Instalação de tomadas 10A e canaletas no Alojamento',
+    descricao: 'Instalar 3 canaletas 20x10mm e 4 conjuntos de tomadas 10A para novos postos de computadores da guarda.',
+    local: 'Alojamento dos Cabos e Soldados - 3ª Cia',
+    prioridade: 'Alta',
+    equipeId: 'eq-1',
+    equipeNome: 'Equipe Alfa - Elétrica & Gestão',
+    membrosDesignados: 'Cad PM Perozin, Cad PM Fabio',
+    turno: 'Manhã (07h15)',
+    concluida: true,
+    dataConclusao: hojeDataISO,
+    adiadaParaProximoDia: false,
+    materiaisNecessarios: '3 canaletas 20x10mm, 4 tomadas 2P+T 10A',
+    observacoes: 'Serviço finalizado com teste de carga aprovado.',
+  },
+  {
+    id: 'mis-op-2',
+    data: hojeDataISO,
+    titulo: 'Substituição de chuveiros e revisão de fiação',
+    descricao: 'Efetuar troca de 2 chuveiros eletrônicos 220V e revisão nos conectores com terminal cerâmico.',
+    local: 'Vestiário dos Cadetes - Bloco B',
+    prioridade: 'Urgente',
+    equipeId: 'eq-1',
+    equipeNome: 'Equipe Alfa - Elétrica & Gestão',
+    membrosDesignados: 'Cad PM Fabio, Cad PM Ulisses Silveira',
+    turno: 'Manhã (07h15)',
+    concluida: true,
+    dataConclusao: hojeDataISO,
+    adiadaParaProximoDia: false,
+    materiaisNecessarios: '2 chuveiros 220V, conectores cerâmicos, fita isolante',
+    observacoes: 'Chuveiros regulados na tensão adequada.',
+  },
+  {
+    id: 'mis-op-3',
+    data: hojeDataISO,
+    titulo: 'Retoque de pintura e calafetação nas paredes do corredor',
+    descricao: 'Lixar áreas com marcas de raspagem, aplicar massa/selante PU e pintar com tinta acrílica branca fosca.',
+    local: 'Corredor Principal e Sala de Instrução',
+    prioridade: 'Média',
+    equipeId: 'eq-3',
+    equipeNome: 'Equipe Charlie - Pintura & Auxiliar Geral',
+    membrosDesignados: 'Cad PM Salvioni, Cad PM Freire',
+    turno: 'Tarde (9º e 10º tempos)',
+    concluida: false,
+    adiadaParaProximoDia: true,
+    proximaData: amanhaDataISO,
+    materiaisNecessarios: '0.5 lata de tinta branca 20L, lixa para parede, rolo de lã',
+    observacoes: 'Necessário aguardar secagem do emboço; serviço continuará amanhã.',
+  },
+  {
+    id: 'mis-op-4',
+    data: hojeDataISO,
+    titulo: 'Troca de assentos sanitários almofadados avariados',
+    descricao: 'Substituição de 4 assentos plásticos trincados por modelos almofadados de alta resistência nos sanitários.',
+    local: 'Sanitários Coletivos - Piso 1',
+    prioridade: 'Média',
+    equipeId: 'eq-3',
+    equipeNome: 'Equipe Charlie - Pintura & Auxiliar Geral',
+    membrosDesignados: 'Cad PM Isack, Cad PM Ravely',
+    turno: 'Tarde (9º e 10º tempos)',
+    concluida: false,
+    adiadaParaProximoDia: false,
+    materiaisNecessarios: '4 assentos sanitários brancos almofadados',
+    observacoes: 'Em andamento durante o término do expediente.',
+  },
+  {
+    id: 'mis-op-5',
+    data: amanhaDataISO,
+    titulo: 'Continuação da pintura do corredor e rodapés',
+    descricao: 'Segunda demão de tinta acrílica e limpeza geral de respingos nas luminárias e interruptores.',
+    local: 'Corredor Principal - 3ª Cia',
+    prioridade: 'Média',
+    equipeId: 'eq-3',
+    equipeNome: 'Equipe Charlie - Pintura & Auxiliar Geral',
+    membrosDesignados: 'Cad PM Salvioni, Cad PM Isack',
+    turno: 'Manhã (07h15)',
+    concluida: false,
+    adiadaParaProximoDia: false,
+    materiaisNecessarios: 'Tinta acrílica, fita crepe para proteção',
+    observacoes: 'Missão postergada do dia anterior.',
+  },
+];
+
 export const DADOS_INICIAIS_MISSOES: import('./types').MissaoDiaria[] = [
   ...MISSOES_OFICIAIS_HISTORICAS,
+  ...(hojeDataISO !== '2026-09-16' && hojeDataISO !== '2026-09-17'
+    ? MISSOES_OPERACIONAIS_COMPLEMENTARES
+    : []),
 ];
 
 export const DADOS_INICIAIS_BANCO_FORNECEDORES: EmpresaCadastrada[] = [
