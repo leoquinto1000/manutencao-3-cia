@@ -171,6 +171,7 @@ export const CronogramaView: React.FC<CronogramaViewProps> = ({
             onChangeMissoes={onChangeMissoes}
             equipes={equipes}
             membros={membros}
+            onChangeMembros={onChangeMembros}
             informeAtual={informeAtual}
             onChangeInformeAtual={onChangeInformeAtual}
             onNavegarParaInforme={onNavegarParaInforme}

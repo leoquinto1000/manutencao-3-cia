@@ -24,6 +24,7 @@ import {
   DADOS_INICIAIS_MATERIAIS_USADOS,
   DADOS_INICIAIS_INFORME,
   DADOS_INICIAIS_MISSOES,
+  MISSOES_OFICIAIS_HISTORICAS,
   DADOS_INICIAIS_EQUIPES,
   DADOS_INICIAIS_MEMBROS,
   DADOS_INICIAIS_BANCO_FORNECEDORES,
@@ -156,13 +157,68 @@ export default function App() {
     return [];
   });
 
+  // Helper para restaurar e garantir as missões e determinações oficiais dos dias 16 e 17 de setembro de 2026
+  const sincronizarMissoesHistoricas = (lista: MissaoDiaria[]): MissaoDiaria[] => {
+    if (!Array.isArray(lista) || lista.length === 0) {
+      return MISSOES_OFICIAIS_HISTORICAS;
+    }
+
+    let resultado = [...lista];
+
+    // Verifica se a missão do dia 16/09/2026 (Confecção Informe de Setembro) está presente
+    const temMissao16 = resultado.some(
+      (m) => m.data === '2026-09-16' && m.titulo.toLowerCase().includes('informe')
+    );
+    if (!temMissao16) {
+      const outras = resultado.filter((m) => m.data !== '2026-09-16');
+      const missao16 = MISSOES_OFICIAIS_HISTORICAS.find((m) => m.data === '2026-09-16')!;
+      resultado = [...outras, missao16];
+    }
+
+    // Verifica se as 3 missões do dia 17/09/2026 estão presentes
+    const missoes17Atuais = resultado.filter((m) => m.data === '2026-09-17');
+    const temTodas17 =
+      missoes17Atuais.length >= 3 &&
+      missoes17Atuais.some((m) => m.titulo.toLowerCase().includes('monumento') && m.turno?.includes('Manhã')) &&
+      missoes17Atuais.some((m) => m.titulo.toLowerCase().includes('monumento') && m.turno?.includes('Tarde')) &&
+      missoes17Atuais.some((m) => m.titulo.toLowerCase().includes('iluminação'));
+
+    if (!temTodas17) {
+      const outras = resultado.filter((m) => m.data !== '2026-09-17');
+      const missoes17Oficiais = MISSOES_OFICIAIS_HISTORICAS.filter((m) => m.data === '2026-09-17');
+      
+      // Preserva fotos de missões que já existiam se houver
+      const mescladas17 = missoes17Oficiais.map((oficial) => {
+        const existente = missoes17Atuais.find(
+          (m) =>
+            m.id === oficial.id ||
+            (m.titulo.toLowerCase() === oficial.titulo.toLowerCase() && m.turno === oficial.turno)
+        );
+        if (existente) {
+          return {
+            ...oficial,
+            fotoAntesUrl: existente.fotoAntesUrl || oficial.fotoAntesUrl,
+            fotoDepoisUrl: existente.fotoDepoisUrl || oficial.fotoDepoisUrl,
+          };
+        }
+        return oficial;
+      });
+
+      resultado = [...outras, ...mescladas17];
+    }
+
+    return resultado;
+  };
+
   // Estado das Missões do Cronograma
   const [missoes, setMissoes] = useState<MissaoDiaria[]>(() => {
     try {
       const saved = localStorage.getItem('pmesp_missoes');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return sincronizarMissoesHistoricas(parsed);
+        }
       }
     } catch (e) {
       console.error(e);
@@ -170,18 +226,20 @@ export default function App() {
     return DADOS_INICIAIS_MISSOES;
   });
 
-  // Helper para garantir e sincronizar os 11 policiais militares reais da 3ª Cia no Efetivo Fixo
+  // Helper para garantir e sincronizar os 11 policiais militares reais da 3ª Cia no Efetivo Fixo e Apoios
   const sincronizarEfetivoOficial = (lista: MembroEquipe[]): MembroEquipe[] => {
     if (!Array.isArray(lista) || lista.length === 0) {
       return DADOS_INICIAIS_MEMBROS;
     }
     const temOficiaisReais = lista.some(
       (m) =>
-        ['230060-5', '252664-6', '144966-4', '252593-3', '260062-5', '180823-A', '230342-6', '250021-3', '170429-0', '191800-1'].includes(
+        ['230060-5', '252664-6', '144966-4', '252593-3', '260062-5', '180823-A', '230342-6', '250021-3', '170429-0', '191800-1', '243255-2', '260107-9'].includes(
           m.re || ''
         ) ||
         m.nomeGuerra.toLowerCase().includes('perozin') ||
-        m.nomeGuerra.toLowerCase().includes('salvioni')
+        m.nomeGuerra.toLowerCase().includes('salvioni') ||
+        m.nomeGuerra.toLowerCase().includes('lima') ||
+        m.nomeGuerra.toLowerCase().includes('pimenta')
     );
 
     if (!temOficiaisReais) {
@@ -218,9 +276,16 @@ export default function App() {
         resultado[idx] = {
           ...oficial,
           ...resultado[idx],
-          anoCurso: oficial.anoCurso,
-          tipoEfetivo: 'fixo',
+          anoCurso: oficial.anoCurso || resultado[idx].anoCurso,
+          pelotao: oficial.pelotao || resultado[idx].pelotao,
+          tipoEfetivo: oficial.tipoEfetivo || resultado[idx].tipoEfetivo || 'fixo',
+          origemApoio: oficial.origemApoio || resultado[idx].origemApoio,
           ativo: true,
+          // Preserva e garante os impedimentos oficiais dos dias 16 e 17
+          impedimentosPorData: {
+            ...(resultado[idx].impedimentosPorData || {}),
+            ...(oficial.impedimentosPorData || {}),
+          },
         };
       } else {
         resultado.push(oficial);
@@ -337,9 +402,9 @@ export default function App() {
             const fotosNoDB = missoesDB.some((m) => m.fotoAntesUrl || m.fotoDepoisUrl);
             const fotosNosAtuais = atuais.some((m) => m.fotoAntesUrl || m.fotoDepoisUrl);
             if (fotosNoDB && !fotosNosAtuais) {
-              return missoesDB;
+              return sincronizarMissoesHistoricas(missoesDB);
             }
-            return atuais;
+            return sincronizarMissoesHistoricas(atuais);
           });
         }
 
@@ -530,20 +595,21 @@ export default function App() {
             setMissoes((atuais) => {
               const fotosFirestore = dados.missoes.some((m: any) => m.fotoAntesUrl || m.fotoDepoisUrl);
               const fotosAtuais = atuais.some((m) => m.fotoAntesUrl || m.fotoDepoisUrl);
-              if (fotosFirestore || !fotosAtuais) {
-                return dados.missoes;
+              let base = dados.missoes;
+              if (!fotosFirestore && fotosAtuais) {
+                base = dados.missoes.map((m: any) => {
+                  const local = atuais.find((al) => al.id === m.id);
+                  if (local) {
+                    return {
+                      ...m,
+                      fotoAntesUrl: m.fotoAntesUrl || local.fotoAntesUrl,
+                      fotoDepoisUrl: m.fotoDepoisUrl || local.fotoDepoisUrl,
+                    };
+                  }
+                  return m;
+                });
               }
-              return dados.missoes.map((m: any) => {
-                const local = atuais.find((al) => al.id === m.id);
-                if (local) {
-                  return {
-                    ...m,
-                    fotoAntesUrl: m.fotoAntesUrl || local.fotoAntesUrl,
-                    fotoDepoisUrl: m.fotoDepoisUrl || local.fotoDepoisUrl,
-                  };
-                }
-                return m;
-              });
+              return sincronizarMissoesHistoricas(base);
             });
           }
           if (Array.isArray(dados.equipes)) setEquipes(sincronizarEquipesOficiais(dados.equipes));
