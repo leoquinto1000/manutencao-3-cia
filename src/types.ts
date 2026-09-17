@@ -156,7 +156,7 @@ export interface PaginaFotoServico {
   dataServico: string;
   descricao: string;
   anotacao: string;
-  tipoGrid: '2' | '3';
+  tipoGrid: '1' | '2' | '3' | '4';
   fotos: FotoCard[];
 }
 

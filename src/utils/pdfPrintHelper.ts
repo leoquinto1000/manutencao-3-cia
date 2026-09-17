@@ -287,6 +287,25 @@ export async function gerarDocumentoPdf(
       onProgresso(`Processando página ${i + 1} de ${paginas.length}...`, Math.round(((i) / paginas.length) * 100));
     }
 
+    // Garante que todas as imagens da página estejam carregadas antes da captura pelo canvas
+    const imagens = Array.from(pagina.querySelectorAll<HTMLImageElement>('img'));
+    if (imagens.length > 0) {
+      await Promise.all(
+        imagens.map(
+          (img) =>
+            new Promise<void>((resolve) => {
+              if (img.complete && img.naturalHeight !== 0) {
+                resolve();
+              } else {
+                img.onload = () => resolve();
+                img.onerror = () => resolve();
+                setTimeout(resolve, 800);
+              }
+            })
+        )
+      );
+    }
+
     // Cria canvas de alta resolução com suporte a oklch e sincronização de campos
     const isA4Formatada = pagina.classList.contains('apmbb-page') || pagina.classList.contains('pesquisa-page');
 

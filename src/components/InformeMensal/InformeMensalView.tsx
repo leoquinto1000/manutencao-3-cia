@@ -67,8 +67,18 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
 
   const documentoRef = useRef<HTMLDivElement>(null);
   const inputCapaRef = useRef<HTMLInputElement>(null);
+  const inputNovaPaginaFotosRef = useRef<HTMLInputElement>(null);
   const [carregandoCapa, setCarregandoCapa] = useState<boolean>(false);
   const [isDraggingCapa, setIsDraggingCapa] = useState<boolean>(false);
+
+  // Ref que garante sempre a versão mais recente do informe nas funções assíncronas
+  const informeAtualRef = useRef(informeAtual);
+  informeAtualRef.current = informeAtual;
+
+  // Estado para indicar qual foto específica está sendo enviada/processada no momento (chave: "pagId-fotoId")
+  const [uploadingFotoKey, setUploadingFotoKey] = useState<string | null>(null);
+  // Estado para indicar drag & drop sobre uma foto específica
+  const [dragOverFotoKey, setDragOverFotoKey] = useState<string | null>(null);
 
   const informeArquivadoCorrespondente = informeAtual.id
     ? informesArquivados.find((x) => x.id === informeAtual.id)
@@ -85,7 +95,7 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
   });
 
   const handleUpdateField = (field: keyof InformeMensal, val: any) => {
-    onChangeInformeAtual({ ...informeAtual, [field]: val });
+    onChangeInformeAtual({ ...informeAtualRef.current, [field]: val });
   };
 
   const handleUploadCapa = async (file: File) => {
@@ -138,28 +148,77 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
   const handleAddPaginaFotos = () => {
     const novaPagina: PaginaFotoServico = {
       id: gerarId(),
-      tituloServico: 'NOVO SERVIÇO DE MANUTENÇÃO PREDIAL',
-      dataServico: informeAtual.mesAno || 'AGOSTO 2026',
+      tituloServico: 'SERVIÇO DE MANUTENÇÃO PREDIAL',
+      dataServico: informeAtualRef.current.mesAno || 'AGOSTO 2026',
       descricao: 'Descrição detalhada dos reparos executados pelos Cadetes e Efetivo da 3ª Companhia.',
       anotacao: '✅ Intervenção concluída garantindo a segurança e funcionalidade das instalações.',
       tipoGrid: '2',
       fotos: [
         {
           id: gerarId(),
-          url: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=600&auto=format&fit=crop&q=60',
+          url: '', // Inicia vazio para destacar o espaço de inserção direta do computador
           legenda: 'ANTES: Registro do estado inicial com avarias',
         },
         {
           id: gerarId(),
-          url: 'https://images.unsplash.com/photo-1507652313519-d4e9174996dd?w=600&auto=format&fit=crop&q=60',
+          url: '', // Inicia vazio para destacar o espaço de inserção direta do computador
           legenda: 'DEPOIS: Serviço finalizado com revitalização completa',
         },
       ],
     };
 
-    handleUpdateField('paginas', [...informeAtual.paginas, novaPagina]);
-    setMensagemSucesso(`📄 Página ${informeAtual.paginas.length + 2} de fotos adicionada ao final do relatório!`);
+    const paginasAtuais = informeAtualRef.current.paginas || [];
+    handleUpdateField('paginas', [...paginasAtuais, novaPagina]);
+    setMensagemSucesso(`📄 Página ${paginasAtuais.length + 2} adicionada! Clique nos espaços para carregar as fotos do seu computador.`);
     setTimeout(() => setMensagemSucesso(null), 3500);
+  };
+
+  // Cria uma nova página no relatório diretamente a partir dos arquivos selecionados do computador
+  const handleCriarPaginaComFotosDoPC = async (fileList: FileList | File[]) => {
+    const files = Array.from(fileList);
+    if (files.length === 0) return;
+    try {
+      const fotosCarregadas: FotoCard[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const dataUrl = await comprimirImagemParaArmazenamento(file, 1200, 0.78);
+        if (dataUrl && dataUrl.length > 50 && !dataUrl.startsWith('data:,')) {
+          const prefixo = i === 0 ? 'ANTES: ' : i === 1 ? 'DEPOIS: ' : '';
+          const nomeLimpo = file.name.replace(/\.[^/.]+$/, '').toUpperCase();
+          fotosCarregadas.push({
+            id: gerarId(),
+            url: dataUrl,
+            legenda: `${prefixo}${nomeLimpo}`,
+          });
+        }
+      }
+
+      if (fotosCarregadas.length === 0) {
+        alert('Não foi possível ler as fotos selecionadas. Verifique o formato dos arquivos.');
+        return;
+      }
+
+      const gridCalculado: '1' | '2' | '3' | '4' =
+        fotosCarregadas.length === 1 ? '1' : fotosCarregadas.length === 3 ? '3' : fotosCarregadas.length >= 4 ? '4' : '2';
+
+      const novaPagina: PaginaFotoServico = {
+        id: gerarId(),
+        tituloServico: 'SERVIÇO DE MANUTENÇÃO PREDIAL',
+        dataServico: informeAtualRef.current.mesAno || 'AGOSTO 2026',
+        descricao: 'Descrição detalhada dos reparos executados pelos Cadetes e Efetivo da 3ª Companhia.',
+        anotacao: '✅ Intervenção concluída garantindo a segurança e funcionalidade das instalações.',
+        tipoGrid: gridCalculado,
+        fotos: fotosCarregadas,
+      };
+
+      const paginasAtuais = informeAtualRef.current.paginas || [];
+      handleUpdateField('paginas', [...paginasAtuais, novaPagina]);
+      setMensagemSucesso(`📄 Página ${paginasAtuais.length + 2} criada com ${fotosCarregadas.length} foto(s) do seu computador!`);
+      setTimeout(() => setMensagemSucesso(null), 3500);
+    } catch (err) {
+      console.error('Erro ao criar página com fotos do computador:', err);
+      alert('Ocorreu um erro ao carregar as fotos selecionadas.');
+    }
   };
 
   const handleUpdatePagina = (pagId: string, field: keyof PaginaFotoServico, val: any) => {
@@ -189,7 +248,7 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
   };
 
   const handleDuplicarPagina = (pagId: string) => {
-    const pagina = informeAtual.paginas.find((p) => p.id === pagId);
+    const pagina = informeAtualRef.current.paginas.find((p) => p.id === pagId);
     if (!pagina) return;
     const novaPagina: PaginaFotoServico = {
       ...pagina,
@@ -197,8 +256,8 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
       tituloServico: `${pagina.tituloServico} (CÓPIA)`,
       fotos: pagina.fotos.map((f) => ({ ...f, id: gerarId() })),
     };
-    const indexOriginal = informeAtual.paginas.findIndex((p) => p.id === pagId);
-    const novasPaginas = [...informeAtual.paginas];
+    const indexOriginal = informeAtualRef.current.paginas.findIndex((p) => p.id === pagId);
+    const novasPaginas = [...informeAtualRef.current.paginas];
     novasPaginas.splice(indexOriginal + 1, 0, novaPagina);
     handleUpdateField('paginas', novasPaginas);
     setMensagemSucesso('📋 Página duplicada com sucesso!');
@@ -206,43 +265,66 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
   };
 
   const handleUploadFotoPagina = async (pagId: string, fotoId: string, file: File) => {
+    if (!file) return;
+    const key = `${pagId}-${fotoId}`;
+    setUploadingFotoKey(key);
     try {
-      const dataUrl = await comprimirImagemParaArmazenamento(file, 1024, 0.72);
-      const updated = informeAtual.paginas.map((p) => {
+      const dataUrl = await comprimirImagemParaArmazenamento(file, 1200, 0.78);
+      if (!dataUrl || dataUrl.length < 50 || dataUrl.startsWith('data:,')) {
+        throw new Error('Falha ao processar arquivo de imagem');
+      }
+      const updated = informeAtualRef.current.paginas.map((p) => {
         if (p.id !== pagId) return p;
         const updatedFotos = p.fotos.map((f) => (f.id === fotoId ? { ...f, url: dataUrl } : f));
         return { ...p, fotos: updatedFotos };
       });
       handleUpdateField('paginas', updated);
-      setMensagemSucesso('📷 Foto atualizada com sucesso!');
+      setMensagemSucesso('📷 Foto do computador carregada com sucesso no documento!');
       setTimeout(() => setMensagemSucesso(null), 2500);
     } catch (err) {
       console.error('Erro ao processar foto da página:', err);
+      alert('Não foi possível carregar esta foto. Por favor, tente com outro arquivo de imagem.');
+    } finally {
+      setUploadingFotoKey(null);
     }
   };
 
-  const handleAddFotoComUpload = async (pagId: string, file: File) => {
+  const handleAddFotoComUpload = async (pagId: string, fileOrList: File | FileList | File[]) => {
+    const files: File[] = fileOrList instanceof File ? [fileOrList] : Array.from(fileOrList);
+    if (files.length === 0) return;
+    setUploadingFotoKey(`pagina-${pagId}`);
     try {
-      const dataUrl = await comprimirImagemParaArmazenamento(file, 1024, 0.72);
-      const newFoto: FotoCard = {
-        id: gerarId(),
-        url: dataUrl,
-        legenda: file.name.replace(/\.[^/.]+$/, '').toUpperCase() || 'Registro Fotográfico',
-      };
-      const updated = informeAtual.paginas.map((p) => {
-        if (p.id !== pagId) return p;
-        return { ...p, fotos: [...p.fotos, newFoto] };
-      });
-      handleUpdateField('paginas', updated);
-      setMensagemSucesso('📷 Foto adicionada com sucesso!');
-      setTimeout(() => setMensagemSucesso(null), 3000);
+      const novasFotos: FotoCard[] = [];
+      for (const file of files) {
+        const dataUrl = await comprimirImagemParaArmazenamento(file, 1200, 0.78);
+        if (dataUrl && dataUrl.length > 50 && !dataUrl.startsWith('data:,')) {
+          novasFotos.push({
+            id: gerarId(),
+            url: dataUrl,
+            legenda: file.name.replace(/\.[^/.]+$/, '').toUpperCase() || 'Registro Fotográfico',
+          });
+        }
+      }
+
+      if (novasFotos.length > 0) {
+        const updated = informeAtualRef.current.paginas.map((p) => {
+          if (p.id !== pagId) return p;
+          return { ...p, fotos: [...p.fotos, ...novasFotos] };
+        });
+        handleUpdateField('paginas', updated);
+        setMensagemSucesso(`📷 ${novasFotos.length} foto(s) do computador inserida(s) na página!`);
+        setTimeout(() => setMensagemSucesso(null), 3000);
+      }
     } catch (err) {
-      console.error('Erro ao adicionar foto:', err);
+      console.error('Erro ao adicionar fotos do computador:', err);
+      alert('Ocorreu um erro ao carregar as imagens selecionadas.');
+    } finally {
+      setUploadingFotoKey(null);
     }
   };
 
   const handleUpdateLegendaFoto = (pagId: string, fotoId: string, legenda: string) => {
-    const updated = informeAtual.paginas.map((p) => {
+    const updated = informeAtualRef.current.paginas.map((p) => {
       if (p.id !== pagId) return p;
       const updatedFotos = p.fotos.map((f) => (f.id === fotoId ? { ...f, legenda } : f));
       return { ...p, fotos: updatedFotos };
@@ -251,17 +333,17 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
   };
 
   const handleAddFotoToPagina = (pagId: string) => {
-    const updated = informeAtual.paginas.map((p) => {
+    const updated = informeAtualRef.current.paginas.map((p) => {
       if (p.id !== pagId) return p;
       const newFoto: FotoCard = {
         id: gerarId(),
-        url: 'https://images.unsplash.com/photo-1507652313519-d4e9174996dd?w=600&auto=format&fit=crop&q=60',
+        url: '', // Inicia vazio para destacar dropzone de carregamento do computador
         legenda: 'Novo registro fotográfico do serviço',
       };
       return { ...p, fotos: [...p.fotos, newFoto] };
     });
     handleUpdateField('paginas', updated);
-    setMensagemSucesso('🖼️ Foto adicional inserida na página.');
+    setMensagemSucesso('🖼️ Novo espaço de foto inserido! Clique nele para carregar a imagem do seu computador.');
     setTimeout(() => setMensagemSucesso(null), 2500);
   };
 
@@ -440,6 +522,31 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
                 <FileText size={14} className="text-slate-600" />
                 <span>Novo / Limpar</span>
               </button>
+
+              {/* Input oculto para carregar fotos do PC e criar nova página automaticamente */}
+              <input
+                ref={inputNovaPaginaFotosRef}
+                type="file"
+                multiple
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files && e.target.files.length > 0) {
+                    handleCriarPaginaComFotosDoPC(e.target.files);
+                    e.target.value = '';
+                  }
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => inputNovaPaginaFotosRef.current?.click()}
+                className="flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold px-3 py-2 rounded-md transition shadow-sm cursor-pointer"
+                title="Criar nova página carregando diretamente as fotos do seu computador"
+              >
+                <Upload size={14} />
+                <span>+ Página (Fotos do PC)</span>
+              </button>
+
               <button
                 type="button"
                 onClick={handleAddPaginaFotos}
@@ -447,7 +554,7 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
                 title="Adicionar nova página com fotos de serviços"
               >
                 <Plus size={14} />
-                <span>Adicionar Página de Fotos ({informeAtual.paginas.length})</span>
+                <span>+ Página ({informeAtual.paginas.length})</span>
               </button>
               <button
                 type="button"
@@ -1122,23 +1229,26 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
                 </div>
 
                 {/* Adicionar Fotos: Upload direto ou padrão */}
+                <input
+                  id={`input-fotos-pagina-${pagina.id}`}
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files.length > 0) {
+                      handleAddFotoComUpload(pagina.id, e.target.files);
+                      e.target.value = '';
+                    }
+                  }}
+                />
                 <label
+                  htmlFor={`input-fotos-pagina-${pagina.id}`}
                   className="px-2 py-1 text-[10.5px] font-bold text-emerald-300 hover:text-emerald-100 bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-500/40 rounded flex items-center gap-1 cursor-pointer transition"
-                  title="Enviar foto do computador diretamente para esta página"
+                  title="Enviar foto(s) do computador diretamente para esta página"
                 >
-                  <Upload size={12} />
-                  <span>+ Upload</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      if (e.target.files && e.target.files[0]) {
-                        handleAddFotoComUpload(pagina.id, e.target.files[0]);
-                        e.target.value = '';
-                      }
-                    }}
-                  />
+                  <Upload size={12} className="pointer-events-none" />
+                  <span className="pointer-events-none">+ Fotos do PC</span>
                 </label>
 
                 <button
@@ -1245,95 +1355,189 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
                         : 'grid-cols-2'
                     }`}
                   >
-                    {pagina.fotos.map((foto, fIdx) => (
-                      <div
-                        key={foto.id}
-                        className="bg-white rounded-xl overflow-hidden shadow-sm border border-slate-200 flex flex-col items-center relative group/foto"
-                      >
-                        <div className="relative w-full">
-                          <img
-                            src={foto.url}
-                            alt={foto.legenda || 'Registro fotográfico'}
-                            className={`w-full object-cover block bg-slate-100 ${
-                              pagina.tipoGrid === '1'
-                                ? 'h-80'
-                                : pagina.tipoGrid === '3'
-                                ? 'h-44'
-                                : pagina.tipoGrid === '4'
-                                ? 'h-48'
-                                : 'h-64'
-                            }`}
+                    {pagina.fotos.map((foto, fIdx) => {
+                      const fotoCardKey = `${pagina.id}-${foto.id}`;
+                      const isUploadingThis = uploadingFotoKey === fotoCardKey;
+                      const isDraggingThis = dragOverFotoKey === fotoCardKey;
+                      const inputFotoId = `input-foto-${pagina.id}-${foto.id}`;
+                      const temFoto = Boolean(foto.url && foto.url.trim() !== '');
+
+                      return (
+                        <div
+                          key={foto.id}
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setDragOverFotoKey(fotoCardKey);
+                          }}
+                          onDragLeave={() => setDragOverFotoKey(null)}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setDragOverFotoKey(null);
+                            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                              handleUploadFotoPagina(pagina.id, foto.id, e.dataTransfer.files[0]);
+                            }
+                          }}
+                          className={`bg-white rounded-xl overflow-hidden shadow-sm border flex flex-col items-center relative group/foto transition-all ${
+                            isDraggingThis
+                              ? 'border-blue-500 ring-2 ring-blue-400/50 bg-blue-50/20'
+                              : 'border-slate-200'
+                          }`}
+                        >
+                          <input
+                            id={inputFotoId}
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              if (e.target.files && e.target.files[0]) {
+                                handleUploadFotoPagina(pagina.id, foto.id, e.target.files[0]);
+                                e.target.value = '';
+                              }
+                            }}
                           />
 
-                          {/* Foto Action Bar (Mover, Baixar, Substituir, Excluir) */}
-                          <div className="no-print absolute top-1.5 right-1.5 flex items-center gap-1 bg-slate-900/80 backdrop-blur-xs p-1 rounded-md shadow-md">
-                            {fIdx > 0 && (
-                              <button
-                                type="button"
-                                onClick={() => handleMoverFoto(pagina.id, fIdx, 'esquerda')}
-                                className="text-white hover:text-[#c9a84e] p-0.5 hover:bg-white/20 rounded transition cursor-pointer"
-                                title="Mover foto para a esquerda"
-                              >
-                                <ArrowLeft size={12} />
-                              </button>
-                            )}
-                            {fIdx < pagina.fotos.length - 1 && (
-                              <button
-                                type="button"
-                                onClick={() => handleMoverFoto(pagina.id, fIdx, 'direita')}
-                                className="text-white hover:text-[#c9a84e] p-0.5 hover:bg-white/20 rounded transition cursor-pointer"
-                                title="Mover foto para a direita"
-                              >
-                                <ArrowRight size={12} />
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => baixarFoto(foto.url, `pagina-${pagIdx + 1}-${foto.legenda ? foto.legenda.slice(0, 20).replace(/\s+/g, '_') : 'foto'}.jpg`)}
-                              className="text-white hover:text-emerald-300 p-0.5 hover:bg-white/20 rounded transition cursor-pointer"
-                              title="Salvar foto no dispositivo"
-                            >
-                              <Download size={12} />
-                            </button>
-                            <label className="text-white hover:text-blue-300 p-0.5 hover:bg-white/20 rounded transition cursor-pointer flex items-center" title="Substituir por outra foto">
-                              <Upload size={12} />
-                              <input
-                                type="file"
-                                accept="image/*"
-                                className="hidden"
-                                onChange={(e) => {
-                                  if (e.target.files && e.target.files[0]) {
-                                    handleUploadFotoPagina(pagina.id, foto.id, e.target.files[0]);
-                                    e.target.value = '';
-                                  }
-                                }}
+                          <div className="relative w-full overflow-hidden">
+                            {temFoto ? (
+                              <img
+                                src={foto.url}
+                                referrerPolicy="no-referrer"
+                                alt={foto.legenda || 'Registro fotográfico'}
+                                className={`w-full object-cover block bg-slate-100 ${
+                                  pagina.tipoGrid === '1'
+                                    ? 'h-80'
+                                    : pagina.tipoGrid === '3'
+                                    ? 'h-44'
+                                    : pagina.tipoGrid === '4'
+                                    ? 'h-48'
+                                    : 'h-64'
+                                }`}
                               />
-                            </label>
-                            {pagina.fotos.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveFotoFromPagina(pagina.id, foto.id)}
-                                className="text-red-400 hover:text-red-200 p-0.5 hover:bg-red-900/50 rounded transition cursor-pointer"
-                                title="Excluir esta foto"
+                            ) : (
+                              /* Dropzone de upload quando o espaço está vazio */
+                              <div
+                                onClick={() => {
+                                  const el = document.getElementById(inputFotoId) as HTMLInputElement;
+                                  el?.click();
+                                }}
+                                className={`w-full bg-slate-50 hover:bg-blue-50/50 border-2 border-dashed border-slate-300 hover:border-[#1a2b4c] flex flex-col items-center justify-center gap-2 cursor-pointer transition p-4 text-center ${
+                                  pagina.tipoGrid === '1'
+                                    ? 'h-80'
+                                    : pagina.tipoGrid === '3'
+                                    ? 'h-44'
+                                    : pagina.tipoGrid === '4'
+                                    ? 'h-48'
+                                    : 'h-64'
+                                }`}
                               >
-                                <Trash2 size={12} />
-                              </button>
+                                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-[#1a2b4c]">
+                                  <Upload size={18} />
+                                </div>
+                                <span className="font-heading font-bold text-xs text-slate-800">
+                                  Inserir Foto do Computador
+                                </span>
+                                <span className="text-[10px] text-slate-500">
+                                  Clique ou arraste a imagem para cá
+                                </span>
+                              </div>
                             )}
+
+                            {/* Overlay de carregamento ao processar foto */}
+                            {isUploadingThis && (
+                              <div className="absolute inset-0 bg-slate-900/75 backdrop-blur-xs flex flex-col items-center justify-center gap-2 z-20 text-white">
+                                <Loader2 className="animate-spin text-[#c9a84e]" size={28} />
+                                <span className="text-xs font-bold">Processando foto...</span>
+                              </div>
+                            )}
+
+                            {/* Overlay ao arrastar arquivo por cima */}
+                            {isDraggingThis && (
+                              <div className="absolute inset-0 bg-blue-600/80 backdrop-blur-xs flex flex-col items-center justify-center gap-2 z-20 text-white pointer-events-none">
+                                <Upload className="animate-bounce" size={32} />
+                                <span className="text-xs font-bold">Solte a imagem para substituir!</span>
+                              </div>
+                            )}
+
+                            {/* Botão flutuante para Substituir Foto do PC (visível no hover ou mobile) */}
+                            {temFoto && !isUploadingThis && (
+                              <div className="no-print absolute bottom-2 right-2 opacity-90 group-hover/foto:opacity-100 transition-opacity">
+                                <label
+                                  htmlFor={inputFotoId}
+                                  className="bg-slate-900/80 hover:bg-[#1a2b4c] text-white text-[10.5px] font-bold px-2.5 py-1 rounded-md shadow-md flex items-center gap-1.5 cursor-pointer backdrop-blur-xs transition"
+                                  title="Clique para escolher outra foto do seu computador"
+                                >
+                                  <Upload size={11} className="pointer-events-none text-[#c9a84e]" />
+                                  <span className="pointer-events-none">Substituir Foto</span>
+                                </label>
+                              </div>
+                            )}
+
+                            {/* Foto Action Bar (Mover, Baixar, Substituir, Excluir) */}
+                            <div className="no-print absolute top-1.5 right-1.5 flex items-center gap-1 bg-slate-900/80 backdrop-blur-xs p-1 rounded-md shadow-md z-10">
+                              {fIdx > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoverFoto(pagina.id, fIdx, 'esquerda')}
+                                  className="text-white hover:text-[#c9a84e] p-0.5 hover:bg-white/20 rounded transition cursor-pointer"
+                                  title="Mover foto para a esquerda"
+                                >
+                                  <ArrowLeft size={12} />
+                                </button>
+                              )}
+                              {fIdx < pagina.fotos.length - 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoverFoto(pagina.id, fIdx, 'direita')}
+                                  className="text-white hover:text-[#c9a84e] p-0.5 hover:bg-white/20 rounded transition cursor-pointer"
+                                  title="Mover foto para a direita"
+                                >
+                                  <ArrowRight size={12} />
+                                </button>
+                              )}
+                              {temFoto && (
+                                <button
+                                  type="button"
+                                  onClick={() => baixarFoto(foto.url, `pagina-${pagIdx + 1}-${foto.legenda ? foto.legenda.slice(0, 20).replace(/\s+/g, '_') : 'foto'}.jpg`)}
+                                  className="text-white hover:text-emerald-300 p-0.5 hover:bg-white/20 rounded transition cursor-pointer"
+                                  title="Salvar foto no dispositivo"
+                                >
+                                  <Download size={12} />
+                                </button>
+                              )}
+                              <label
+                                htmlFor={inputFotoId}
+                                className="text-white hover:text-blue-300 p-0.5 hover:bg-white/20 rounded transition cursor-pointer flex items-center"
+                                title="Substituir por outra foto do computador"
+                              >
+                                <Upload size={12} className="pointer-events-none" />
+                              </label>
+                              {pagina.fotos.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveFotoFromPagina(pagina.id, foto.id)}
+                                  className="text-red-400 hover:text-red-200 p-0.5 hover:bg-red-900/50 rounded transition cursor-pointer"
+                                  title="Excluir esta foto"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          <div className="w-full bg-slate-50 border-t border-slate-200 p-2 text-center">
+                            <input
+                              type="text"
+                              value={foto.legenda}
+                              onChange={(e) =>
+                                handleUpdateLegendaFoto(pagina.id, foto.id, e.target.value)
+                              }
+                              placeholder="Legenda da foto..."
+                              className="w-full text-center font-heading text-[11.5px] font-bold text-slate-800 bg-transparent border border-transparent hover:border-slate-300 focus:border-[#1a2b4c] focus:bg-blue-50/20 rounded px-1 py-0.5 outline-none transition"
+                            />
                           </div>
                         </div>
-                        <div className="w-full bg-slate-50 border-t border-slate-200 p-2 text-center">
-                          <input
-                            type="text"
-                            value={foto.legenda}
-                            onChange={(e) =>
-                              handleUpdateLegendaFoto(pagina.id, foto.id, e.target.value)
-                            }
-                            placeholder="Legenda da foto..."
-                            className="w-full text-center font-heading text-[11.5px] font-bold text-slate-800 bg-transparent border border-transparent hover:border-slate-300 focus:border-[#1a2b4c] focus:bg-blue-50/20 rounded px-1 py-0.5 outline-none transition"
-                          />
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
 
                   {/* Annotation Box */}

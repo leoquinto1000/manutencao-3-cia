@@ -52,28 +52,107 @@ export function baixarFoto(urlOuDataUrl: string, nomeArquivo: string): void {
 
 /**
  * Redimensiona e comprime uma foto (File ou DataURL) para JPEG otimizado
- * (dimensão máxima de 1024px e qualidade 0.72).
- * Isso reduz fotos pesadas de celulares (4MB-10MB) para apenas ~40KB-70KB,
- * permitindo que sejam salvas no Firestore e no armazenamento local sem estourar limites
- * e sem perder qualidade visual para exibição e relatórios A4.
+ * (dimensão máxima de 1200px e qualidade ajustável).
+ * Suporta formatos do computador (JPEG, PNG, WebP, JFIF, BMP, GIF, etc.).
+ * Utiliza createImageBitmap quando disponível para máxima velocidade,
+ * com fallback seguro para FileReader + Canvas + timeout garantido.
  */
-export function comprimirImagemParaArmazenamento(
-  arquivoOuDataUrl: File | string,
-  maxDimensao: number = 1024,
-  qualidade: number = 0.72
+export async function comprimirImagemParaArmazenamento(
+  arquivoOuDataUrl: File | Blob | string,
+  maxDimensao: number = 1200,
+  qualidade: number = 0.78
 ): Promise<string> {
-  return new Promise((resolve) => {
-    const processarDataUrl = (dataUrl: string) => {
-      // Se for URL externa de internet (ex: https://), não precisa comprimir
-      if (dataUrl.startsWith('http://') || dataUrl.startsWith('https://')) {
-        resolve(dataUrl);
-        return;
+  // Se for URL externa de internet (ex: https://), não precisa comprimir
+  if (typeof arquivoOuDataUrl === 'string') {
+    if (arquivoOuDataUrl.startsWith('http://') || arquivoOuDataUrl.startsWith('https://')) {
+      return arquivoOuDataUrl;
+    }
+  }
+
+  // 1. Caminho ultra-rápido moderno: createImageBitmap (se for File ou Blob)
+  if (typeof arquivoOuDataUrl !== 'string' && typeof window !== 'undefined' && 'createImageBitmap' in window) {
+    try {
+      const bitmap = await createImageBitmap(arquivoOuDataUrl);
+      let largura = bitmap.width;
+      let altura = bitmap.height;
+
+      if (largura > maxDimensao || altura > maxDimensao) {
+        if (largura > altura) {
+          altura = Math.round((altura * maxDimensao) / largura);
+          largura = maxDimensao;
+        } else {
+          largura = Math.round((largura * maxDimensao) / altura);
+          altura = maxDimensao;
+        }
       }
 
-      const img = new Image();
-      img.onload = () => {
-        let largura = img.width;
-        let altura = img.height;
+      const canvas = document.createElement('canvas');
+      canvas.width = largura;
+      canvas.height = altura;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, largura, altura);
+        ctx.drawImage(bitmap, 0, 0, largura, altura);
+        const compressed = canvas.toDataURL('image/jpeg', qualidade);
+        if (compressed && compressed.length > 100 && !compressed.startsWith('data:,')) {
+          bitmap.close?.();
+          return compressed;
+        }
+      }
+      bitmap.close?.();
+    } catch (bitmapErr) {
+      console.warn('createImageBitmap falhou, utilizando fallback via FileReader:', bitmapErr);
+    }
+  }
+
+  // 2. Caminho de leitura via FileReader se for File/Blob
+  let dataUrlBase = '';
+  if (typeof arquivoOuDataUrl === 'string') {
+    dataUrlBase = arquivoOuDataUrl;
+  } else {
+    try {
+      dataUrlBase = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => resolve((ev.target?.result as string) || '');
+        reader.onerror = (err) => reject(err);
+        reader.readAsDataURL(arquivoOuDataUrl);
+      });
+    } catch (readErr) {
+      console.error('Erro ao ler arquivo do computador:', readErr);
+      return '';
+    }
+  }
+
+  if (!dataUrlBase) return '';
+
+  // 3. Compressão via elemento Image com timeout seguro de 2.5s
+  return new Promise<string>((resolve) => {
+    let finalizado = false;
+    const timeoutId = setTimeout(() => {
+      if (!finalizado) {
+        finalizado = true;
+        // Se demorar muito, retorna o dataUrl bruto lido do arquivo para não perder a foto do usuário
+        resolve(dataUrlBase);
+      }
+    }, 2500);
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+
+    img.onload = () => {
+      if (finalizado) return;
+      clearTimeout(timeoutId);
+      finalizado = true;
+
+      try {
+        let largura = img.naturalWidth || img.width;
+        let altura = img.naturalHeight || img.height;
+
+        if (largura <= 0 || altura <= 0) {
+          resolve(dataUrlBase);
+          return;
+        }
 
         if (largura > maxDimensao || altura > maxDimensao) {
           if (largura > altura) {
@@ -90,37 +169,34 @@ export function comprimirImagemParaArmazenamento(
         canvas.height = altura;
         const ctx = canvas.getContext('2d');
         if (!ctx) {
-          resolve(dataUrl);
+          resolve(dataUrlBase);
           return;
         }
 
-        // Fundo branco para garantir que transparências de PNG fiquem brancas em JPEG
         ctx.fillStyle = '#FFFFFF';
         ctx.fillRect(0, 0, largura, altura);
         ctx.drawImage(img, 0, 0, largura, altura);
 
-        try {
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', qualidade);
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', qualidade);
+        if (compressedDataUrl && compressedDataUrl.length > 100 && !compressedDataUrl.startsWith('data:,')) {
           resolve(compressedDataUrl);
-        } catch (e) {
-          resolve(dataUrl);
+        } else {
+          resolve(dataUrlBase);
         }
-      };
-      img.onerror = () => resolve(dataUrl);
-      img.src = dataUrl;
+      } catch (canvasErr) {
+        console.warn('Erro na compressão canvas, usando imagem original:', canvasErr);
+        resolve(dataUrlBase);
+      }
     };
 
-    if (typeof arquivoOuDataUrl === 'string') {
-      processarDataUrl(arquivoOuDataUrl);
-    } else {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const rawDataUrl = ev.target?.result as string;
-        processarDataUrl(rawDataUrl);
-      };
-      reader.onerror = () => resolve('');
-      reader.readAsDataURL(arquivoOuDataUrl);
-    }
+    img.onerror = () => {
+      if (finalizado) return;
+      clearTimeout(timeoutId);
+      finalizado = true;
+      resolve(dataUrlBase);
+    };
+
+    img.src = dataUrlBase;
   });
 }
 

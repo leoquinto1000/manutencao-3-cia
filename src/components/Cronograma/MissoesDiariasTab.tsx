@@ -599,39 +599,6 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
               Hoje
             </button>
 
-            {/* Atalhos Rápidos para as Pautas Oficiais dos Anexos */}
-            <button
-              type="button"
-              onClick={() => {
-                setDataSelecionada('2026-09-16');
-                setMostrarApenasPendentes(false);
-              }}
-              title="Visualizar Ordem do Dia e Determinações de 16/09/2026"
-              className={`px-2.5 py-1.5 text-xs font-bold rounded-md border transition ${
-                dataSelecionada === '2026-09-16' && !mostrarApenasPendentes
-                  ? 'bg-blue-900 text-white border-blue-900 shadow-xs'
-                  : 'bg-white text-blue-950 border-blue-200 hover:bg-blue-50'
-              }`}
-            >
-              16/09 (Quarta)
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setDataSelecionada('2026-09-17');
-                setMostrarApenasPendentes(false);
-              }}
-              title="Visualizar Ordem do Dia e Determinações de 17/09/2026"
-              className={`px-2.5 py-1.5 text-xs font-bold rounded-md border transition ${
-                dataSelecionada === '2026-09-17' && !mostrarApenasPendentes
-                  ? 'bg-blue-900 text-white border-blue-900 shadow-xs'
-                  : 'bg-white text-blue-950 border-blue-200 hover:bg-blue-50'
-              }`}
-            >
-              17/09 (Quinta)
-            </button>
-
             {/* Alternar Ver Todas as Pendentes */}
             <button
               type="button"
