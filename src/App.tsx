@@ -51,6 +51,7 @@ export default function App() {
   const [statusFirebase, setStatusFirebase] = useState<'carregando' | 'conectado' | 'salvando' | 'erro-permissao' | 'offline'>('carregando');
   const [ultimaSincronizacao, setUltimaSincronizacao] = useState<string | null>(null);
   const isCarregadoInicialmente = useRef(false);
+  const snapshotUltimoSalvo = useRef<string>('');
 
   // Load state from localStorage or use initial military templates
   const [nfs, setNfs] = useState<NFInstance[]>(() => {
@@ -157,57 +158,12 @@ export default function App() {
     return [];
   });
 
-  // Helper para restaurar e garantir as missões e determinações oficiais dos dias 16 e 17 de setembro de 2026
+  // Preserva integralmente as missões salvas sem resetar ao atualizar a versão
   const sincronizarMissoesHistoricas = (lista: MissaoDiaria[]): MissaoDiaria[] => {
     if (!Array.isArray(lista) || lista.length === 0) {
       return MISSOES_OFICIAIS_HISTORICAS;
     }
-
-    let resultado = [...lista];
-
-    // Verifica se a missão do dia 16/09/2026 (Confecção Informe de Setembro) está presente
-    const temMissao16 = resultado.some(
-      (m) => m.data === '2026-09-16' && m.titulo.toLowerCase().includes('informe')
-    );
-    if (!temMissao16) {
-      const outras = resultado.filter((m) => m.data !== '2026-09-16');
-      const missao16 = MISSOES_OFICIAIS_HISTORICAS.find((m) => m.data === '2026-09-16')!;
-      resultado = [...outras, missao16];
-    }
-
-    // Verifica se as 3 missões do dia 17/09/2026 estão presentes
-    const missoes17Atuais = resultado.filter((m) => m.data === '2026-09-17');
-    const temTodas17 =
-      missoes17Atuais.length >= 3 &&
-      missoes17Atuais.some((m) => m.titulo.toLowerCase().includes('monumento') && m.turno?.includes('Manhã')) &&
-      missoes17Atuais.some((m) => m.titulo.toLowerCase().includes('monumento') && m.turno?.includes('Tarde')) &&
-      missoes17Atuais.some((m) => m.titulo.toLowerCase().includes('iluminação'));
-
-    if (!temTodas17) {
-      const outras = resultado.filter((m) => m.data !== '2026-09-17');
-      const missoes17Oficiais = MISSOES_OFICIAIS_HISTORICAS.filter((m) => m.data === '2026-09-17');
-      
-      // Preserva fotos de missões que já existiam se houver
-      const mescladas17 = missoes17Oficiais.map((oficial) => {
-        const existente = missoes17Atuais.find(
-          (m) =>
-            m.id === oficial.id ||
-            (m.titulo.toLowerCase() === oficial.titulo.toLowerCase() && m.turno === oficial.turno)
-        );
-        if (existente) {
-          return {
-            ...oficial,
-            fotoAntesUrl: existente.fotoAntesUrl || oficial.fotoAntesUrl,
-            fotoDepoisUrl: existente.fotoDepoisUrl || oficial.fotoDepoisUrl,
-          };
-        }
-        return oficial;
-      });
-
-      resultado = [...outras, ...mescladas17];
-    }
-
-    return resultado;
+    return lista;
   };
 
   // Estado das Missões do Cronograma
@@ -226,86 +182,18 @@ export default function App() {
     return DADOS_INICIAIS_MISSOES;
   });
 
-  // Helper para garantir e sincronizar os 11 policiais militares reais da 3ª Cia no Efetivo Fixo e Apoios
+  // Preserva o efetivo cadastrado ou modificado sem sobrescrever
   const sincronizarEfetivoOficial = (lista: MembroEquipe[]): MembroEquipe[] => {
     if (!Array.isArray(lista) || lista.length === 0) {
       return DADOS_INICIAIS_MEMBROS;
     }
-    const temOficiaisReais = lista.some(
-      (m) =>
-        ['230060-5', '252664-6', '144966-4', '252593-3', '260062-5', '180823-A', '230342-6', '250021-3', '170429-0', '191800-1', '243255-2', '260107-9'].includes(
-          m.re || ''
-        ) ||
-        m.nomeGuerra.toLowerCase().includes('perozin') ||
-        m.nomeGuerra.toLowerCase().includes('salvioni') ||
-        m.nomeGuerra.toLowerCase().includes('lima') ||
-        m.nomeGuerra.toLowerCase().includes('pimenta')
-    );
-
-    if (!temOficiaisReais) {
-      return DADOS_INICIAIS_MEMBROS;
-    }
-
-    const converterParaCfo = (ano?: string) => {
-      if (!ano) return '1°CFO';
-      if (ano === '1º Ano' || ano.includes('1')) return '1°CFO';
-      if (ano === '2º Ano' || ano.includes('2')) return '2°CFO';
-      if (ano === '3º Ano' || ano.includes('3')) return '3°CFO';
-      if (ano === '4º Ano' || ano.includes('4')) return '4°CFO';
-      if (ano.toLowerCase().includes('permanente') || ano.toLowerCase().includes('efetivo')) return 'Efetivo Permanente';
-      return ano;
-    };
-
-    const resultado = [...lista].map((m) => {
-      if (m.anoCurso && m.anoCurso.includes('Ano')) {
-        return {
-          ...m,
-          anoCurso: converterParaCfo(m.anoCurso),
-        };
-      }
-      return m;
-    });
-
-    for (const oficial of DADOS_INICIAIS_MEMBROS) {
-      const idx = resultado.findIndex(
-        (m) =>
-          (m.re && oficial.re && m.re.replace(/\D/g, '') === oficial.re.replace(/\D/g, '')) ||
-          m.nomeGuerra.toLowerCase() === oficial.nomeGuerra.toLowerCase()
-      );
-      if (idx >= 0) {
-        resultado[idx] = {
-          ...oficial,
-          ...resultado[idx],
-          anoCurso: oficial.anoCurso || resultado[idx].anoCurso,
-          pelotao: oficial.pelotao || resultado[idx].pelotao,
-          tipoEfetivo: oficial.tipoEfetivo || resultado[idx].tipoEfetivo || 'fixo',
-          origemApoio: oficial.origemApoio || resultado[idx].origemApoio,
-          ativo: true,
-          // Preserva e garante os impedimentos oficiais dos dias 16 e 17
-          impedimentosPorData: {
-            ...(resultado[idx].impedimentosPorData || {}),
-            ...(oficial.impedimentosPorData || {}),
-          },
-        };
-      } else {
-        resultado.push(oficial);
-      }
-    }
-    return resultado;
+    return lista;
   };
 
+  // Preserva as equipes de manutenção cadastradas sem resetar
   const sincronizarEquipesOficiais = (lista: EquipeManutencao[]): EquipeManutencao[] => {
     if (!Array.isArray(lista) || lista.length === 0) return DADOS_INICIAIS_EQUIPES;
-    const temEquipeAntiga = lista.some(
-      (eq) => eq.encarregado?.includes('Ribeiro') || eq.encarregado?.includes('Santana')
-    );
-    if (temEquipeAntiga) {
-      return DADOS_INICIAIS_EQUIPES;
-    }
-    return lista.map((eq) => ({
-      ...eq,
-      supervisor: eq.supervisor || '1º Ten PM Froes',
-    }));
+    return lista;
   };
 
   // Estado das Equipes de Manutenção
@@ -522,100 +410,68 @@ export default function App() {
       .then((dados) => {
         if (!isMounted) return;
         if (dados) {
-          // Documento existe no Firestore: preenche todos os módulos
-          if (Array.isArray(dados.nfs) && dados.nfs.length > 0) setNfs(dados.nfs);
-          if (Array.isArray(dados.pesquisas)) setPesquisas(dados.pesquisas);
-          if (dados.balancete) setBalancete(dados.balancete);
-          if (dados.textoParte) setTextoParte(dados.textoParte);
-          if (Array.isArray(dados.materiaisUsados)) setMateriaisUsados(dados.materiaisUsados);
-          if (dados.informeAtual) {
-            setInformeAtual((atual) => {
-              const temCapaLocalCustomizada =
-                atual.capaUrl && atual.capaUrl !== DADOS_INICIAIS_INFORME.capaUrl;
-              const temFotosLocais = (atual.paginas || []).some((p) => (p.fotos || []).length > 0);
+          // Documento existe no Firestore: preenche todos os módulos com os dados reais salvos no banco
+          const nfsFinais = Array.isArray(dados.nfs) && dados.nfs.length > 0 ? dados.nfs : [DADOS_INICIAIS_NF1];
+          const pesquisasFinais = Array.isArray(dados.pesquisas) ? dados.pesquisas : [];
+          const balanceteFinal = { ...DADOS_INICIAIS_BALANCETE, ...(dados.balancete || {}) };
+          const textoParteFinal = { ...DADOS_INICIAIS_TEXTOPARTE, ...(dados.textoParte || {}) };
+          const materiaisFinal = Array.isArray(dados.materiaisUsados) ? dados.materiaisUsados : [];
+          const informeFinal = dados.informeAtual ? { ...DADOS_INICIAIS_INFORME, ...dados.informeAtual } : DADOS_INICIAIS_INFORME;
+          const informesArquivadosFinais = Array.isArray(dados.informesArquivados) ? dados.informesArquivados : [];
+          const arquivosSalvosFinais = Array.isArray(dados.arquivosSalvos) ? dados.arquivosSalvos : [];
+          const missoesFinais = Array.isArray(dados.missoes) && dados.missoes.length > 0 ? dados.missoes : DADOS_INICIAIS_MISSOES;
+          const equipesFinais = Array.isArray(dados.equipes) && dados.equipes.length > 0 ? dados.equipes : DADOS_INICIAIS_EQUIPES;
+          const membrosFinais = Array.isArray(dados.membros) && dados.membros.length > 0 ? dados.membros : DADOS_INICIAIS_MEMBROS;
+          const bancoFornecedoresFinal = Array.isArray(dados.bancoFornecedores) ? dados.bancoFornecedores : [];
 
-              // Se o usuário já adicionou fotos ou alterou a capa localmente, preserva os dados locais
-              const capaFinal = temCapaLocalCustomizada
-                ? atual.capaUrl
-                : dados.informeAtual.capaUrl || atual.capaUrl || DADOS_INICIAIS_INFORME.capaUrl;
+          setNfs(nfsFinais);
+          setPesquisas(pesquisasFinais);
+          setBalancete(balanceteFinal);
+          setTextoParte(textoParteFinal);
+          setMateriaisUsados(materiaisFinal);
+          setInformeAtual(informeFinal);
+          setInformesArquivados(informesArquivadosFinais);
+          setArquivosSalvos(arquivosSalvosFinais);
+          setMissoes(missoesFinais);
+          setEquipes(equipesFinais);
+          setMembros(membrosFinais);
+          setBancoFornecedores(bancoFornecedoresFinal);
 
-              if (temFotosLocais || temCapaLocalCustomizada) {
-                return {
-                  ...DADOS_INICIAIS_INFORME,
-                  ...dados.informeAtual,
-                  ...atual,
-                  capaUrl: capaFinal,
-                };
-              }
-              return { ...DADOS_INICIAIS_INFORME, ...dados.informeAtual, capaUrl: capaFinal };
-            });
-          }
+          // Espelha no cache local seguro (IndexedDB e localStorage) para resiliência offline e carregamento instantâneo
+          try {
+            localStorage.setItem('pmesp_nfs', JSON.stringify(nfsFinais));
+            localStorage.setItem('pmesp_pesquisas', JSON.stringify(pesquisasFinais));
+            localStorage.setItem('pmesp_balancete', JSON.stringify(balanceteFinal));
+            localStorage.setItem('pmesp_textoparte', JSON.stringify(textoParteFinal));
+            localStorage.setItem('pmesp_materiais_usados', JSON.stringify(materiaisFinal));
+            localStorage.setItem('pmesp_informe_atual', JSON.stringify(informeFinal));
+            localStorage.setItem('pmesp_informes_arquivados', JSON.stringify(informesArquivadosFinais));
+            localStorage.setItem('pmesp_projetos_arquivados', JSON.stringify(arquivosSalvosFinais));
+            localStorage.setItem('pmesp_missoes', JSON.stringify(missoesFinais));
+            localStorage.setItem('pmesp_equipes', JSON.stringify(equipesFinais));
+            localStorage.setItem('pmesp_membros', JSON.stringify(membrosFinais));
+            localStorage.setItem('pmesp_banco_fornecedores', JSON.stringify(bancoFornecedoresFinal));
+            salvarItemIndexedDB('pmesp_informe_atual', informeFinal);
+            salvarItemIndexedDB('pmesp_informes_arquivados', informesArquivadosFinais);
+            salvarItemIndexedDB('pmesp_projetos_arquivados', arquivosSalvosFinais);
+            salvarItemIndexedDB('pmesp_missoes', missoesFinais);
+          } catch (e) {}
 
-          // Mesclagem segura de Informes Arquivados (nunca apaga os informes existentes na máquina)
-          if (Array.isArray(dados.informesArquivados) && dados.informesArquivados.length > 0) {
-            setInformesArquivados((atuais) => {
-              const map = new Map<string, InformeMensal>();
-              for (const inf of dados.informesArquivados) {
-                if (inf && inf.id) map.set(inf.id, inf);
-              }
-              for (const inf of atuais) {
-                if (inf && inf.id) {
-                  if (!map.has(inf.id)) {
-                    map.set(inf.id, inf);
-                  } else {
-                    const fsInf = map.get(inf.id)!;
-                    const fotosLocal = (inf.paginas || []).reduce((acc, p) => acc + (p.fotos?.length || 0), 0) + (inf.capaUrl ? 1 : 0);
-                    const fotosFS = (fsInf.paginas || []).reduce((acc, p) => acc + (p.fotos?.length || 0), 0) + (fsInf.capaUrl ? 1 : 0);
-                    if (fotosLocal > fotosFS) {
-                      map.set(inf.id, inf);
-                    }
-                  }
-                }
-              }
-              return Array.from(map.values());
-            });
-          }
-
-          // Mesclagem segura de Arquivos Salvos da Prestação de Contas (nunca apaga arquivos locais)
-          if (Array.isArray(dados.arquivosSalvos) && dados.arquivosSalvos.length > 0) {
-            setArquivosSalvos((atuais) => {
-              const map = new Map<number, ProjetoSalvo>();
-              for (const proj of dados.arquivosSalvos) {
-                if (proj && proj.id_arquivo) map.set(proj.id_arquivo, proj);
-              }
-              for (const proj of atuais) {
-                if (proj && proj.id_arquivo && !map.has(proj.id_arquivo)) {
-                  map.set(proj.id_arquivo, proj);
-                }
-              }
-              return Array.from(map.values());
-            });
-          }
-          if (Array.isArray(dados.missoes)) {
-            setMissoes((atuais) => {
-              const fotosFirestore = dados.missoes.some((m: any) => m.fotoAntesUrl || m.fotoDepoisUrl);
-              const fotosAtuais = atuais.some((m) => m.fotoAntesUrl || m.fotoDepoisUrl);
-              let base = dados.missoes;
-              if (!fotosFirestore && fotosAtuais) {
-                base = dados.missoes.map((m: any) => {
-                  const local = atuais.find((al) => al.id === m.id);
-                  if (local) {
-                    return {
-                      ...m,
-                      fotoAntesUrl: m.fotoAntesUrl || local.fotoAntesUrl,
-                      fotoDepoisUrl: m.fotoDepoisUrl || local.fotoDepoisUrl,
-                    };
-                  }
-                  return m;
-                });
-              }
-              return sincronizarMissoesHistoricas(base);
-            });
-          }
-          if (Array.isArray(dados.equipes)) setEquipes(sincronizarEquipesOficiais(dados.equipes));
-          if (Array.isArray(dados.membros) && dados.membros.length > 0)
-            setMembros(sincronizarEfetivoOficial(dados.membros));
-          if (Array.isArray(dados.bancoFornecedores)) setBancoFornecedores(dados.bancoFornecedores);
+          // Registra snapshot exato dos dados carregados do banco para impedir sobrescrita no boot
+          snapshotUltimoSalvo.current = JSON.stringify({
+            nfs: nfsFinais,
+            pesquisas: pesquisasFinais,
+            balancete: balanceteFinal,
+            textoParte: textoParteFinal,
+            materiaisUsados: materiaisFinal,
+            informeAtual: informeFinal,
+            informesArquivados: informesArquivadosFinais,
+            arquivosSalvos: arquivosSalvosFinais,
+            missoes: missoesFinais,
+            equipes: equipesFinais,
+            membros: membrosFinais,
+            bancoFornecedores: bancoFornecedoresFinal,
+          });
 
           if (dados.ultimaAtualizacao) {
             try {
@@ -623,9 +479,10 @@ export default function App() {
             } catch (e) {}
           }
           setStatusFirebase('conectado');
+          isCarregadoInicialmente.current = true;
         } else {
-          // Primeira vez que o app conecta a este banco: inicializa o documento com os dados atuais
-          salvarDadosFirestore({
+          // Banco realmente vazio (primeira inicialização do sistema): grava os dados iniciais com segurança
+          const payloadInicial = {
             nfs,
             pesquisas,
             balancete,
@@ -638,32 +495,35 @@ export default function App() {
             equipes,
             membros,
             bancoFornecedores,
-          })
+          };
+          salvarDadosFirestore(payloadInicial)
             .then(() => {
               if (!isMounted) return;
+              snapshotUltimoSalvo.current = JSON.stringify(payloadInicial);
               setStatusFirebase('conectado');
               setUltimaSincronizacao(new Date().toLocaleTimeString('pt-BR'));
+              isCarregadoInicialmente.current = true;
             })
             .catch((err: any) => {
               if (!isMounted) return;
               if (err?.code === 'permission-denied') {
                 setStatusFirebase('erro-permissao');
               } else {
-                setStatusFirebase('conectado');
+                setStatusFirebase('offline');
               }
             });
         }
-        isCarregadoInicialmente.current = true;
       })
       .catch((err: any) => {
         if (!isMounted) return;
-        console.warn('Erro na carga inicial do Firestore:', err);
+        console.warn('Alerta na conexão com o Firestore:', err);
         if (err?.code === 'permission-denied') {
           setStatusFirebase('erro-permissao');
         } else {
           setStatusFirebase('offline');
         }
-        isCarregadoInicialmente.current = true;
+        // NÃO define isCarregadoInicialmente como true em caso de falha de conexão!
+        // Isso impede que modelos locais sobrescrevam os dados reais salvos no banco.
       });
 
     return () => {
@@ -671,28 +531,39 @@ export default function App() {
     };
   }, []);
 
-  // Auto-Save debounced para o Firestore quando houver modificação de dados
+  // Auto-Save debounced para o Firestore quando houver modificação real de dados
   useEffect(() => {
+    // 1. Só salva após a carga do banco de dados estar 100% concluída
     if (!isCarregadoInicialmente.current) return;
-    if (statusFirebase === 'erro-permissao') return;
+    // 2. Não salva em caso de erro de permissão ou modo offline
+    if (statusFirebase === 'erro-permissao' || statusFirebase === 'offline') return;
+
+    const payloadAtual = {
+      nfs,
+      pesquisas,
+      balancete,
+      textoParte,
+      materiaisUsados,
+      informeAtual,
+      informesArquivados,
+      arquivosSalvos,
+      missoes,
+      equipes,
+      membros,
+      bancoFornecedores,
+    };
+    const estadoAtualStr = JSON.stringify(payloadAtual);
+
+    // 3. Se os dados forem idênticos ao que veio do banco de dados, NÃO salva (protege contra reset de versão)
+    if (estadoAtualStr === snapshotUltimoSalvo.current) {
+      return;
+    }
 
     const timer = setTimeout(() => {
       setStatusFirebase('salvando');
-      salvarDadosFirestore({
-        nfs,
-        pesquisas,
-        balancete,
-        textoParte,
-        materiaisUsados,
-        informeAtual,
-        informesArquivados,
-        arquivosSalvos,
-        missoes,
-        equipes,
-        membros,
-        bancoFornecedores,
-      })
+      salvarDadosFirestore(payloadAtual)
         .then(() => {
+          snapshotUltimoSalvo.current = estadoAtualStr;
           setStatusFirebase('conectado');
           setUltimaSincronizacao(new Date().toLocaleTimeString('pt-BR'));
         })
@@ -720,13 +591,14 @@ export default function App() {
     equipes,
     membros,
     bancoFornecedores,
+    statusFirebase,
   ]);
 
   // Sincronização manual imediata solicitada pelo usuário
   const handleSincronizarManual = async () => {
     setStatusFirebase('salvando');
     try {
-      await salvarDadosFirestore({
+      const payloadAtual = {
         nfs,
         pesquisas,
         balancete,
@@ -739,7 +611,9 @@ export default function App() {
         equipes,
         membros,
         bancoFornecedores,
-      });
+      };
+      await salvarDadosFirestore(payloadAtual);
+      snapshotUltimoSalvo.current = JSON.stringify(payloadAtual);
       setStatusFirebase('conectado');
       setUltimaSincronizacao(new Date().toLocaleTimeString('pt-BR'));
     } catch (err: any) {

@@ -87,6 +87,7 @@ export async function carregarDadosFirestore(): Promise<DadosSistemaFirestore | 
     const refArquivosSalvos = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_ARQUIVOS_SALVOS);
     const colInformesIndividuais = collection(db, FIRESTORE_COLLECTION, 'dados_historico', 'informes');
 
+    // Leituras diretas: refGeral falhar indica problema de rede ou permissão, que não deve ser confundido com banco vazio
     const [
       snapGeral,
       snapMissoes,
@@ -95,7 +96,7 @@ export async function carregarDadosFirestore(): Promise<DadosSistemaFirestore | 
       snapArquivosSalvos,
       snapColInformes,
     ] = await Promise.all([
-      getDoc(refGeral).catch(() => null),
+      getDoc(refGeral),
       getDoc(refMissoes).catch(() => null),
       getDoc(refInforme).catch(() => null),
       getDoc(refHistorico).catch(() => null),
@@ -103,14 +104,15 @@ export async function carregarDadosFirestore(): Promise<DadosSistemaFirestore | 
       getDocs(colInformesIndividuais).catch(() => null),
     ]);
 
-    if (
-      !snapGeral?.exists() &&
-      !snapMissoes?.exists() &&
-      !snapInforme?.exists() &&
-      !snapHistorico?.exists() &&
-      !snapArquivosSalvos?.exists() &&
-      (!snapColInformes || snapColInformes.empty)
-    ) {
+    const temAlgumDado =
+      snapGeral.exists() ||
+      Boolean(snapMissoes?.exists()) ||
+      Boolean(snapInforme?.exists()) ||
+      Boolean(snapHistorico?.exists()) ||
+      Boolean(snapArquivosSalvos?.exists()) ||
+      Boolean(snapColInformes && !snapColInformes.empty);
+
+    if (!temAlgumDado) {
       return null;
     }
 
