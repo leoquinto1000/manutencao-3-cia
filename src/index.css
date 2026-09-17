@@ -202,19 +202,54 @@
   .apmbb-page {
     border: none !important;
     box-shadow: none !important;
-    padding: 10mm 12mm 8mm 12mm !important;
+    padding: 6mm 8mm 6mm 8mm !important;
     margin: 0 auto !important;
     page-break-before: auto !important;
     page-break-after: always !important;
+    break-after: page !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
-    width: 210mm !important;
-    max-width: 210mm !important;
-    min-height: 297mm !important;
-    height: 297mm !important;
-    max-height: 297mm !important;
+    width: 100% !important;
+    max-width: 194mm !important;
+    min-height: 275mm !important;
+    height: 275mm !important;
+    max-height: 275mm !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
     overflow: hidden !important;
     box-sizing: border-box !important;
+  }
+
+  .apmbb-page:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
+
+  #documento-informe-print-wrapper,
+  .documento-informe-print-wrapper {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 194mm !important;
+  }
+
+  #documento-informe-print-wrapper > *,
+  .documento-informe-print-wrapper > * {
+    margin: 0 auto !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 194mm !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+
+  #documento-informe-print-wrapper > *:last-child,
+  .documento-informe-print-wrapper > *:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
   }
 
   .textoparte-page {
