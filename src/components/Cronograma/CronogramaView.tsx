@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { MissaoDiaria, EquipeManutencao, MembroEquipe, InformeMensal } from '../../types';
+import { MissaoDiaria, EquipeManutencao, MembroEquipe, InformeMensal, UserRole } from '../../types';
 import { MissoesDiariasTab } from './MissoesDiariasTab';
 import { CadastroEquipesTab } from './CadastroEquipesTab';
 import { ResultadoEfetivoTab } from './ResultadoEfetivoTab';
@@ -33,6 +33,7 @@ interface CronogramaViewProps {
   informeAtual?: InformeMensal;
   onChangeInformeAtual?: (informe: InformeMensal) => void;
   onNavegarParaInforme?: () => void;
+  usuarioRole?: UserRole;
 }
 
 export const CronogramaView: React.FC<CronogramaViewProps> = ({
@@ -45,7 +46,9 @@ export const CronogramaView: React.FC<CronogramaViewProps> = ({
   informeAtual,
   onChangeInformeAtual,
   onNavegarParaInforme,
+  usuarioRole,
 }) => {
+  const isAuxiliar = usuarioRole === 'auxiliar' || usuarioRole === 'visualizador';
   const [subAbaAtiva, setSubAbaAtiva] = useState<'missoes' | 'equipes' | 'resultado'>('missoes');
   const hoje = formatarDataISO();
   const [dataSelecionada, setDataSelecionada] = useState<string>(hoje);
@@ -166,81 +169,88 @@ export const CronogramaView: React.FC<CronogramaViewProps> = ({
             )}
           </button>
 
-          <button
-            type="button"
-            onClick={() => setSubAbaAtiva('equipes')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs sm:text-sm font-bold transition cursor-pointer ${
-              subAbaAtiva === 'equipes'
-                ? 'bg-[#1a2b4c] text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-[#1a2b4c]'
-            }`}
-          >
-            <Users
-              size={16}
-              className={subAbaAtiva === 'equipes' ? 'text-[#c9a84e]' : 'text-slate-400'}
-            />
-            <span>Equipes & Efetivo da Manutenção</span>
-            <span
-              className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+          {/* Subaba Equipes (apenas para Admin, UGE e Operacional) */}
+          {!isAuxiliar && (
+            <button
+              type="button"
+              onClick={() => setSubAbaAtiva('equipes')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs sm:text-sm font-bold transition cursor-pointer ${
                 subAbaAtiva === 'equipes'
-                  ? 'bg-white/20 text-white'
-                  : 'bg-slate-100 text-slate-600'
+                  ? 'bg-[#1a2b4c] text-white shadow-xs'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-[#1a2b4c]'
               }`}
             >
-              {contadores.totalEquipes} equipes ({contadores.totalMilitares} militares)
-            </span>
-          </button>
+              <Users
+                size={16}
+                className={subAbaAtiva === 'equipes' ? 'text-[#c9a84e]' : 'text-slate-400'}
+              />
+              <span>Equipes & Efetivo da Manutenção</span>
+              <span
+                className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                  subAbaAtiva === 'equipes'
+                    ? 'bg-white/20 text-white'
+                    : 'bg-slate-100 text-slate-600'
+                }`}
+              >
+                {contadores.totalEquipes} equipes ({contadores.totalMilitares} militares)
+              </span>
+            </button>
+          )}
 
           {/* Subaba Resultado ao lado de Equipes e Efetivo da Manutenção */}
-          <button
-            type="button"
-            onClick={() => setSubAbaAtiva('resultado')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs sm:text-sm font-bold transition cursor-pointer ${
-              subAbaAtiva === 'resultado'
-                ? 'bg-[#1a2b4c] text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-[#1a2b4c]'
-            }`}
-          >
-            <ClipboardCheck
-              size={16}
-              className={subAbaAtiva === 'resultado' ? 'text-[#c9a84e]' : 'text-slate-400'}
-            />
-            <span>Resultado</span>
-            <span
-              className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+          {!isAuxiliar && (
+            <button
+              type="button"
+              onClick={() => setSubAbaAtiva('resultado')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs sm:text-sm font-bold transition cursor-pointer ${
                 subAbaAtiva === 'resultado'
-                  ? 'bg-white/20 text-white'
-                  : 'bg-slate-100 text-slate-600'
+                  ? 'bg-[#1a2b4c] text-white shadow-xs'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-[#1a2b4c]'
               }`}
             >
-              {contadores.totalEfetivoResultado} militares
-              {contadores.impedidosEfetivo > 0 && (
-                <span className="text-red-400 font-extrabold ml-1">
-                  • {contadores.impedidosEfetivo} impedido(s)
-                </span>
-              )}
-            </span>
-          </button>
+              <ClipboardCheck
+                size={16}
+                className={subAbaAtiva === 'resultado' ? 'text-[#c9a84e]' : 'text-slate-400'}
+              />
+              <span>Resultado</span>
+              <span
+                className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                  subAbaAtiva === 'resultado'
+                    ? 'bg-white/20 text-white'
+                    : 'bg-slate-100 text-slate-600'
+                }`}
+              >
+                {contadores.totalEfetivoResultado} militares
+                {contadores.impedidosEfetivo > 0 && (
+                  <span className="text-red-400 font-extrabold ml-1">
+                    • {contadores.impedidosEfetivo} impedido(s)
+                  </span>
+                )}
+              </span>
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-2 pr-1">
-          {/* Botão de restauração global de todos os dados do Cronograma */}
-          <button
-            type="button"
-            onClick={handleRestaurarTudoCronograma}
-            title="Restaurar todos os dados da aba Cronograma (Missões de todas as datas, Equipes e Efetivo completo da 3ª Cia)"
-            className="px-2.5 py-1.5 text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-md transition flex items-center gap-1.5 shadow-xs cursor-pointer"
-          >
-            <RotateCcw size={13} className="text-amber-700 shrink-0" />
-            <span className="hidden sm:inline">Restaurar Cronograma Completo</span>
-            <span className="sm:hidden">Restaurar Tudo</span>
-          </button>
+          {/* Botão de restauração global de todos os dados do Cronograma (Apenas Admin/Operacional/UGE) */}
+          {!isAuxiliar && (
+            <button
+              type="button"
+              onClick={handleRestaurarTudoCronograma}
+              title="Restaurar todos os dados da aba Cronograma (Missões de todas as datas, Equipes e Efetivo completo da 3ª Cia)"
+              className="px-2.5 py-1.5 text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-md transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+            >
+              <RotateCcw size={13} className="text-amber-700 shrink-0" />
+              <span className="hidden sm:inline">Restaurar Cronograma Completo</span>
+              <span className="sm:hidden">Restaurar Tudo</span>
+            </button>
+          )}
 
           <div className="hidden md:flex items-center gap-2 pl-2 border-l border-slate-200 text-xs text-slate-500">
             <Shield size={14} className="text-[#c9a84e]" />
             <span className="font-semibold text-[#1a2b4c]">3ª Cia Escola</span>
             <span>•</span>
-            <span>Ordem Diária de Serviço</span>
+            <span>{isAuxiliar ? 'Visualização de Missões' : 'Ordem Diária de Serviço'}</span>
           </div>
         </div>
       </div>
@@ -277,6 +287,7 @@ export const CronogramaView: React.FC<CronogramaViewProps> = ({
             onNavegarParaInforme={onNavegarParaInforme}
             dataSelecionada={dataSelecionada}
             onChangeDataSelecionada={setDataSelecionada}
+            modoAuxiliar={isAuxiliar}
           />
         )}
 

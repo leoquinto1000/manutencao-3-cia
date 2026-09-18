@@ -17,6 +17,8 @@ import {
   EquipeManutencao,
   MembroEquipe,
   EmpresaCadastrada,
+  UsuarioSistema,
+  UserRole,
 } from './types';
 import {
   DADOS_INICIAIS_NF1,
@@ -36,17 +38,33 @@ import {
   salvarDadosFirestore,
   escutarDadosFirestore,
   excluirInformeArquivadoFirestore,
+  carregarUsuariosFirestore,
+  salvarUsuariosFirestore,
+  logoutSistema,
+  USUARIOS_INICIAIS,
   DadosSistemaFirestore,
 } from './firebase';
 import { salvarItemIndexedDB, carregarItemIndexedDB } from './utils/indexedDbStorage';
-import { Header } from './components/Header';
+import { Header, AbaNavegacao } from './components/Header';
 import { PrestacaoContasView } from './components/PrestacaoContas/PrestacaoContasView';
 import { MateriaisUsadosView } from './components/MateriaisUsados/MateriaisUsadosView';
 import { InformeMensalView } from './components/InformeMensal/InformeMensalView';
 import { CronogramaView } from './components/Cronograma/CronogramaView';
+import { UsuariosView } from './components/UsuariosView';
+import { LoginView } from './components/LoginView';
 
 export default function App() {
-  const [abaPrincipal, setAbaPrincipal] = useState<'prestacao' | 'materiais' | 'informe' | 'cronograma'>('prestacao');
+  // Estado de Autenticação e Sessão de Usuário
+  const [usuarioLogado, setUsuarioLogado] = useState<UsuarioSistema | null>(() => {
+    try {
+      const saved = localStorage.getItem('pmesp_usuario_logado');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return null;
+  });
+
+  const [usuarios, setUsuarios] = useState<UsuarioSistema[]>(USUARIOS_INICIAIS);
+  const [abaPrincipal, setAbaPrincipal] = useState<AbaNavegacao>('prestacao');
 
   // Estado de Sincronização em Nuvem com o Firebase Firestore (manutencao-3-cia)
   const [statusFirebase, setStatusFirebase] = useState<'carregando' | 'conectado' | 'salvando' | 'erro-permissao' | 'offline'>('carregando');
@@ -484,6 +502,30 @@ export default function App() {
     let isMounted = true;
     setStatusFirebase('carregando');
 
+    // Carrega usuários cadastrados no banco Firestore
+    carregarUsuariosFirestore()
+      .then((users) => {
+        if (!isMounted) return;
+        if (users && users.length > 0) {
+          setUsuarios(users);
+          setUsuarioLogado((prev) => {
+            if (!prev) return null;
+            const atualizado = users.find((u) => u.id === prev.id || u.email.toLowerCase() === prev.email.toLowerCase());
+            if (atualizado) {
+              if (!atualizado.ativo) {
+                try {
+                  localStorage.removeItem('pmesp_usuario_logado');
+                } catch (e) {}
+                return null;
+              }
+              return atualizado;
+            }
+            return prev;
+          });
+        }
+      })
+      .catch((err) => console.warn('Aviso ao carregar usuários:', err));
+
     // Timer de segurança para desobstruir a interface caso a conexão esteja offline/muito lenta
     const timerSeguranca = setTimeout(() => {
       if (isMounted) {
@@ -860,6 +902,60 @@ export default function App() {
     salvarDadosFirestore({ informesArquivados: [] }).catch(console.error);
   };
 
+  const handleLoginSucesso = (usuario: UsuarioSistema) => {
+    setUsuarioLogado(usuario);
+    try {
+      localStorage.setItem('pmesp_usuario_logado', JSON.stringify(usuario));
+    } catch (e) {}
+    setFeedbackBanco(`Bem-vindo, ${usuario.graduacaoOuCargo} ${usuario.nome}!`);
+    setTimeout(() => setFeedbackBanco(null), 3500);
+
+    // Redireciona para a aba inicial apropriada para cada perfil
+    if (usuario.role === 'auxiliar' || usuario.role === 'visualizador') {
+      setAbaPrincipal('cronograma');
+    } else if (usuario.role === 'operacional' || usuario.role === 'operador') {
+      setAbaPrincipal('cronograma');
+    } else if (usuario.role === 'uge') {
+      setAbaPrincipal('prestacao');
+    } else {
+      setAbaPrincipal('prestacao');
+    }
+  };
+
+  // Garante que o usuário permaneça apenas nas abas autorizadas para seu nível de acesso
+  useEffect(() => {
+    if (!usuarioLogado) return;
+    const role = usuarioLogado.role;
+    if (role === 'auxiliar' || role === 'visualizador') {
+      if (abaPrincipal !== 'cronograma') {
+        setAbaPrincipal('cronograma');
+      }
+    } else if (role === 'operacional' || role === 'operador') {
+      if (abaPrincipal !== 'materiais' && abaPrincipal !== 'cronograma') {
+        setAbaPrincipal('materiais');
+      }
+    } else if (role === 'uge') {
+      if (abaPrincipal !== 'prestacao' && abaPrincipal !== 'informe' && abaPrincipal !== 'cronograma') {
+        setAbaPrincipal('prestacao');
+      }
+    }
+  }, [usuarioLogado?.role, abaPrincipal]);
+
+  const handleLogout = async () => {
+    await logoutSistema();
+    setUsuarioLogado(null);
+    try {
+      localStorage.removeItem('pmesp_usuario_logado');
+    } catch (e) {}
+    setFeedbackBanco('Sessão encerrada com sucesso.');
+    setTimeout(() => setFeedbackBanco(null), 3000);
+  };
+
+  // Se o usuário ainda não realizou login com e-mail e senha, exibe a tela de login militar
+  if (!usuarioLogado) {
+    return <LoginView onLoginSucesso={handleLoginSucesso} />;
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-slate-100 text-slate-900 font-sans">
       {/* Tela de Carregamento Inicial do Banco de Dados */}
@@ -916,6 +1012,8 @@ export default function App() {
         ultimaSincronizacao={ultimaSincronizacao}
         onSincronizarManual={handleSincronizarManual}
         onRecarregarBanco={handleRecarregarDoBanco}
+        usuarioLogado={usuarioLogado}
+        onLogout={handleLogout}
       />
 
       <main className="main-print-container flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 py-6">
@@ -975,9 +1073,47 @@ export default function App() {
             informeAtual={informeAtual}
             onChangeInformeAtual={setInformeAtual}
             onNavegarParaInforme={() => setAbaPrincipal('informe')}
+            usuarioRole={usuarioLogado?.role}
           />
+        )}
+
+        {abaPrincipal === 'usuarios' && (
+          usuarioLogado?.role === 'admin' ? (
+            <UsuariosView
+              usuarios={usuarios}
+              onChangeUsuarios={(novos) => {
+                setUsuarios(novos);
+                salvarUsuariosFirestore(novos).catch(console.error);
+              }}
+              usuarioLogado={usuarioLogado}
+              onAtualizarUsuarioLogado={(atualizado) => {
+                setUsuarioLogado(atualizado);
+                try {
+                  localStorage.setItem('pmesp_usuario_logado', JSON.stringify(atualizado));
+                } catch (e) {}
+              }}
+            />
+          ) : (
+            <div className="bg-white p-8 rounded-xl shadow-xs border border-slate-200 text-center max-w-md mx-auto my-12">
+              <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center mx-auto mb-3 text-xl font-bold">
+                ⚠️
+              </div>
+              <h3 className="font-bold text-base text-slate-800">Acesso Restrito ao Comando</h3>
+              <p className="text-xs text-slate-500 mt-2 mb-4 leading-relaxed">
+                A aba de Gestão de Usuários é exclusiva para o perfil de Administrador da 3ª Cia.
+              </p>
+              <button
+                type="button"
+                onClick={() => setAbaPrincipal(usuarioLogado?.role === 'operador' ? 'cronograma' : 'informe')}
+                className="px-4 py-2 bg-[#1a2b4c] text-white text-xs font-bold rounded-lg hover:bg-[#2c4373] transition cursor-pointer"
+              >
+                Voltar para meu painel
+              </button>
+            </div>
+          )
         )}
       </main>
     </div>
   );
 }
+

@@ -239,3 +239,25 @@ export interface MissaoDiaria {
   fotoDepoisUrl?: string;
   informePaginaId?: string;
 }
+
+export type UserRole = 
+  | 'admin' 
+  | 'uge' 
+  | 'operacional' 
+  | 'auxiliar'
+  | 'operador' 
+  | 'visualizador';
+
+export interface UsuarioSistema {
+  id: string;
+  email: string;
+  nome: string;
+  graduacaoOuCargo: string;
+  re?: string;
+  role: UserRole;
+  ativo: boolean;
+  criadoEm: string;
+  ultimoAcesso?: string;
+  senhaHash?: string;
+}
+

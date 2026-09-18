@@ -1448,6 +1448,7 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
                     <option value="Cap PM">Cap PM</option>
                     <option value="1º Ten PM">1º Ten PM</option>
                     <option value="2º Ten PM">2º Ten PM</option>
+                    <option value="Cadete">Cadete</option>
                     <option value="Cad PM">Cad PM</option>
                     <option value="Subten PM">Subten PM</option>
                     <option value="1º Sgt PM">1º Sgt PM</option>

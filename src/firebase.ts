@@ -1,5 +1,14 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
+  getAuth,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  sendPasswordResetEmail,
+  onAuthStateChanged,
+  User as FirebaseUser,
+} from 'firebase/auth';
+import {
   getFirestore,
   doc,
   getDoc,
@@ -23,6 +32,8 @@ import {
   EquipeManutencao,
   MembroEquipe,
   EmpresaCadastrada,
+  UsuarioSistema,
+  UserRole,
 } from './types';
 
 // Configuração oficial do Firebase fornecida para o projeto manutencao-3-cia
@@ -39,6 +50,7 @@ export const firebaseConfig = {
 // Inicialização segura do Firebase (evita re-inicializações)
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const db = getFirestore(app);
+export const auth = getAuth(app);
 
 // Coleção e Documentos no Firestore para garantir que fotos nunca estourem o limite de 1MB por documento
 export const FIRESTORE_COLLECTION = 'sistema_manutencao';
@@ -47,6 +59,7 @@ export const FIRESTORE_DOC_MISSOES = 'dados_missoes';
 export const FIRESTORE_DOC_INFORME = 'dados_informe';
 export const FIRESTORE_DOC_HISTORICO = 'dados_historico';
 export const FIRESTORE_DOC_ARQUIVOS_SALVOS = 'dados_arquivos_salvos';
+export const FIRESTORE_DOC_USUARIOS = 'dados_usuarios';
 
 export interface DadosSistemaFirestore {
   nfs: NFInstance[];
@@ -361,3 +374,331 @@ export function escutarDadosFirestore(
     }
   );
 }
+
+// ==========================================
+// GESTÃO DE USUÁRIOS E AUTENTICAÇÃO
+// ==========================================
+
+export const USUARIOS_INICIAIS: UsuarioSistema[] = [
+  {
+    id: 'user-admin-1',
+    email: 'leoquinto1000@gmail.com',
+    nome: 'Leonardo Quinto',
+    graduacaoOuCargo: 'Cap PM',
+    re: '123456-7',
+    role: 'admin',
+    ativo: true,
+    criadoEm: '2026-01-01T00:00:00.000Z',
+    senhaHash: 'pmesp123456',
+  },
+  {
+    id: 'user-admin-2',
+    email: 'admin@pmesp.sp.gov.br',
+    nome: 'Administrador 3ª Cia',
+    graduacaoOuCargo: 'Comando',
+    re: '100001-0',
+    role: 'admin',
+    ativo: true,
+    criadoEm: '2026-01-01T00:00:00.000Z',
+    senhaHash: 'pmesp123456',
+  },
+  {
+    id: 'user-uge-1',
+    email: 'uge@pmesp.sp.gov.br',
+    nome: 'Gestão UGE',
+    graduacaoOuCargo: '1º Ten PM',
+    re: '102030-4',
+    role: 'uge',
+    ativo: true,
+    criadoEm: '2026-01-01T00:00:00.000Z',
+    senhaHash: 'uge123456',
+  },
+  {
+    id: 'user-operacional-1',
+    email: 'manutencao@pmesp.sp.gov.br',
+    nome: 'Carlos Eduardo Silva',
+    graduacaoOuCargo: '1º Sgt PM',
+    re: '987654-3',
+    role: 'operacional',
+    ativo: true,
+    criadoEm: '2026-01-01T00:00:00.000Z',
+    senhaHash: 'manutencao123',
+  },
+  {
+    id: 'user-auxiliar-1',
+    email: 'auxiliar@pmesp.sp.gov.br',
+    nome: 'Marcos Pereira',
+    graduacaoOuCargo: 'Cb PM',
+    re: '112233-4',
+    role: 'auxiliar',
+    ativo: true,
+    criadoEm: '2026-01-01T00:00:00.000Z',
+    senhaHash: 'auxiliar123',
+  },
+];
+
+/**
+ * Carrega a lista de usuários salvos no Firestore
+ */
+export async function carregarUsuariosFirestore(): Promise<UsuarioSistema[]> {
+  try {
+    const refDoc = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_USUARIOS);
+    const snap = await lerDocServidorComFallback(refDoc);
+    if (snap && snap.exists()) {
+      const data = snap.data() as { usuarios?: UsuarioSistema[] };
+      if (Array.isArray(data?.usuarios) && data.usuarios.length > 0) {
+        return data.usuarios.map((u) => {
+          let role = u.role;
+          if (role === 'operador') role = 'operacional';
+          if (role === 'visualizador') role = 'auxiliar';
+          return { ...u, role };
+        });
+      }
+    }
+    // Se não existia ainda, inicializa com os usuários padrão do sistema
+    await salvarUsuariosFirestore(USUARIOS_INICIAIS);
+    return USUARIOS_INICIAIS;
+  } catch (err) {
+    console.warn('Aviso ao carregar usuários do Firestore, utilizando base local:', err);
+    try {
+      const cached = localStorage.getItem('pmesp_usuarios');
+      if (cached) return JSON.parse(cached);
+    } catch (e) {}
+    return USUARIOS_INICIAIS;
+  }
+}
+
+/**
+ * Salva a lista de usuários no Firestore
+ */
+export async function salvarUsuariosFirestore(usuarios: UsuarioSistema[]): Promise<void> {
+  try {
+    const refDoc = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_USUARIOS);
+    await setDoc(
+      refDoc,
+      limparParaFirestore({
+        usuarios,
+        ultimaAtualizacao: new Date().toISOString(),
+      }),
+      { merge: true }
+    );
+    try {
+      localStorage.setItem('pmesp_usuarios', JSON.stringify(usuarios));
+    } catch (e) {}
+  } catch (err) {
+    console.warn('Aviso ao salvar usuários no Firestore:', err);
+    try {
+      localStorage.setItem('pmesp_usuarios', JSON.stringify(usuarios));
+    } catch (e) {}
+  }
+}
+
+/**
+ * Realiza autenticação com e-mail e senha.
+ * Tenta primeiramente via Firebase Auth (se o provedor e-mail/senha estiver ativo no console).
+ * Possui fallback direto com os perfis cadastrados no Firestore/banco de dados para garantir
+ * que nenhum militar fique bloqueado caso o provedor ainda não tenha sido ativado no Console.
+ */
+export async function loginSistema(
+  email: string,
+  senha: string
+): Promise<{ user: UsuarioSistema; modo: 'firebase' | 'banco' }> {
+  const emailNorm = email.trim().toLowerCase();
+  const senhaTrim = senha.trim();
+
+  // 1. Carrega a lista atualizada de usuários do sistema
+  const usuarios = await carregarUsuariosFirestore();
+  const usuarioCadastrado = usuarios.find((u) => u.email.toLowerCase() === emailNorm);
+
+  if (usuarioCadastrado && !usuarioCadastrado.ativo) {
+    throw new Error('Este usuário está inativo. Entre em contato com o Administrador da 3ª Cia.');
+  }
+
+  // 2. Tenta autenticação direta via Firebase Auth
+  try {
+    const userCredential = await signInWithEmailAndPassword(auth, emailNorm, senhaTrim);
+    if (userCredential.user) {
+      if (usuarioCadastrado) {
+        // Atualiza último acesso
+        const atualizados = usuarios.map((u) =>
+          u.id === usuarioCadastrado.id ? { ...u, ultimoAcesso: new Date().toISOString() } : u
+        );
+        salvarUsuariosFirestore(atualizados).catch(() => {});
+        return { user: { ...usuarioCadastrado, ultimoAcesso: new Date().toISOString() }, modo: 'firebase' };
+      } else {
+        // Usuário autenticado no Firebase Auth mas ainda não na lista local
+        const novoUser: UsuarioSistema = {
+          id: userCredential.user.uid,
+          email: emailNorm,
+          nome: userCredential.user.displayName || emailNorm.split('@')[0],
+          graduacaoOuCargo: emailNorm.includes('admin') || emailNorm === 'leoquinto1000@gmail.com' ? 'Cap PM' : 'Policial Militar',
+          role: emailNorm.includes('admin') || emailNorm === 'leoquinto1000@gmail.com' ? 'admin' : 'operacional',
+          ativo: true,
+          criadoEm: new Date().toISOString(),
+          ultimoAcesso: new Date().toISOString(),
+        };
+        await salvarUsuariosFirestore([...usuarios, novoUser]);
+        return { user: novoUser, modo: 'firebase' };
+      }
+    }
+  } catch (fbAuthErr: any) {
+    // Se o Firebase Auth falhou por senha incorreta ou usuário não encontrado nele,
+    // verificamos se corresponde ao cadastro de usuários do banco Firestore
+    console.info('Tentando validação contra banco de dados do sistema...', fbAuthErr?.code);
+  }
+
+  // 3. Validação pelo banco de dados Firestore
+  if (usuarioCadastrado) {
+    if (usuarioCadastrado.senhaHash === senhaTrim) {
+      const atualizados = usuarios.map((u) =>
+        u.id === usuarioCadastrado.id ? { ...u, ultimoAcesso: new Date().toISOString() } : u
+      );
+      salvarUsuariosFirestore(atualizados).catch(() => {});
+      return { user: { ...usuarioCadastrado, ultimoAcesso: new Date().toISOString() }, modo: 'banco' };
+    } else {
+      throw new Error('Senha incorreta. Verifique a senha digitada ou solicite a redefinição.');
+    }
+  }
+
+  throw new Error('Usuário não encontrado com este e-mail. Verifique os dados ou solicite cadastro ao Administrador.');
+}
+
+/**
+ * Cria ou cadastra um novo usuário no sistema
+ */
+export async function cadastrarNovoUsuario(
+  dados: {
+    nome: string;
+    email: string;
+    graduacaoOuCargo: string;
+    re?: string;
+    role: UserRole;
+    senha: string;
+  }
+): Promise<UsuarioSistema> {
+  const emailNorm = dados.email.trim().toLowerCase();
+  const usuarios = await carregarUsuariosFirestore();
+
+  if (usuarios.some((u) => u.email.toLowerCase() === emailNorm)) {
+    throw new Error('Já existe um usuário cadastrado com este e-mail.');
+  }
+
+  let novoUid = 'user-' + Date.now();
+
+  // Tenta criar no Firebase Auth se possível
+  try {
+    const cred = await createUserWithEmailAndPassword(auth, emailNorm, dados.senha);
+    if (cred.user) {
+      novoUid = cred.user.uid;
+    }
+  } catch (err: any) {
+    console.info('Criação no Firebase Auth ignorada ou provedor não ativado, registrando no banco:', err?.code);
+  }
+
+  const novoUsuario: UsuarioSistema = {
+    id: novoUid,
+    email: emailNorm,
+    nome: dados.nome.trim(),
+    graduacaoOuCargo: dados.graduacaoOuCargo.trim(),
+    re: dados.re ? dados.re.trim() : undefined,
+    role: dados.role,
+    ativo: true,
+    criadoEm: new Date().toISOString(),
+    senhaHash: dados.senha,
+  };
+
+  const listaAtualizada = [...usuarios, novoUsuario];
+  await salvarUsuariosFirestore(listaAtualizada);
+  return novoUsuario;
+}
+
+/**
+ * Atualiza os dados de um usuário existente
+ */
+export async function atualizarUsuarioFirestore(
+  usuarioId: string,
+  dadosAtualizados: {
+    nome?: string;
+    email?: string;
+    graduacaoOuCargo?: string;
+    re?: string;
+    role?: UserRole;
+    ativo?: boolean;
+    novaSenha?: string;
+  }
+): Promise<UsuarioSistema[]> {
+  const usuarios = await carregarUsuariosFirestore();
+  const index = usuarios.findIndex((u) => u.id === usuarioId);
+  if (index === -1) {
+    throw new Error('Usuário não encontrado para atualização.');
+  }
+
+  // Se o e-mail foi alterado, verifica se outro usuário já o possui
+  if (dadosAtualizados.email) {
+    const emailNorm = dadosAtualizados.email.trim().toLowerCase();
+    const existeOutro = usuarios.some((u) => u.id !== usuarioId && u.email.toLowerCase() === emailNorm);
+    if (existeOutro) {
+      throw new Error('Já existe outro militar/usuário cadastrado com este e-mail.');
+    }
+  }
+
+  const usuarioAtual = usuarios[index];
+  const usuarioModificado: UsuarioSistema = {
+    ...usuarioAtual,
+    nome: dadosAtualizados.nome !== undefined ? dadosAtualizados.nome.trim() : usuarioAtual.nome,
+    email: dadosAtualizados.email !== undefined ? dadosAtualizados.email.trim().toLowerCase() : usuarioAtual.email,
+    graduacaoOuCargo: dadosAtualizados.graduacaoOuCargo !== undefined ? dadosAtualizados.graduacaoOuCargo.trim() : usuarioAtual.graduacaoOuCargo,
+    re: dadosAtualizados.re !== undefined ? dadosAtualizados.re.trim() : usuarioAtual.re,
+    role: dadosAtualizados.role !== undefined ? dadosAtualizados.role : usuarioAtual.role,
+    ativo: dadosAtualizados.ativo !== undefined ? dadosAtualizados.ativo : usuarioAtual.ativo,
+    senhaHash: dadosAtualizados.novaSenha && dadosAtualizados.novaSenha.trim().length >= 6
+      ? dadosAtualizados.novaSenha.trim()
+      : usuarioAtual.senhaHash,
+  };
+
+  const listaAtualizada = [...usuarios];
+  listaAtualizada[index] = usuarioModificado;
+  await salvarUsuariosFirestore(listaAtualizada);
+  return listaAtualizada;
+}
+
+/**
+ * Redefine a senha de um usuário existente
+ */
+export async function redefinirSenhaUsuario(usuarioId: string, novaSenha: string): Promise<void> {
+  const usuarios = await carregarUsuariosFirestore();
+  const listaAtualizada = usuarios.map((u) => (u.id === usuarioId ? { ...u, senhaHash: novaSenha } : u));
+  await salvarUsuariosFirestore(listaAtualizada);
+}
+
+/**
+ * Envia e-mail de recuperação de senha pelo Firebase Auth
+ */
+export async function solicitarRecuperacaoSenha(email: string): Promise<{ success: boolean; mensagem: string }> {
+  try {
+    await sendPasswordResetEmail(auth, email.trim().toLowerCase());
+    return {
+      success: true,
+      mensagem: `E-mail de recuperação enviado para ${email}. Verifique sua caixa de entrada e spam.`,
+    };
+  } catch (err: any) {
+    console.warn('Erro ao enviar e-mail de recuperação via Firebase Auth:', err);
+    return {
+      success: false,
+      mensagem: 'Não foi possível enviar o e-mail automático. Solicite a redefinição diretamente ao Administrador da 3ª Cia.',
+    };
+  }
+}
+
+/**
+ * Desconecta o usuário do sistema
+ */
+export async function logoutSistema(): Promise<void> {
+  try {
+    await signOut(auth);
+  } catch (e) {}
+  try {
+    localStorage.removeItem('pmesp_usuario_logado');
+  } catch (e) {}
+}
+

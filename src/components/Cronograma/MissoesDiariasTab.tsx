@@ -67,6 +67,7 @@ interface MissoesDiariasTabProps {
   onNavegarParaInforme?: () => void;
   dataSelecionada?: string;
   onChangeDataSelecionada?: (data: string) => void;
+  modoAuxiliar?: boolean;
 }
 
 export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
@@ -81,6 +82,7 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
   onNavegarParaInforme,
   dataSelecionada: dataSelecionadaProp,
   onChangeDataSelecionada,
+  modoAuxiliar = false,
 }) => {
   const hoje = formatarDataISO();
   const [dataInterna, setDataInterna] = useState<string>(hoje);
@@ -571,36 +573,45 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
 
           {/* Botões de Ação */}
           <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-start lg:justify-end">
-            <button
-              type="button"
-              onClick={handleMoverTodasPendentesParaAmanha}
-              title="Postegar todas as missões pendentes não concluídas de hoje para amanhã"
-              className="px-3 py-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-md transition flex items-center gap-1.5"
-            >
-              <ArrowRight size={14} />
-              <span>Mover Pendentes para Amanhã</span>
-            </button>
+            {!modoAuxiliar && (
+              <button
+                type="button"
+                onClick={handleMoverTodasPendentesParaAmanha}
+                title="Postegar todas as missões pendentes não concluídas de hoje para amanhã"
+                className="px-3 py-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-md transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <ArrowRight size={14} />
+                <span>Mover Pendentes para Amanhã</span>
+              </button>
+            )}
 
             <button
               type="button"
               onClick={handleImprimir}
-              className="px-3 py-1.5 text-xs font-bold bg-[#c9a84e] hover:bg-[#b5953e] text-[#1a2b4c] rounded-md transition flex items-center gap-1.5 shadow-xs"
+              className="px-3 py-1.5 text-xs font-bold bg-[#c9a84e] hover:bg-[#b5953e] text-[#1a2b4c] rounded-md transition flex items-center gap-1.5 shadow-xs cursor-pointer"
             >
               <Printer size={14} />
               <span>Imprimir Ordem do Dia</span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                setMissaoEmEdicao(null);
-                setModalAberta(true);
-              }}
-              className="px-3.5 py-1.5 text-xs font-bold bg-[#1a2b4c] hover:bg-[#2c4373] text-white rounded-md shadow-xs transition flex items-center gap-1.5"
-            >
-              <Plus size={15} />
-              <span>Nova Determinação / Missão</span>
-            </button>
+            {!modoAuxiliar ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setMissaoEmEdicao(null);
+                  setModalAberta(true);
+                }}
+                className="px-3.5 py-1.5 text-xs font-bold bg-[#1a2b4c] hover:bg-[#2c4373] text-white rounded-md shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus size={15} />
+                <span>Nova Determinação / Missão</span>
+              </button>
+            ) : (
+              <div className="px-3 py-1.5 text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-300 rounded-md flex items-center gap-1.5">
+                <Camera size={13} className="text-emerald-700" />
+                <span>Auxiliares: Fotos e Conclusão</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -840,11 +851,15 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
                         <div className="flex-1 min-w-0 break-words [overflow-wrap:anywhere]">
                           <div
                             onClick={() => {
-                              setMissaoEmEdicao(m);
-                              setModalAberta(true);
+                              if (!modoAuxiliar) {
+                                setMissaoEmEdicao(m);
+                                setModalAberta(true);
+                              }
                             }}
-                            className="font-bold text-black text-xs sm:text-[12.5px] leading-tight cursor-pointer hover:text-blue-800 break-words [overflow-wrap:anywhere]"
-                            title="Clique para editar determinação"
+                            className={`font-bold text-black text-xs sm:text-[12.5px] leading-tight break-words [overflow-wrap:anywhere] ${
+                              !modoAuxiliar ? 'cursor-pointer hover:text-blue-800' : ''
+                            }`}
+                            title={!modoAuxiliar ? "Clique para editar determinação" : undefined}
                           >
                             {idx + 1}. {m.titulo}
                           </div>
@@ -883,47 +898,49 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
                           )}
                         </div>
 
-                        {/* Botões rápidos de ação no hover (ocultos na impressão) */}
-                        <div className="opacity-0 group-hover:opacity-100 transition no-print flex items-center gap-1 shrink-0 bg-white/95 border border-slate-300 rounded px-1 py-0.5 shadow-2xs">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setMissaoEmEdicao(m);
-                              setModalAberta(true);
-                            }}
-                            title="Tirar foto ou editar missão"
-                            className="p-1 text-slate-600 hover:text-blue-700 hover:bg-slate-100 rounded cursor-pointer"
-                          >
-                            <Camera size={12} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setMissaoEmEdicao(m);
-                              setModalAberta(true);
-                            }}
-                            title="Editar Missão"
-                            className="p-1 text-slate-600 hover:text-blue-700 hover:bg-slate-100 rounded cursor-pointer"
-                          >
-                            <Edit2 size={12} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => moverMissaoParaProximoDia(m.id)}
-                            title="Avançar para amanhã"
-                            className="p-1 text-slate-600 hover:text-amber-700 hover:bg-slate-100 rounded cursor-pointer"
-                          >
-                            ⏩
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => excluirMissao(m.id)}
-                            title="Excluir Missão"
-                            className="p-1 text-slate-600 hover:text-red-700 hover:bg-slate-100 rounded cursor-pointer"
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
+                        {/* Botões rápidos de ação no hover (ocultos na impressão e para auxiliares) */}
+                        {!modoAuxiliar && (
+                          <div className="opacity-0 group-hover:opacity-100 transition no-print flex items-center gap-1 shrink-0 bg-white/95 border border-slate-300 rounded px-1 py-0.5 shadow-2xs">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMissaoEmEdicao(m);
+                                setModalAberta(true);
+                              }}
+                              title="Tirar foto ou editar missão"
+                              className="p-1 text-slate-600 hover:text-blue-700 hover:bg-slate-100 rounded cursor-pointer"
+                            >
+                              <Camera size={12} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMissaoEmEdicao(m);
+                                setModalAberta(true);
+                              }}
+                              title="Editar Missão"
+                              className="p-1 text-slate-600 hover:text-blue-700 hover:bg-slate-100 rounded cursor-pointer"
+                            >
+                              <Edit2 size={12} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => moverMissaoParaProximoDia(m.id)}
+                              title="Avançar para amanhã"
+                              className="p-1 text-slate-600 hover:text-amber-700 hover:bg-slate-100 rounded cursor-pointer"
+                            >
+                              ⏩
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => excluirMissao(m.id)}
+                              title="Excluir Missão"
+                              className="p-1 text-slate-600 hover:text-red-700 hover:bg-slate-100 rounded cursor-pointer"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </td>
 
@@ -1178,21 +1195,27 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
                         <div className="flex items-center gap-1.5 bg-amber-50/80 border border-amber-200/90 rounded-md px-2.5 py-1 text-slate-800">
                           <Shield size={13} className="text-[#1a2b4c] shrink-0" />
                           <span className="font-bold text-[#1a2b4c]">Policiais Executores:</span>
-                          <input
-                            type="text"
-                            value={m.membrosDesignados || ''}
-                            onChange={(e) => {
-                              const valor = e.target.value;
-                              onChangeMissoes(
-                                missoes.map((item) =>
-                                  item.id === m.id ? { ...item, membrosDesignados: valor } : item
-                                )
-                              );
-                            }}
-                            placeholder="Ex: Cb PM Ribeiro, Sd PM Santana..."
-                            title="Clique para alterar diretamente os policiais que realizarão esta missão"
-                            className="bg-white border border-amber-300 rounded px-2 py-0.5 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-1 focus:ring-[#1a2b4c] min-w-[220px]"
-                          />
+                          {!modoAuxiliar ? (
+                            <input
+                              type="text"
+                              value={m.membrosDesignados || ''}
+                              onChange={(e) => {
+                                const valor = e.target.value;
+                                onChangeMissoes(
+                                  missoes.map((item) =>
+                                    item.id === m.id ? { ...item, membrosDesignados: valor } : item
+                                  )
+                                );
+                              }}
+                              placeholder="Ex: Cb PM Ribeiro, Sd PM Santana..."
+                              title="Clique para alterar diretamente os policiais que realizarão esta missão"
+                              className="bg-white border border-amber-300 rounded px-2 py-0.5 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-1 focus:ring-[#1a2b4c] min-w-[220px]"
+                            />
+                          ) : (
+                            <span className="font-semibold text-slate-900 text-xs">
+                              {m.membrosDesignados || 'Efetivo da 3ª Cia'}
+                            </span>
+                          )}
                         </div>
 
                         {m.equipeNome && (
@@ -1219,61 +1242,69 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
                   </div>
 
                   {/* Lado Direito: Ações rápidas (Ir para Próximo Dia, Mover, Editar, Excluir) */}
-                  <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100 justify-end">
-                    {/* Botão/Toggle "Ir para o Próximo Dia" */}
-                    <button
-                      type="button"
-                      onClick={() => toggleAdiadaParaProximoDia(m.id)}
-                      title={
-                        m.adiadaParaProximoDia
-                          ? 'Desmarcar envio para o próximo dia'
-                          : 'Marcar para que esta missão vá para o próximo dia'
-                      }
-                      className={`px-2.5 py-1.5 text-xs font-bold rounded-md border transition flex items-center gap-1.5 ${
-                        m.adiadaParaProximoDia
-                          ? 'bg-amber-600 text-white border-amber-600 shadow-2xs'
-                          : 'bg-white text-slate-700 border-slate-300 hover:bg-amber-50 hover:text-amber-800 hover:border-amber-300'
-                      }`}
-                    >
-                      <ArrowRight size={13} />
-                      <span>{m.adiadaParaProximoDia ? 'Irá p/ Próx. Dia' : 'Ir p/ Próx. Dia'}</span>
-                    </button>
-
-                    {/* Botão para efetivamente avançar a data da missão para amanhã */}
-                    {!m.concluida && (
+                  {!modoAuxiliar ? (
+                    <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100 justify-end">
+                      {/* Botão/Toggle "Ir para o Próximo Dia" */}
                       <button
                         type="button"
-                        onClick={() => moverMissaoParaProximoDia(m.id)}
-                        title="Transferir esta missão diretamente para a data de amanhã"
-                        className="px-2 py-1.5 text-xs text-blue-700 hover:bg-blue-50 border border-blue-200 rounded-md transition"
+                        onClick={() => toggleAdiadaParaProximoDia(m.id)}
+                        title={
+                          m.adiadaParaProximoDia
+                            ? 'Desmarcar envio para o próximo dia'
+                            : 'Marcar para que esta missão vá para o próximo dia'
+                        }
+                        className={`px-2.5 py-1.5 text-xs font-bold rounded-md border transition flex items-center gap-1.5 ${
+                          m.adiadaParaProximoDia
+                            ? 'bg-amber-600 text-white border-amber-600 shadow-2xs'
+                            : 'bg-white text-slate-700 border-slate-300 hover:bg-amber-50 hover:text-amber-800 hover:border-amber-300'
+                        }`}
                       >
-                        Avançar Data ⏩
+                        <ArrowRight size={13} />
+                        <span>{m.adiadaParaProximoDia ? 'Irá p/ Próx. Dia' : 'Ir p/ Próx. Dia'}</span>
                       </button>
-                    )}
 
-                    {/* Editar */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMissaoEmEdicao(m);
-                        setModalAberta(true);
-                      }}
-                      title="Editar Missão"
-                      className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded-md transition"
-                    >
-                      <Edit2 size={15} />
-                    </button>
+                      {/* Botão para efetivamente avançar a data da missão para amanhã */}
+                      {!m.concluida && (
+                        <button
+                          type="button"
+                          onClick={() => moverMissaoParaProximoDia(m.id)}
+                          title="Transferir esta missão diretamente para a data de amanhã"
+                          className="px-2 py-1.5 text-xs text-blue-700 hover:bg-blue-50 border border-blue-200 rounded-md transition"
+                        >
+                          Avançar Data ⏩
+                        </button>
+                      )}
 
-                    {/* Excluir */}
-                    <button
-                      type="button"
-                      onClick={() => excluirMissao(m.id)}
-                      title="Excluir Missão"
-                      className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-slate-100 rounded-md transition"
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
+                      {/* Editar */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMissaoEmEdicao(m);
+                          setModalAberta(true);
+                        }}
+                        title="Editar Missão"
+                        className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded-md transition"
+                      >
+                        <Edit2 size={15} />
+                      </button>
+
+                      {/* Excluir */}
+                      <button
+                        type="button"
+                        onClick={() => excluirMissao(m.id)}
+                        title="Excluir Missão"
+                        className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-slate-100 rounded-md transition"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100 justify-end">
+                      <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-1 rounded">
+                        Registro de Fotos & Conclusão
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* ============================================================ */}
@@ -1325,7 +1356,7 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
                           <Eye size={13} />
                           <span>Ver Folha do Informe</span>
                         </button>
-                        {onNavegarParaInforme && (
+                        {onNavegarParaInforme && !modoAuxiliar && (
                           <button
                             type="button"
                             onClick={onNavegarParaInforme}

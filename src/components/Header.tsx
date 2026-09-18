@@ -1,13 +1,34 @@
 import React, { useState } from 'react';
-import { Shield, FileText, Package, Newspaper, CalendarDays, Cloud, CloudCheck, CloudOff, RefreshCw, AlertTriangle, Check, DownloadCloud } from 'lucide-react';
+import { 
+  Shield, 
+  FileText, 
+  Package, 
+  Newspaper, 
+  CalendarDays, 
+  Cloud, 
+  CloudCheck, 
+  CloudOff, 
+  RefreshCw, 
+  AlertTriangle, 
+  Check, 
+  DownloadCloud,
+  Users,
+  LogOut,
+  UserCheck
+} from 'lucide-react';
+import { UsuarioSistema } from '../types';
+
+export type AbaNavegacao = 'prestacao' | 'materiais' | 'informe' | 'cronograma' | 'usuarios';
 
 interface HeaderProps {
-  abaAtiva: 'prestacao' | 'materiais' | 'informe' | 'cronograma';
-  onTrocarAba: (aba: 'prestacao' | 'materiais' | 'informe' | 'cronograma') => void;
+  abaAtiva: AbaNavegacao;
+  onTrocarAba: (aba: AbaNavegacao) => void;
   statusFirebase?: 'carregando' | 'conectado' | 'salvando' | 'erro-permissao' | 'offline';
   ultimaSincronizacao?: string | null;
   onSincronizarManual?: () => void;
   onRecarregarBanco?: () => void;
+  usuarioLogado?: UsuarioSistema | null;
+  onLogout?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -17,13 +38,27 @@ export const Header: React.FC<HeaderProps> = ({
   ultimaSincronizacao,
   onSincronizarManual,
   onRecarregarBanco,
+  usuarioLogado,
+  onLogout,
 }) => {
   const [modalAjudaRegras, setModalAjudaRegras] = useState(false);
+  const role = usuarioLogado?.role;
+  const isAdmin = role === 'admin';
+  const isUGE = role === 'uge';
+  const isOperacional = role === 'operacional' || role === 'operador';
+  const isAuxiliar = role === 'auxiliar' || role === 'visualizador';
+
+  // Visibilidade estrita das abas conforme as diretrizes de nível de acesso
+  const canVerPrestacao = isAdmin || isUGE;
+  const canVerMateriais = isAdmin || isOperacional;
+  const canVerInforme = isAdmin || isUGE;
+  const canVerCronograma = isAdmin || isUGE || isOperacional || isAuxiliar;
+  const canVerUsuarios = isAdmin;
 
   return (
     <header className="no-print sticky top-0 z-50 bg-[#1a2b4c] text-white shadow-md">
       {/* Top Banner */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-[#c9a84e] text-[#1a2b4c] rounded-lg flex items-center justify-center font-black text-lg border-2 border-white shadow-inner shrink-0">
             3ª
@@ -43,82 +78,124 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Status de Sincronização do Firebase (manutencao-3-cia) */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {statusFirebase === 'carregando' && (
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-900/60 border border-blue-400/40 text-blue-200 text-xs">
-              <RefreshCw size={13} className="animate-spin text-blue-400" />
-              <span>Conectando ao Firestore...</span>
-            </div>
-          )}
+        <div className="flex items-center gap-3 flex-wrap justify-between w-full lg:w-auto">
+          {/* Status de Sincronização do Firebase */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {statusFirebase === 'carregando' && (
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-900/60 border border-blue-400/40 text-blue-200 text-xs">
+                <RefreshCw size={13} className="animate-spin text-blue-400" />
+                <span>Conectando...</span>
+              </div>
+            )}
 
-          {statusFirebase === 'salvando' && (
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-900/60 border border-amber-400/50 text-amber-200 text-xs">
-              <RefreshCw size={13} className="animate-spin text-amber-400" />
-              <span>Salvando no Firestore...</span>
-            </div>
-          )}
+            {statusFirebase === 'salvando' && (
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-900/60 border border-amber-400/50 text-amber-200 text-xs">
+                <RefreshCw size={13} className="animate-spin text-amber-400" />
+                <span>Salvando...</span>
+              </div>
+            )}
 
-          {statusFirebase === 'conectado' && (
-            <div className="flex items-center gap-2">
-              <div
-                className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/70 border border-emerald-500/50 text-emerald-300 text-xs shadow-xs"
-                title={`Conectado ao Firebase Firestore (Projeto: manutencao-3-cia)${
-                  ultimaSincronizacao ? ` • Última sincronização: ${ultimaSincronizacao}` : ''
-                }`}
-              >
-                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
-                <Cloud size={14} className="text-emerald-400" />
-                <span className="font-semibold">Firebase Conectado</span>
-                {ultimaSincronizacao && (
-                  <span className="text-[10px] text-emerald-300/80 hidden md:inline">
-                    ({ultimaSincronizacao})
-                  </span>
+            {statusFirebase === 'conectado' && (
+              <div className="flex items-center gap-1.5">
+                <div
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-950/70 border border-emerald-500/50 text-emerald-300 text-xs shadow-xs"
+                  title={`Conectado ao Firestore (manutencao-3-cia)${
+                    ultimaSincronizacao ? ` • Sincronizado: ${ultimaSincronizacao}` : ''
+                  }`}
+                >
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></div>
+                  <Cloud size={13} className="text-emerald-400" />
+                  <span className="font-semibold text-[11px] hidden sm:inline">Nuvem Conectada</span>
+                </div>
+
+                {onRecarregarBanco && (
+                  <button
+                    type="button"
+                    onClick={onRecarregarBanco}
+                    className="px-2 py-1 rounded bg-[#c9a84e]/20 hover:bg-[#c9a84e]/30 border border-[#c9a84e]/50 text-[#e5cd8a] text-[11px] font-semibold flex items-center gap-1 transition cursor-pointer"
+                    title="Recarregar dados atualizados do banco"
+                  >
+                    <DownloadCloud size={12} className="text-[#c9a84e]" />
+                    <span className="hidden sm:inline">Recarregar</span>
+                  </button>
                 )}
               </div>
+            )}
 
-              {onRecarregarBanco && (
+            {statusFirebase === 'erro-permissao' && (
+              <button
+                type="button"
+                onClick={() => setModalAjudaRegras(true)}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400 text-amber-300 text-xs hover:bg-amber-500/30 transition cursor-pointer"
+              >
+                <AlertTriangle size={13} className="text-amber-400 shrink-0" />
+                <span className="font-bold text-[11px]">Liberar Regras</span>
+              </button>
+            )}
+
+            {statusFirebase === 'offline' && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800 border border-slate-600 text-slate-300 text-xs">
+                <CloudOff size={13} className="text-slate-400" />
+                <span className="text-[11px]">Modo Local</span>
+              </div>
+            )}
+          </div>
+
+          {/* Usuário Logado e Perfil Militar */}
+          {usuarioLogado && (
+            <div className="flex items-center gap-2 pl-2 border-l border-white/15">
+              <div className="flex items-center gap-2 bg-black/25 px-2.5 py-1 rounded-lg border border-white/10">
+                <div
+                  className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 ${
+                    isAdmin
+                      ? 'bg-[#c9a84e] text-[#1a2b4c]'
+                      : isUGE
+                      ? 'bg-amber-500 text-white'
+                      : isOperacional
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-emerald-600 text-white'
+                  }`}
+                >
+                  {usuarioLogado.graduacaoOuCargo.slice(0, 2).toUpperCase()}
+                </div>
+                <div className="text-left">
+                  <div className="text-xs font-bold leading-tight flex items-center gap-1.5">
+                    <span className="text-slate-200">{usuarioLogado.graduacaoOuCargo}</span>
+                    <span className="text-white">{usuarioLogado.nome.split(' ')[0]}</span>
+                    {isAdmin && (
+                      <span className="text-[9px] font-bold bg-[#c9a84e] text-[#1a2b4c] px-1.5 py-0.2 rounded">
+                        Admin (Full)
+                      </span>
+                    )}
+                    {isUGE && (
+                      <span className="text-[9px] font-bold bg-amber-500/30 text-amber-200 px-1.5 py-0.2 rounded border border-amber-400/40">
+                        UGE
+                      </span>
+                    )}
+                    {isOperacional && (
+                      <span className="text-[9px] font-bold bg-blue-500/40 text-blue-200 px-1.5 py-0.2 rounded border border-blue-400/40">
+                        Operacional
+                      </span>
+                    )}
+                    {isAuxiliar && (
+                      <span className="text-[9px] font-bold bg-emerald-500/40 text-emerald-200 px-1.5 py-0.2 rounded border border-emerald-400/40">
+                        Auxiliar
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {onLogout && (
                 <button
                   type="button"
-                  onClick={onRecarregarBanco}
-                  className="px-2.5 py-1 rounded bg-[#c9a84e]/20 hover:bg-[#c9a84e]/30 border border-[#c9a84e]/50 text-[#e5cd8a] text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
-                  title="Recarregar dados atualizados salvos no banco de dados (Firestore)"
+                  onClick={onLogout}
+                  className="p-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/60 border border-red-500/40 text-red-200 hover:text-white transition cursor-pointer"
+                  title="Encerrar Sessão / Trocar Usuário"
                 >
-                  <DownloadCloud size={13} className="text-[#c9a84e]" />
-                  <span className="hidden sm:inline">Recarregar Banco</span>
+                  <LogOut size={14} />
                 </button>
               )}
-
-              {onSincronizarManual && (
-                <button
-                  type="button"
-                  onClick={onSincronizarManual}
-                  className="px-2.5 py-1 rounded bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
-                  title="Forçar sincronização com o Firestore agora"
-                >
-                  <RefreshCw size={12} />
-                  <span className="hidden sm:inline">Salvar Nuvem</span>
-                </button>
-              )}
-            </div>
-          )}
-
-          {statusFirebase === 'erro-permissao' && (
-            <button
-              type="button"
-              onClick={() => setModalAjudaRegras(true)}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400 text-amber-300 text-xs hover:bg-amber-500/30 transition cursor-pointer animate-pulse"
-              title="Clique para ver como liberar o banco no Firebase Console"
-            >
-              <AlertTriangle size={14} className="text-amber-400 shrink-0" />
-              <span className="font-bold">Aviso: Liberar Regras do Firestore</span>
-            </button>
-          )}
-
-          {statusFirebase === 'offline' && (
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800 border border-slate-600 text-slate-300 text-xs">
-              <CloudOff size={13} className="text-slate-400" />
-              <span>Modo Local (Offline)</span>
             </div>
           )}
         </div>
@@ -175,54 +252,102 @@ service cloud.firestore {
 
       {/* Primary Navigation Tabs */}
       <nav className="bg-white border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex gap-2 overflow-x-auto">
-          <button
-            onClick={() => onTrocarAba('prestacao')}
-            className={`flex items-center gap-2 py-3 px-4 text-xs sm:text-sm font-semibold border-b-2 transition whitespace-nowrap ${
-              abaAtiva === 'prestacao'
-                ? 'border-[#c9a84e] text-[#1a2b4c] bg-slate-50'
-                : 'border-transparent text-slate-600 hover:text-[#1a2b4c] hover:bg-slate-50'
-            }`}
-          >
-            <FileText size={16} className={abaAtiva === 'prestacao' ? 'text-[#c9a84e]' : ''} />
-            <span>💰 1. Prestação de Contas</span>
-          </button>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex gap-2 overflow-x-auto items-center justify-between">
+          <div className="flex gap-2">
+            {canVerPrestacao && (
+              <button
+                onClick={() => onTrocarAba('prestacao')}
+                className={`flex items-center gap-2 py-3 px-4 text-xs sm:text-sm font-semibold border-b-2 transition whitespace-nowrap ${
+                  abaAtiva === 'prestacao'
+                    ? 'border-[#c9a84e] text-[#1a2b4c] bg-slate-50'
+                    : 'border-transparent text-slate-600 hover:text-[#1a2b4c] hover:bg-slate-50'
+                }`}
+              >
+                <FileText size={16} className={abaAtiva === 'prestacao' ? 'text-[#c9a84e]' : ''} />
+                <span>💰 1. Prestação de Contas</span>
+              </button>
+            )}
 
-          <button
-            onClick={() => onTrocarAba('materiais')}
-            className={`flex items-center gap-2 py-3 px-4 text-xs sm:text-sm font-semibold border-b-2 transition whitespace-nowrap ${
-              abaAtiva === 'materiais'
-                ? 'border-[#c9a84e] text-[#1a2b4c] bg-slate-50'
-                : 'border-transparent text-slate-600 hover:text-[#1a2b4c] hover:bg-slate-50'
-            }`}
-          >
-            <Package size={16} className={abaAtiva === 'materiais' ? 'text-[#c9a84e]' : ''} />
-            <span>📦 2. Controle de Materiais</span>
-          </button>
+            {canVerMateriais && (
+              <button
+                onClick={() => onTrocarAba('materiais')}
+                className={`flex items-center gap-2 py-3 px-4 text-xs sm:text-sm font-semibold border-b-2 transition whitespace-nowrap ${
+                  abaAtiva === 'materiais'
+                    ? 'border-[#c9a84e] text-[#1a2b4c] bg-slate-50'
+                    : 'border-transparent text-slate-600 hover:text-[#1a2b4c] hover:bg-slate-50'
+                }`}
+              >
+                <Package size={16} className={abaAtiva === 'materiais' ? 'text-[#c9a84e]' : ''} />
+                <span>📦 2. Controle de Materiais</span>
+              </button>
+            )}
 
-          <button
-            onClick={() => onTrocarAba('informe')}
-            className={`flex items-center gap-2 py-3 px-4 text-xs sm:text-sm font-semibold border-b-2 transition whitespace-nowrap ${
-              abaAtiva === 'informe'
-                ? 'border-[#c9a84e] text-[#1a2b4c] bg-slate-50'
-                : 'border-transparent text-slate-600 hover:text-[#1a2b4c] hover:bg-slate-50'
-            }`}
-          >
-            <Newspaper size={16} className={abaAtiva === 'informe' ? 'text-[#c9a84e]' : ''} />
-            <span>📰 3. Informe Mensal (APMBB)</span>
-          </button>
+            {canVerInforme && (
+              <button
+                onClick={() => onTrocarAba('informe')}
+                className={`flex items-center gap-2 py-3 px-4 text-xs sm:text-sm font-semibold border-b-2 transition whitespace-nowrap ${
+                  abaAtiva === 'informe'
+                    ? 'border-[#c9a84e] text-[#1a2b4c] bg-slate-50'
+                    : 'border-transparent text-slate-600 hover:text-[#1a2b4c] hover:bg-slate-50'
+                }`}
+              >
+                <Newspaper size={16} className={abaAtiva === 'informe' ? 'text-[#c9a84e]' : ''} />
+                <span>📰 3. Informe Mensal (APMBB)</span>
+              </button>
+            )}
 
-          <button
-            onClick={() => onTrocarAba('cronograma')}
-            className={`flex items-center gap-2 py-3 px-4 text-xs sm:text-sm font-semibold border-b-2 transition whitespace-nowrap ${
-              abaAtiva === 'cronograma'
-                ? 'border-[#c9a84e] text-[#1a2b4c] bg-slate-50'
-                : 'border-transparent text-slate-600 hover:text-[#1a2b4c] hover:bg-slate-50'
-            }`}
-          >
-            <CalendarDays size={16} className={abaAtiva === 'cronograma' ? 'text-[#c9a84e]' : ''} />
-            <span>📅 4. Cronograma</span>
-          </button>
+            {canVerCronograma && (
+              <button
+                onClick={() => onTrocarAba('cronograma')}
+                className={`flex items-center gap-2 py-3 px-4 text-xs sm:text-sm font-semibold border-b-2 transition whitespace-nowrap ${
+                  abaAtiva === 'cronograma'
+                    ? 'border-[#c9a84e] text-[#1a2b4c] bg-slate-50'
+                    : 'border-transparent text-slate-600 hover:text-[#1a2b4c] hover:bg-slate-50'
+                }`}
+              >
+                <CalendarDays size={16} className={abaAtiva === 'cronograma' ? 'text-[#c9a84e]' : ''} />
+                <span>📅 4. Cronograma</span>
+              </button>
+            )}
+
+            {canVerUsuarios && (
+              <button
+                onClick={() => onTrocarAba('usuarios')}
+                className={`flex items-center gap-2 py-3 px-4 text-xs sm:text-sm font-semibold border-b-2 transition whitespace-nowrap ${
+                  abaAtiva === 'usuarios'
+                    ? 'border-[#c9a84e] text-[#1a2b4c] bg-slate-50'
+                    : 'border-transparent text-slate-600 hover:text-[#1a2b4c] hover:bg-slate-50'
+                }`}
+              >
+                <Users size={16} className={abaAtiva === 'usuarios' ? 'text-[#c9a84e]' : ''} />
+                <span>👥 5. Gestão de Usuários</span>
+              </button>
+            )}
+          </div>
+
+          {isAuxiliar && (
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-800 border border-emerald-300 rounded-full text-xs font-bold">
+              <span>📋 Perfil Auxiliar (Cronograma, Fotos & Conclusão)</span>
+            </div>
+          )}
+
+          {isOperacional && (
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-800 border border-blue-300 rounded-full text-xs font-bold">
+              <span>🛠️ Perfil Operacional (Materiais & Cronograma)</span>
+            </div>
+          )}
+
+          {isUGE && (
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-800 border border-amber-300 rounded-full text-xs font-bold">
+              <span>🏛️ Perfil UGE (Prestação, Informe & Cronograma)</span>
+            </div>
+          )}
+
+          {isAdmin && (
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-[#c9a84e]/15 text-[#1a2b4c] border border-[#c9a84e]/40 rounded-full text-xs font-bold">
+              <span>👑 Administrador Full</span>
+            </div>
+          )}
         </div>
       </nav>
     </header>
