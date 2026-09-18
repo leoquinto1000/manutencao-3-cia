@@ -278,9 +278,6 @@ export const ResultadoEfetivoTab: React.FC<ResultadoEfetivoTabProps> = ({
                 <h2 className="text-base sm:text-lg font-bold text-[#1a2b4c]">
                   Resultado Diário — Efetivo de Manutenção & Apoio
                 </h2>
-                <div className="text-xs text-slate-500 mt-0.5">
-                  Preenchimento diário dos impedimentos. Os dados refletem automaticamente na <strong>Pauta Oficial PMESP (Tabela)</strong> da respectiva data.
-                </div>
               </div>
             </div>
           </div>

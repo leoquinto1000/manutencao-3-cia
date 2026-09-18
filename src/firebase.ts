@@ -3,10 +3,12 @@ import {
   getFirestore,
   doc,
   getDoc,
+  getDocFromServer,
   setDoc,
   deleteDoc,
   collection,
   getDocs,
+  getDocsFromServer,
   onSnapshot,
 } from 'firebase/firestore';
 import {
@@ -75,6 +77,38 @@ export function limparParaFirestore<T>(dado: T): T {
 }
 
 /**
+ * Auxiliar para ler documento diretamente do servidor remoto do Firestore,
+ * com fallback para o cache local caso o dispositivo esteja offline ou com instabilidade.
+ */
+async function lerDocServidorComFallback(refDoc: any) {
+  try {
+    return await getDocFromServer(refDoc);
+  } catch (err) {
+    try {
+      return await getDoc(refDoc);
+    } catch (e2) {
+      return null;
+    }
+  }
+}
+
+/**
+ * Auxiliar para ler coleção diretamente do servidor remoto do Firestore,
+ * com fallback para o cache local.
+ */
+async function lerColecaoServidorComFallback(colRef: any) {
+  try {
+    return await getDocsFromServer(colRef);
+  } catch (err) {
+    try {
+      return await getDocs(colRef);
+    } catch (e2) {
+      return null;
+    }
+  }
+}
+
+/**
  * Carrega todos os dados do sistema salvos no Firestore,
  * combinando os documentos particionados para suportar fotos sem limite de 1MB.
  */
@@ -87,7 +121,7 @@ export async function carregarDadosFirestore(): Promise<DadosSistemaFirestore | 
     const refArquivosSalvos = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_ARQUIVOS_SALVOS);
     const colInformesIndividuais = collection(db, FIRESTORE_COLLECTION, 'dados_historico', 'informes');
 
-    // Leituras diretas: refGeral falhar indica problema de rede ou permissão, que não deve ser confundido com banco vazio
+    // Leituras diretas no servidor com fallback suave
     const [
       snapGeral,
       snapMissoes,
@@ -96,16 +130,16 @@ export async function carregarDadosFirestore(): Promise<DadosSistemaFirestore | 
       snapArquivosSalvos,
       snapColInformes,
     ] = await Promise.all([
-      getDoc(refGeral),
-      getDoc(refMissoes).catch(() => null),
-      getDoc(refInforme).catch(() => null),
-      getDoc(refHistorico).catch(() => null),
-      getDoc(refArquivosSalvos).catch(() => null),
-      getDocs(colInformesIndividuais).catch(() => null),
+      lerDocServidorComFallback(refGeral),
+      lerDocServidorComFallback(refMissoes),
+      lerDocServidorComFallback(refInforme),
+      lerDocServidorComFallback(refHistorico),
+      lerDocServidorComFallback(refArquivosSalvos),
+      lerColecaoServidorComFallback(colInformesIndividuais),
     ]);
 
     const temAlgumDado =
-      snapGeral.exists() ||
+      Boolean(snapGeral?.exists()) ||
       Boolean(snapMissoes?.exists()) ||
       Boolean(snapInforme?.exists()) ||
       Boolean(snapHistorico?.exists()) ||
@@ -116,11 +150,11 @@ export async function carregarDadosFirestore(): Promise<DadosSistemaFirestore | 
       return null;
     }
 
-    const dadosGerais = snapGeral?.exists() ? (snapGeral.data() as Partial<DadosSistemaFirestore>) : {};
-    const dadosMissoes = snapMissoes?.exists() ? snapMissoes.data() : null;
-    const dadosInforme = snapInforme?.exists() ? snapInforme.data() : null;
-    const dadosHistorico = snapHistorico?.exists() ? snapHistorico.data() : null;
-    const dadosArquivosSalvos = snapArquivosSalvos?.exists() ? snapArquivosSalvos.data() : null;
+    const dadosGerais = snapGeral?.exists() ? (snapGeral.data() as Record<string, any>) : {};
+    const dadosMissoes = snapMissoes?.exists() ? (snapMissoes.data() as Record<string, any>) : null;
+    const dadosInforme = snapInforme?.exists() ? (snapInforme.data() as Record<string, any>) : null;
+    const dadosHistorico = snapHistorico?.exists() ? (snapHistorico.data() as Record<string, any>) : null;
+    const dadosArquivosSalvos = snapArquivosSalvos?.exists() ? (snapArquivosSalvos.data() as Record<string, any>) : null;
 
     const missoesFinais = (dadosMissoes?.missoes as MissaoDiaria[]) || dadosGerais.missoes;
     const informeFinal = (dadosInforme?.informeAtual as InformeMensal) || dadosGerais.informeAtual;

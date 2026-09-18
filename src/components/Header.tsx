@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, FileText, Package, Newspaper, CalendarDays, Cloud, CloudCheck, CloudOff, RefreshCw, AlertTriangle, Check } from 'lucide-react';
+import { Shield, FileText, Package, Newspaper, CalendarDays, Cloud, CloudCheck, CloudOff, RefreshCw, AlertTriangle, Check, DownloadCloud } from 'lucide-react';
 
 interface HeaderProps {
   abaAtiva: 'prestacao' | 'materiais' | 'informe' | 'cronograma';
@@ -7,6 +7,7 @@ interface HeaderProps {
   statusFirebase?: 'carregando' | 'conectado' | 'salvando' | 'erro-permissao' | 'offline';
   ultimaSincronizacao?: string | null;
   onSincronizarManual?: () => void;
+  onRecarregarBanco?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -15,6 +16,7 @@ export const Header: React.FC<HeaderProps> = ({
   statusFirebase = 'conectado',
   ultimaSincronizacao,
   onSincronizarManual,
+  onRecarregarBanco,
 }) => {
   const [modalAjudaRegras, setModalAjudaRegras] = useState(false);
 
@@ -74,6 +76,18 @@ export const Header: React.FC<HeaderProps> = ({
                   </span>
                 )}
               </div>
+
+              {onRecarregarBanco && (
+                <button
+                  type="button"
+                  onClick={onRecarregarBanco}
+                  className="px-2.5 py-1 rounded bg-[#c9a84e]/20 hover:bg-[#c9a84e]/30 border border-[#c9a84e]/50 text-[#e5cd8a] text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                  title="Recarregar dados atualizados salvos no banco de dados (Firestore)"
+                >
+                  <DownloadCloud size={13} className="text-[#c9a84e]" />
+                  <span className="hidden sm:inline">Recarregar Banco</span>
+                </button>
+              )}
 
               {onSincronizarManual && (
                 <button

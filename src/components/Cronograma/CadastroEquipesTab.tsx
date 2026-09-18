@@ -491,9 +491,6 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
               <Users size={18} className="text-[#c9a84e]" />
               Equipes de Manutenção da 3ª Cia
             </h3>
-            <p className="text-xs text-slate-500">
-              Grupos de trabalho escalados para execuções das ordens de serviço diárias (policiais do Efetivo de Manutenção da 3ª Cia)
-            </p>
           </div>
           <button
             type="button"
@@ -640,9 +637,6 @@ export const CadastroEquipesTab: React.FC<CadastroEquipesTabProps> = ({
               <Shield size={18} className="text-[#c9a84e]" />
               <span>Efetivo de Manutenção (Militares da 3ª Cia)</span>
             </h3>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Gestão separada do efetivo fixo da manutenção e dos policiais militares que prestam apoio à Subunidade
-            </p>
           </div>
           <button
             type="button"

@@ -470,51 +470,6 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
     }
   };
 
-  // Exportar CSV do dia
-  const exportarCSV = () => {
-    const cabecalho = [
-      'Data',
-      'Turno',
-      'Prioridade',
-      'Título da Missão',
-      'Local/Setor',
-      'Equipe',
-      'Militares Escalados',
-      'Determinações',
-      'Materiais Necessários',
-      'Concluída',
-      'Irá para Próximo Dia',
-      'Observações',
-    ];
-
-    const linhas = missoesFiltradas.map((m) => [
-      `"${formatarDataCurta(m.data)}"`,
-      `"${m.turno}"`,
-      `"${m.prioridade}"`,
-      `"${m.titulo.replace(/"/g, '""')}"`,
-      `"${m.local.replace(/"/g, '""')}"`,
-      `"${m.equipeNome || ''}"`,
-      `"${(m.membrosDesignados || '').replace(/"/g, '""')}"`,
-      `"${(m.descricao || '').replace(/"/g, '""')}"`,
-      `"${(m.materiaisNecessarios || '').replace(/"/g, '""')}"`,
-      `"${m.concluida ? 'SIM' : 'NÃO'}"`,
-      `"${m.adiadaParaProximoDia ? 'SIM' : 'NÃO'}"`,
-      `"${(m.observacoes || '').replace(/"/g, '""')}"`,
-    ]);
-
-    const csvContent =
-      'data:text/csv;charset=utf-8,\uFEFF' +
-      [cabecalho.join(';'), ...linhas.map((e) => e.join(';'))].join('\n');
-
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Cronograma_Manutencao_${dataSelecionada}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   const getBadgePrioridade = (prioridade: string) => {
     switch (prioridade) {
       case 'Urgente':
@@ -624,15 +579,6 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
             >
               <ArrowRight size={14} />
               <span>Mover Pendentes para Amanhã</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={exportarCSV}
-              className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-300 rounded-md transition flex items-center gap-1.5"
-            >
-              <FileSpreadsheet size={14} className="text-emerald-600" />
-              <span>Exportar</span>
             </button>
 
             <button

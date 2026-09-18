@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { RefreshCw, CheckCircle2 } from 'lucide-react';
 import {
   NFInstance,
   PesquisaPrecoItem,
@@ -49,6 +50,8 @@ export default function App() {
 
   // Estado de Sincronização em Nuvem com o Firebase Firestore (manutencao-3-cia)
   const [statusFirebase, setStatusFirebase] = useState<'carregando' | 'conectado' | 'salvando' | 'erro-permissao' | 'offline'>('carregando');
+  const [carregandoDadosIniciais, setCarregandoDadosIniciais] = useState<boolean>(true);
+  const [feedbackBanco, setFeedbackBanco] = useState<string | null>(null);
   const [ultimaSincronizacao, setUltimaSincronizacao] = useState<string | null>(null);
   const isCarregadoInicialmente = useRef(false);
   const snapshotUltimoSalvo = useRef<string>('');
@@ -275,6 +278,8 @@ export default function App() {
   useEffect(() => {
     let isAtivo = true;
     async function carregarCacheLocal() {
+      // Se os dados do banco Firestore já carregaram, não sobrescreve
+      if (isCarregadoInicialmente.current) return;
       try {
         const [missoesDB, informeDB, arquivadosDB, projetosDB] = await Promise.all([
           carregarItemIndexedDB<MissaoDiaria[]>('pmesp_missoes'),
@@ -283,7 +288,7 @@ export default function App() {
           carregarItemIndexedDB<ProjetoSalvo[]>('pmesp_projetos_arquivados'),
         ]);
 
-        if (!isAtivo) return;
+        if (!isAtivo || isCarregadoInicialmente.current) return;
 
         if (Array.isArray(missoesDB) && missoesDB.length > 0) {
           setMissoes((atuais) => {
@@ -401,85 +406,97 @@ export default function App() {
     salvarItemIndexedDB('pmesp_banco_fornecedores', bancoFornecedores);
   }, [bancoFornecedores]);
 
-  // Sincronização Inicial com o Firebase Firestore (manutencao-3-cia)
+  // Aplica de forma unificada os dados carregados do banco de dados Firestore
+  const aplicarDadosDoBanco = useCallback((dados: DadosSistemaFirestore) => {
+    const nfsFinais = Array.isArray(dados.nfs) && dados.nfs.length > 0 ? dados.nfs : [DADOS_INICIAIS_NF1];
+    const pesquisasFinais = Array.isArray(dados.pesquisas) ? dados.pesquisas : [];
+    const balanceteFinal = { ...DADOS_INICIAIS_BALANCETE, ...(dados.balancete || {}) };
+    const textoParteFinal = { ...DADOS_INICIAIS_TEXTOPARTE, ...(dados.textoParte || {}) };
+    const materiaisFinal = Array.isArray(dados.materiaisUsados) ? dados.materiaisUsados : [];
+    const informeFinal = dados.informeAtual ? { ...DADOS_INICIAIS_INFORME, ...dados.informeAtual } : DADOS_INICIAIS_INFORME;
+    const informesArquivadosFinais = Array.isArray(dados.informesArquivados) ? dados.informesArquivados : [];
+    const arquivosSalvosFinais = Array.isArray(dados.arquivosSalvos) ? dados.arquivosSalvos : [];
+    const missoesFinais = Array.isArray(dados.missoes) && dados.missoes.length > 0 ? dados.missoes : DADOS_INICIAIS_MISSOES;
+    const equipesFinais = Array.isArray(dados.equipes) && dados.equipes.length > 0 ? dados.equipes : DADOS_INICIAIS_EQUIPES;
+    const membrosFinais = Array.isArray(dados.membros) && dados.membros.length > 0 ? dados.membros : DADOS_INICIAIS_MEMBROS;
+    const bancoFornecedoresFinal = Array.isArray(dados.bancoFornecedores) ? dados.bancoFornecedores : [];
+
+    setNfs(nfsFinais);
+    setPesquisas(pesquisasFinais);
+    setBalancete(balanceteFinal);
+    setTextoParte(textoParteFinal);
+    setMateriaisUsados(materiaisFinal);
+    setInformeAtual(informeFinal);
+    setInformesArquivados(informesArquivadosFinais);
+    setArquivosSalvos(arquivosSalvosFinais);
+    setMissoes(missoesFinais);
+    setEquipes(equipesFinais);
+    setMembros(membrosFinais);
+    setBancoFornecedores(bancoFornecedoresFinal);
+
+    // Espelha no cache local seguro (IndexedDB e localStorage) para resiliência offline e carregamento instantâneo
+    try {
+      localStorage.setItem('pmesp_nfs', JSON.stringify(nfsFinais));
+      localStorage.setItem('pmesp_pesquisas', JSON.stringify(pesquisasFinais));
+      localStorage.setItem('pmesp_balancete', JSON.stringify(balanceteFinal));
+      localStorage.setItem('pmesp_textoparte', JSON.stringify(textoParteFinal));
+      localStorage.setItem('pmesp_materiais_usados', JSON.stringify(materiaisFinal));
+      localStorage.setItem('pmesp_informe_atual', JSON.stringify(informeFinal));
+      localStorage.setItem('pmesp_informes_arquivados', JSON.stringify(informesArquivadosFinais));
+      localStorage.setItem('pmesp_projetos_arquivados', JSON.stringify(arquivosSalvosFinais));
+      localStorage.setItem('pmesp_missoes', JSON.stringify(missoesFinais));
+      localStorage.setItem('pmesp_equipes', JSON.stringify(equipesFinais));
+      localStorage.setItem('pmesp_membros', JSON.stringify(membrosFinais));
+      localStorage.setItem('pmesp_banco_fornecedores', JSON.stringify(bancoFornecedoresFinal));
+      salvarItemIndexedDB('pmesp_informe_atual', informeFinal);
+      salvarItemIndexedDB('pmesp_informes_arquivados', informesArquivadosFinais);
+      salvarItemIndexedDB('pmesp_projetos_arquivados', arquivosSalvosFinais);
+      salvarItemIndexedDB('pmesp_missoes', missoesFinais);
+    } catch (e) {}
+
+    // Registra snapshot exato dos dados carregados do banco para impedir sobrescrita no boot
+    snapshotUltimoSalvo.current = JSON.stringify({
+      nfs: nfsFinais,
+      pesquisas: pesquisasFinais,
+      balancete: balanceteFinal,
+      textoParte: textoParteFinal,
+      materiaisUsados: materiaisFinal,
+      informeAtual: informeFinal,
+      informesArquivados: informesArquivadosFinais,
+      arquivosSalvos: arquivosSalvosFinais,
+      missoes: missoesFinais,
+      equipes: equipesFinais,
+      membros: membrosFinais,
+      bancoFornecedores: bancoFornecedoresFinal,
+    });
+
+    if (dados.ultimaAtualizacao) {
+      try {
+        setUltimaSincronizacao(new Date(dados.ultimaAtualizacao).toLocaleTimeString('pt-BR'));
+      } catch (e) {}
+    }
+    setStatusFirebase('conectado');
+    isCarregadoInicialmente.current = true;
+  }, []);
+
+  // Sincronização Inicial Automática com o Firebase Firestore ao abrir o app
   useEffect(() => {
     let isMounted = true;
     setStatusFirebase('carregando');
 
+    // Timer de segurança para desobstruir a interface caso a conexão esteja offline/muito lenta
+    const timerSeguranca = setTimeout(() => {
+      if (isMounted) {
+        setCarregandoDadosIniciais(false);
+      }
+    }, 4000);
+
     carregarDadosFirestore()
       .then((dados) => {
         if (!isMounted) return;
+        clearTimeout(timerSeguranca);
         if (dados) {
-          // Documento existe no Firestore: preenche todos os módulos com os dados reais salvos no banco
-          const nfsFinais = Array.isArray(dados.nfs) && dados.nfs.length > 0 ? dados.nfs : [DADOS_INICIAIS_NF1];
-          const pesquisasFinais = Array.isArray(dados.pesquisas) ? dados.pesquisas : [];
-          const balanceteFinal = { ...DADOS_INICIAIS_BALANCETE, ...(dados.balancete || {}) };
-          const textoParteFinal = { ...DADOS_INICIAIS_TEXTOPARTE, ...(dados.textoParte || {}) };
-          const materiaisFinal = Array.isArray(dados.materiaisUsados) ? dados.materiaisUsados : [];
-          const informeFinal = dados.informeAtual ? { ...DADOS_INICIAIS_INFORME, ...dados.informeAtual } : DADOS_INICIAIS_INFORME;
-          const informesArquivadosFinais = Array.isArray(dados.informesArquivados) ? dados.informesArquivados : [];
-          const arquivosSalvosFinais = Array.isArray(dados.arquivosSalvos) ? dados.arquivosSalvos : [];
-          const missoesFinais = Array.isArray(dados.missoes) && dados.missoes.length > 0 ? dados.missoes : DADOS_INICIAIS_MISSOES;
-          const equipesFinais = Array.isArray(dados.equipes) && dados.equipes.length > 0 ? dados.equipes : DADOS_INICIAIS_EQUIPES;
-          const membrosFinais = Array.isArray(dados.membros) && dados.membros.length > 0 ? dados.membros : DADOS_INICIAIS_MEMBROS;
-          const bancoFornecedoresFinal = Array.isArray(dados.bancoFornecedores) ? dados.bancoFornecedores : [];
-
-          setNfs(nfsFinais);
-          setPesquisas(pesquisasFinais);
-          setBalancete(balanceteFinal);
-          setTextoParte(textoParteFinal);
-          setMateriaisUsados(materiaisFinal);
-          setInformeAtual(informeFinal);
-          setInformesArquivados(informesArquivadosFinais);
-          setArquivosSalvos(arquivosSalvosFinais);
-          setMissoes(missoesFinais);
-          setEquipes(equipesFinais);
-          setMembros(membrosFinais);
-          setBancoFornecedores(bancoFornecedoresFinal);
-
-          // Espelha no cache local seguro (IndexedDB e localStorage) para resiliência offline e carregamento instantâneo
-          try {
-            localStorage.setItem('pmesp_nfs', JSON.stringify(nfsFinais));
-            localStorage.setItem('pmesp_pesquisas', JSON.stringify(pesquisasFinais));
-            localStorage.setItem('pmesp_balancete', JSON.stringify(balanceteFinal));
-            localStorage.setItem('pmesp_textoparte', JSON.stringify(textoParteFinal));
-            localStorage.setItem('pmesp_materiais_usados', JSON.stringify(materiaisFinal));
-            localStorage.setItem('pmesp_informe_atual', JSON.stringify(informeFinal));
-            localStorage.setItem('pmesp_informes_arquivados', JSON.stringify(informesArquivadosFinais));
-            localStorage.setItem('pmesp_projetos_arquivados', JSON.stringify(arquivosSalvosFinais));
-            localStorage.setItem('pmesp_missoes', JSON.stringify(missoesFinais));
-            localStorage.setItem('pmesp_equipes', JSON.stringify(equipesFinais));
-            localStorage.setItem('pmesp_membros', JSON.stringify(membrosFinais));
-            localStorage.setItem('pmesp_banco_fornecedores', JSON.stringify(bancoFornecedoresFinal));
-            salvarItemIndexedDB('pmesp_informe_atual', informeFinal);
-            salvarItemIndexedDB('pmesp_informes_arquivados', informesArquivadosFinais);
-            salvarItemIndexedDB('pmesp_projetos_arquivados', arquivosSalvosFinais);
-            salvarItemIndexedDB('pmesp_missoes', missoesFinais);
-          } catch (e) {}
-
-          // Registra snapshot exato dos dados carregados do banco para impedir sobrescrita no boot
-          snapshotUltimoSalvo.current = JSON.stringify({
-            nfs: nfsFinais,
-            pesquisas: pesquisasFinais,
-            balancete: balanceteFinal,
-            textoParte: textoParteFinal,
-            materiaisUsados: materiaisFinal,
-            informeAtual: informeFinal,
-            informesArquivados: informesArquivadosFinais,
-            arquivosSalvos: arquivosSalvosFinais,
-            missoes: missoesFinais,
-            equipes: equipesFinais,
-            membros: membrosFinais,
-            bancoFornecedores: bancoFornecedoresFinal,
-          });
-
-          if (dados.ultimaAtualizacao) {
-            try {
-              setUltimaSincronizacao(new Date(dados.ultimaAtualizacao).toLocaleTimeString('pt-BR'));
-            } catch (e) {}
-          }
-          setStatusFirebase('conectado');
-          isCarregadoInicialmente.current = true;
+          aplicarDadosDoBanco(dados);
         } else {
           // Banco realmente vazio (primeira inicialização do sistema): grava os dados iniciais com segurança
           const payloadInicial = {
@@ -513,23 +530,60 @@ export default function App() {
               }
             });
         }
+        setCarregandoDadosIniciais(false);
       })
       .catch((err: any) => {
         if (!isMounted) return;
+        clearTimeout(timerSeguranca);
         console.warn('Alerta na conexão com o Firestore:', err);
         if (err?.code === 'permission-denied') {
           setStatusFirebase('erro-permissao');
         } else {
           setStatusFirebase('offline');
         }
-        // NÃO define isCarregadoInicialmente como true em caso de falha de conexão!
-        // Isso impede que modelos locais sobrescrevam os dados reais salvos no banco.
+        setCarregandoDadosIniciais(false);
       });
 
     return () => {
       isMounted = false;
+      clearTimeout(timerSeguranca);
     };
-  }, []);
+  }, [aplicarDadosDoBanco]);
+
+  // Recarregar os dados do banco sob demanda (garante carregamento manual imediato a qualquer momento)
+  const handleRecarregarDoBanco = async () => {
+    setStatusFirebase('carregando');
+    setFeedbackBanco('Carregando dados salvos no banco de dados...');
+    try {
+      const dados = await carregarDadosFirestore();
+      if (dados) {
+        aplicarDadosDoBanco(dados);
+        setFeedbackBanco('Dados do banco de dados carregados com sucesso!');
+      } else {
+        setFeedbackBanco('Banco de dados conectado, nenhum registro encontrado.');
+      }
+    } catch (e) {
+      setFeedbackBanco('Não foi possível conectar ao banco de dados no momento.');
+    }
+    setTimeout(() => setFeedbackBanco(null), 3500);
+  };
+
+  // Atualiza automaticamente quando o usuário retorna à janela/aba
+  useEffect(() => {
+    const handleFocus = () => {
+      if (isCarregadoInicialmente.current && statusFirebase !== 'salvando') {
+        carregarDadosFirestore()
+          .then((dados) => {
+            if (dados) {
+              aplicarDadosDoBanco(dados);
+            }
+          })
+          .catch(() => {});
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [aplicarDadosDoBanco, statusFirebase]);
 
   // Auto-Save debounced para o Firestore quando houver modificação real de dados
   useEffect(() => {
@@ -808,12 +862,60 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-100 text-slate-900 font-sans">
+      {/* Tela de Carregamento Inicial do Banco de Dados */}
+      {carregandoDadosIniciais && (
+        <div className="fixed inset-0 z-[9999] bg-[#1a2b4c] text-white flex flex-col items-center justify-center p-4 select-none animate-in fade-in duration-200">
+          <div className="bg-[#15233e]/90 border border-white/15 p-8 rounded-2xl max-w-sm w-full text-center shadow-2xl flex flex-col items-center gap-4">
+            <div className="w-16 h-16 bg-[#c9a84e] text-[#1a2b4c] rounded-xl flex items-center justify-center font-black text-2xl border-4 border-white shadow-md">
+              3ª
+            </div>
+            <div>
+              <span className="text-[11px] font-bold text-[#e5cd8a] uppercase tracking-wider block">
+                Polícia Militar do Estado de São Paulo
+              </span>
+              <h2 className="text-xl font-bold tracking-tight text-white mt-0.5">
+                Manutenção 3ª Cia
+              </h2>
+              <p className="text-xs text-slate-300 mt-1">
+                Carregando dados salvos no banco de dados...
+              </p>
+            </div>
+
+            <div className="w-full flex items-center justify-center gap-2 text-xs text-[#e5cd8a] bg-black/30 px-4 py-2 rounded-full border border-[#c9a84e]/30">
+              <RefreshCw size={14} className="animate-spin text-[#c9a84e]" />
+              <span>Sincronizando com o Firestore</span>
+            </div>
+
+            <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden mt-1">
+              <div className="bg-[#c9a84e] h-full rounded-full animate-pulse w-4/5"></div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setCarregandoDadosIniciais(false)}
+              className="text-[11px] text-slate-400 hover:text-white underline mt-1 transition cursor-pointer"
+            >
+              Prosseguir com dados locais
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Alerta / Toast de feedback do banco de dados */}
+      {feedbackBanco && (
+        <div className="no-print fixed top-16 right-4 z-50 bg-[#1a2b4c] border border-[#c9a84e] text-white px-4 py-2.5 rounded-lg shadow-xl text-xs font-semibold flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
+          <CheckCircle2 size={15} className="text-[#c9a84e]" />
+          <span>{feedbackBanco}</span>
+        </div>
+      )}
+
       <Header
         abaAtiva={abaPrincipal}
         onTrocarAba={setAbaPrincipal}
         statusFirebase={statusFirebase}
         ultimaSincronizacao={ultimaSincronizacao}
         onSincronizarManual={handleSincronizarManual}
+        onRecarregarBanco={handleRecarregarDoBanco}
       />
 
       <main className="main-print-container flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 py-6">
