@@ -403,7 +403,15 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
       .map(
         (u) =>
           `• ${u.graduacaoOuCargo} ${u.nome} (RE: ${u.re || 'N/D'})\n  E-mail: ${u.email}\n  Perfil: ${
-            u.role === 'admin' ? 'Administrador (Full)' : u.role === 'uge' ? 'UGE' : u.role === 'operacional' ? 'Operacional' : 'Auxiliar'
+            u.role === 'admin'
+              ? 'Administrador (Full)'
+              : u.role === 'uge'
+              ? 'UGE'
+              : u.role === '3cfo'
+              ? '3º CFO'
+              : u.role === 'operacional' || u.role === 'operador'
+              ? 'Operacional'
+              : 'Auxiliar'
           }\n  Senha Padrão: ${u.senhaHash || 'pmesp123456'}\n`
       )
       .join('\n');
@@ -417,7 +425,8 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
   };
 
   const handleCopiarLinha = (u: UsuarioSistema) => {
-    const texto = `Login: ${u.email} | Senha: ${u.senhaHash || 'pmesp123456'} | Perfil: ${u.role}`;
+    const perfilLabel = u.role === '3cfo' ? '3º CFO' : u.role;
+    const texto = `Login: ${u.email} | Senha: ${u.senhaHash || 'pmesp123456'} | Perfil: ${perfilLabel}`;
     navigator.clipboard.writeText(texto);
     setCopiadoId(u.id);
     setTimeout(() => setCopiadoId(null), 2000);
@@ -441,6 +450,7 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
 
   const totalAdmins = usuarios.filter((u) => u.role === 'admin').length;
   const totalUge = usuarios.filter((u) => u.role === 'uge').length;
+  const total3CFO = usuarios.filter((u) => u.role === '3cfo').length;
   const totalOperacionais = usuarios.filter((u) => u.role === 'operacional' || u.role === 'operador').length;
   const totalAuxiliares = usuarios.filter((u) => u.role === 'auxiliar' || u.role === 'visualizador').length;
   const totalAtivos = usuarios.filter((u) => u.ativo).length;
@@ -510,19 +520,19 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
       </div>
 
       {/* Cartões dos Níveis de Acesso (Explicação RBAC Conforme Diretrizes) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
         <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-4 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center gap-2 text-amber-900 mb-1.5">
               <span className="text-lg">👑</span>
-              <h3 className="font-bold text-xs uppercase tracking-wider">Administrador (Full)</h3>
+              <h3 className="font-bold text-xs uppercase tracking-wider">Admin (Full)</h3>
             </div>
             <p className="text-xs text-amber-800/90 leading-relaxed">
-              Acesso total irrestrito: poderá visualizar e editar tudo (Prestação de Contas, Materiais, Informe Mensal, Cronograma e Gestão de Usuários).
+              Acesso total: Prestação de Contas, Materiais, Informe Mensal, Cronograma e Gestão de Usuários.
             </p>
           </div>
           <div className="mt-3 text-[11px] font-bold text-amber-900 bg-amber-100/80 px-2 py-1 rounded inline-block self-start">
-            {totalAdmins} usuário(s) com este perfil
+            {totalAdmins} usuário(s)
           </div>
         </div>
 
@@ -533,11 +543,26 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
               <h3 className="font-bold text-xs uppercase tracking-wider">UGE</h3>
             </div>
             <p className="text-xs text-indigo-800/90 leading-relaxed">
-              Prestação de Contas, Informe Mensal e Cronograma: só aparecerão essas 3 abas e terá permissão total para editá-las.
+              Prestação de Contas, Informe Mensal e Cronograma: visualização e edição das 3 abas.
             </p>
           </div>
           <div className="mt-3 text-[11px] font-bold text-indigo-900 bg-indigo-100/80 px-2 py-1 rounded inline-block self-start">
-            {totalUge} usuário(s) com este perfil
+            {totalUge} usuário(s)
+          </div>
+        </div>
+
+        <div className="bg-purple-50/80 border border-purple-200 rounded-xl p-4 shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-purple-900 mb-1.5">
+              <span className="text-lg">🎓</span>
+              <h3 className="font-bold text-xs uppercase tracking-wider">3º CFO</h3>
+            </div>
+            <p className="text-xs text-purple-800/90 leading-relaxed">
+              Controle de Materiais, Informe Mensal e Cronograma: visualização e edição das 3 abas operacionais.
+            </p>
+          </div>
+          <div className="mt-3 text-[11px] font-bold text-purple-900 bg-purple-100/80 px-2 py-1 rounded inline-block self-start">
+            {total3CFO} usuário(s)
           </div>
         </div>
 
@@ -548,11 +573,11 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
               <h3 className="font-bold text-xs uppercase tracking-wider">Operacional</h3>
             </div>
             <p className="text-xs text-blue-800/90 leading-relaxed">
-              Controle de Materiais e Cronograma: só aparecerão essas 2 abas e terá permissão total para editá-las.
+              Controle de Materiais e Cronograma: visualização e edição completa dessas 2 abas.
             </p>
           </div>
           <div className="mt-3 text-[11px] font-bold text-blue-900 bg-blue-100/80 px-2 py-1 rounded inline-block self-start">
-            {totalOperacionais} usuário(s) com este perfil
+            {totalOperacionais} usuário(s)
           </div>
         </div>
 
@@ -563,11 +588,11 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
               <h3 className="font-bold text-xs uppercase tracking-wider">Auxiliares</h3>
             </div>
             <p className="text-xs text-emerald-800/90 leading-relaxed">
-              Cronograma apenas para visualizações e, nos cards das missões, registro de fotos (Antes/Depois) e conclusão da missão.
+              Cronograma apenas para visualização de missões, registro de fotos (Antes/Depois) e conclusão.
             </p>
           </div>
           <div className="mt-3 text-[11px] font-bold text-emerald-900 bg-emerald-100/80 px-2 py-1 rounded inline-block self-start">
-            {totalAuxiliares} usuário(s) com este perfil
+            {totalAuxiliares} usuário(s)
           </div>
         </div>
       </div>
@@ -595,6 +620,7 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
             <option value="todos">Todos os Perfis ({usuarios.length})</option>
             <option value="admin">👑 Administradores ({totalAdmins})</option>
             <option value="uge">📑 UGE ({totalUge})</option>
+            <option value="3cfo">🎓 3º CFO ({total3CFO})</option>
             <option value="operacional">🛠️ Operacional ({totalOperacionais})</option>
             <option value="auxiliar">👁️ Auxiliares ({totalAuxiliares})</option>
           </select>
@@ -650,6 +676,8 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
                                 ? 'bg-[#c9a84e] text-[#1a2b4c]'
                                 : u.role === 'uge'
                                 ? 'bg-indigo-600 text-white'
+                                : u.role === '3cfo'
+                                ? 'bg-purple-600 text-white'
                                 : u.role === 'operacional' || u.role === 'operador'
                                 ? 'bg-blue-600 text-white'
                                 : 'bg-emerald-600 text-white'
@@ -696,6 +724,8 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
                               ? 'bg-[#c9a84e]/20 text-[#1a2b4c] border-[#c9a84e]'
                               : u.role === 'uge'
                               ? 'bg-indigo-100 text-indigo-900 border-indigo-300'
+                              : u.role === '3cfo'
+                              ? 'bg-purple-100 text-purple-900 border-purple-300'
                               : u.role === 'operacional' || u.role === 'operador'
                               ? 'bg-blue-100 text-blue-900 border-blue-300'
                               : 'bg-emerald-100 text-emerald-800 border-emerald-300'
@@ -703,6 +733,7 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
                         >
                           <option value="admin">👑 Administrador (Full)</option>
                           <option value="uge">📑 UGE</option>
+                          <option value="3cfo">🎓 3º CFO</option>
                           <option value="operacional">🛠️ Operacional</option>
                           <option value="auxiliar">👁️ Auxiliares</option>
                         </select>
@@ -855,7 +886,7 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Nível de Acesso (Perfil) *
                 </label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
                   <button
                     type="button"
                     onClick={() => setRole('admin')}
@@ -880,6 +911,19 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
                   >
                     <div className="font-bold text-xs flex items-center gap-1">📑 UGE</div>
                     <div className="text-[10px] text-slate-500 mt-0.5">Contas, Informe e Cronograma</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setRole('3cfo')}
+                    className={`p-2.5 rounded-xl border text-left cursor-pointer transition ${
+                      role === '3cfo'
+                        ? 'bg-purple-50 border-purple-500 text-purple-900 shadow-xs ring-1 ring-purple-400'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="font-bold text-xs flex items-center gap-1">🎓 3º CFO</div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">Materiais, Informe e Cronograma</div>
                   </button>
 
                   <button
@@ -1141,7 +1185,7 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
                     </span>
                   )}
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
                   <button
                     type="button"
                     onClick={() => setEditRole('admin')}
@@ -1169,6 +1213,22 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
                   >
                     <div className="font-bold text-xs flex items-center gap-1">📑 UGE</div>
                     <div className="text-[10px] text-slate-500 mt-0.5">Contas, Informe e Cronograma</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={usuarioEditando.id === usuarioLogado.id}
+                    onClick={() => setEditRole('3cfo')}
+                    className={`p-2.5 rounded-xl border text-left transition ${
+                      usuarioEditando.id === usuarioLogado.id
+                        ? 'opacity-40 cursor-not-allowed bg-slate-50 border-slate-200 text-slate-400'
+                        : editRole === '3cfo'
+                        ? 'bg-purple-50 border-purple-500 text-purple-900 shadow-xs ring-1 ring-purple-400 cursor-pointer'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 cursor-pointer'
+                    }`}
+                  >
+                    <div className="font-bold text-xs flex items-center gap-1">🎓 3º CFO</div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">Materiais, Informe e Cronograma</div>
                   </button>
 
                   <button
@@ -1465,6 +1525,8 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
                                     ? 'bg-[#c9a84e]/20 text-[#1a2b4c] border border-[#c9a84e]'
                                     : u.role === 'uge'
                                     ? 'bg-indigo-100 text-indigo-900 border border-indigo-200'
+                                    : u.role === '3cfo'
+                                    ? 'bg-purple-100 text-purple-900 border border-purple-200'
                                     : u.role === 'operacional' || u.role === 'operador'
                                     ? 'bg-blue-100 text-blue-900 border border-blue-200'
                                     : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
@@ -1474,6 +1536,8 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
                                   ? '👑 Administrador'
                                   : u.role === 'uge'
                                   ? '📑 UGE'
+                                  : u.role === '3cfo'
+                                  ? '🎓 3º CFO'
                                   : u.role === 'operacional' || u.role === 'operador'
                                   ? '🛠️ Operacional'
                                   : '👁️ Auxiliares'}
@@ -1562,7 +1626,11 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
                 <div className="flex justify-between items-center">
                   <span className="text-slate-500 text-[11px]">Nível de Acesso:</span>
                   <span className="font-semibold text-slate-800 uppercase text-[10px] bg-slate-200 px-2 py-0.5 rounded">
-                    {usuarioParaExcluir.role}
+                    {usuarioParaExcluir.role === '3cfo'
+                      ? '3º CFO'
+                      : usuarioParaExcluir.role === 'admin'
+                      ? 'Admin (Full)'
+                      : usuarioParaExcluir.role}
                   </span>
                 </div>
               </div>

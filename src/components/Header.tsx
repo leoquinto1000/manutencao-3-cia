@@ -45,14 +45,15 @@ export const Header: React.FC<HeaderProps> = ({
   const role = usuarioLogado?.role;
   const isAdmin = role === 'admin';
   const isUGE = role === 'uge';
+  const is3CFO = role === '3cfo';
   const isOperacional = role === 'operacional' || role === 'operador';
   const isAuxiliar = role === 'auxiliar' || role === 'visualizador';
 
   // Visibilidade estrita das abas conforme as diretrizes de nível de acesso
   const canVerPrestacao = isAdmin || isUGE;
-  const canVerMateriais = isAdmin || isOperacional;
-  const canVerInforme = isAdmin || isUGE;
-  const canVerCronograma = isAdmin || isUGE || isOperacional || isAuxiliar;
+  const canVerMateriais = isAdmin || isOperacional || is3CFO;
+  const canVerInforme = isAdmin || isUGE || is3CFO;
+  const canVerCronograma = isAdmin || isUGE || isOperacional || isAuxiliar || is3CFO;
   const canVerUsuarios = isAdmin;
 
   return (
@@ -151,6 +152,8 @@ export const Header: React.FC<HeaderProps> = ({
                       ? 'bg-[#c9a84e] text-[#1a2b4c]'
                       : isUGE
                       ? 'bg-amber-500 text-white'
+                      : is3CFO
+                      ? 'bg-purple-600 text-white'
                       : isOperacional
                       ? 'bg-blue-600 text-white'
                       : 'bg-emerald-600 text-white'
@@ -170,6 +173,11 @@ export const Header: React.FC<HeaderProps> = ({
                     {isUGE && (
                       <span className="text-[9px] font-bold bg-amber-500/30 text-amber-200 px-1.5 py-0.2 rounded border border-amber-400/40">
                         UGE
+                      </span>
+                    )}
+                    {is3CFO && (
+                      <span className="text-[9px] font-bold bg-purple-500/40 text-purple-200 px-1.5 py-0.2 rounded border border-purple-400/40">
+                        3º CFO
                       </span>
                     )}
                     {isOperacional && (
@@ -334,6 +342,12 @@ service cloud.firestore {
           {isOperacional && (
             <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-800 border border-blue-300 rounded-full text-xs font-bold">
               <span>🛠️ Perfil Operacional (Materiais & Cronograma)</span>
+            </div>
+          )}
+
+          {is3CFO && (
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-purple-50 text-purple-800 border border-purple-300 rounded-full text-xs font-bold">
+              <span>🎓 Perfil 3º CFO (Materiais, Informe & Cronograma)</span>
             </div>
           )}
 

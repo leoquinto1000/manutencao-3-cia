@@ -915,6 +915,8 @@ export default function App() {
       setAbaPrincipal('cronograma');
     } else if (usuario.role === 'operacional' || usuario.role === 'operador') {
       setAbaPrincipal('cronograma');
+    } else if (usuario.role === '3cfo') {
+      setAbaPrincipal('materiais');
     } else if (usuario.role === 'uge') {
       setAbaPrincipal('prestacao');
     } else {
@@ -932,6 +934,10 @@ export default function App() {
       }
     } else if (role === 'operacional' || role === 'operador') {
       if (abaPrincipal !== 'materiais' && abaPrincipal !== 'cronograma') {
+        setAbaPrincipal('materiais');
+      }
+    } else if (role === '3cfo') {
+      if (abaPrincipal !== 'materiais' && abaPrincipal !== 'informe' && abaPrincipal !== 'cronograma') {
         setAbaPrincipal('materiais');
       }
     } else if (role === 'uge') {

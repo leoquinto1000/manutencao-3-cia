@@ -243,6 +243,7 @@ export interface MissaoDiaria {
 export type UserRole = 
   | 'admin' 
   | 'uge' 
+  | '3cfo'
   | 'operacional' 
   | 'auxiliar'
   | 'operador' 
