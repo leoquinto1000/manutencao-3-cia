@@ -19,9 +19,10 @@ import {
   Pencil,
   Save,
   Copy,
-  Check
+  Check,
+  SlidersHorizontal,
 } from 'lucide-react';
-import { UsuarioSistema, UserRole, MembroEquipe } from '../types';
+import { UsuarioSistema, UserRole, MembroEquipe, NivelAcessoDef } from '../types';
 import { 
   cadastrarNovoUsuario, 
   redefinirSenhaUsuario, 
@@ -29,6 +30,8 @@ import {
   salvarUsuariosFirestore,
   excluirUsuarioFirestore
 } from '../firebase';
+import { NIVEIS_ACESSO_PADRAO, obterNivelDef, getClassesCorNivel } from '../utils/permissoes';
+import { GerenciadorNiveisAcesso } from './Usuarios/GerenciadorNiveisAcesso';
 
 interface UsuariosViewProps {
   usuarios: UsuarioSistema[];
@@ -36,6 +39,8 @@ interface UsuariosViewProps {
   usuarioLogado: UsuarioSistema;
   onAtualizarUsuarioLogado?: (usuario: UsuarioSistema) => void;
   membros?: MembroEquipe[];
+  niveisAcesso?: NivelAcessoDef[];
+  onChangeNiveisAcesso?: (niveis: NivelAcessoDef[]) => Promise<void> | void;
 }
 
 const GRADUACOES_OPCOES = [
@@ -64,7 +69,11 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
   usuarioLogado,
   onAtualizarUsuarioLogado,
   membros = [],
+  niveisAcesso,
+  onChangeNiveisAcesso,
 }) => {
+  const niveis = niveisAcesso && niveisAcesso.length > 0 ? niveisAcesso : NIVEIS_ACESSO_PADRAO;
+  const [abaSecundaria, setAbaSecundaria] = useState<'usuarios' | 'niveis'>('usuarios');
   const [busca, setBusca] = useState('');
   const [filtroRole, setFiltroRole] = useState<string>('todos');
 
@@ -490,6 +499,20 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
+            onClick={() => setAbaSecundaria(abaSecundaria === 'niveis' ? 'usuarios' : 'niveis')}
+            className={`px-3.5 py-2 text-xs font-bold rounded-lg flex items-center gap-1.5 transition border cursor-pointer shadow-2xs ${
+              abaSecundaria === 'niveis'
+                ? 'bg-[#1a2b4c] text-white border-[#1a2b4c]'
+                : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border-indigo-300'
+            }`}
+            title="Gerenciar e criar níveis de acesso do sistema (RBAC)"
+          >
+            <SlidersHorizontal size={14} className={abaSecundaria === 'niveis' ? 'text-[#c9a84e]' : 'text-indigo-700'} />
+            <span>{abaSecundaria === 'niveis' ? 'Ver Usuários' : 'Níveis de Acesso (RBAC)'}</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setModalCredenciais(true)}
             className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-lg flex items-center gap-1.5 transition border border-slate-300 cursor-pointer shadow-2xs"
             title="Visualizar a relação de e-mails, permissões e senhas padrão de acesso"
@@ -519,83 +542,101 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
         </div>
       </div>
 
-      {/* Cartões dos Níveis de Acesso (Explicação RBAC Conforme Diretrizes) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
-        <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-4 shadow-xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center gap-2 text-amber-900 mb-1.5">
-              <span className="text-lg">👑</span>
-              <h3 className="font-bold text-xs uppercase tracking-wider">Admin (Full)</h3>
-            </div>
-            <p className="text-xs text-amber-800/90 leading-relaxed">
-              Acesso total: Prestação de Contas, Materiais, Informe Mensal, Cronograma e Gestão de Usuários.
-            </p>
-          </div>
-          <div className="mt-3 text-[11px] font-bold text-amber-900 bg-amber-100/80 px-2 py-1 rounded inline-block self-start">
-            {totalAdmins} usuário(s)
-          </div>
-        </div>
+      {/* Abas Secundárias: Usuários vs Níveis de Acesso */}
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+        <button
+          type="button"
+          onClick={() => setAbaSecundaria('usuarios')}
+          className={`flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-bold rounded-lg transition cursor-pointer ${
+            abaSecundaria === 'usuarios'
+              ? 'bg-[#1a2b4c] text-white shadow-xs'
+              : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <Users size={16} className={abaSecundaria === 'usuarios' ? 'text-[#c9a84e]' : 'text-slate-400'} />
+          <span>Efetivo & Usuários Cadastrados</span>
+          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+            abaSecundaria === 'usuarios' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+          }`}>
+            {usuarios.length}
+          </span>
+        </button>
 
-        <div className="bg-indigo-50/80 border border-indigo-200 rounded-xl p-4 shadow-xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center gap-2 text-indigo-900 mb-1.5">
-              <span className="text-lg">📑</span>
-              <h3 className="font-bold text-xs uppercase tracking-wider">UGE</h3>
-            </div>
-            <p className="text-xs text-indigo-800/90 leading-relaxed">
-              Prestação de Contas, Informe Mensal e Cronograma: visualização e edição das 3 abas.
-            </p>
-          </div>
-          <div className="mt-3 text-[11px] font-bold text-indigo-900 bg-indigo-100/80 px-2 py-1 rounded inline-block self-start">
-            {totalUge} usuário(s)
-          </div>
-        </div>
-
-        <div className="bg-purple-50/80 border border-purple-200 rounded-xl p-4 shadow-xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center gap-2 text-purple-900 mb-1.5">
-              <span className="text-lg">🎓</span>
-              <h3 className="font-bold text-xs uppercase tracking-wider">3º CFO</h3>
-            </div>
-            <p className="text-xs text-purple-800/90 leading-relaxed">
-              Controle de Materiais, Informe Mensal e Cronograma: visualização e edição das 3 abas operacionais.
-            </p>
-          </div>
-          <div className="mt-3 text-[11px] font-bold text-purple-900 bg-purple-100/80 px-2 py-1 rounded inline-block self-start">
-            {total3CFO} usuário(s)
-          </div>
-        </div>
-
-        <div className="bg-blue-50/80 border border-blue-200 rounded-xl p-4 shadow-xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center gap-2 text-blue-900 mb-1.5">
-              <span className="text-lg">🛠️</span>
-              <h3 className="font-bold text-xs uppercase tracking-wider">Operacional</h3>
-            </div>
-            <p className="text-xs text-blue-800/90 leading-relaxed">
-              Controle de Materiais e Cronograma: visualização e edição completa dessas 2 abas.
-            </p>
-          </div>
-          <div className="mt-3 text-[11px] font-bold text-blue-900 bg-blue-100/80 px-2 py-1 rounded inline-block self-start">
-            {totalOperacionais} usuário(s)
-          </div>
-        </div>
-
-        <div className="bg-emerald-50/80 border border-emerald-200 rounded-xl p-4 shadow-xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center gap-2 text-emerald-900 mb-1.5">
-              <span className="text-lg">👁️</span>
-              <h3 className="font-bold text-xs uppercase tracking-wider">Auxiliares</h3>
-            </div>
-            <p className="text-xs text-emerald-800/90 leading-relaxed">
-              Cronograma com visualização de missões, registro de fotos (Antes/Depois), conclusão e acesso com edição completa na aba Resultado.
-            </p>
-          </div>
-          <div className="mt-3 text-[11px] font-bold text-emerald-900 bg-emerald-100/80 px-2 py-1 rounded inline-block self-start">
-            {totalAuxiliares} usuário(s)
-          </div>
-        </div>
+        <button
+          type="button"
+          onClick={() => setAbaSecundaria('niveis')}
+          className={`flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-bold rounded-lg transition cursor-pointer ${
+            abaSecundaria === 'niveis'
+              ? 'bg-[#1a2b4c] text-white shadow-xs'
+              : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <SlidersHorizontal size={16} className={abaSecundaria === 'niveis' ? 'text-[#c9a84e]' : 'text-slate-400'} />
+          <span>Níveis de Acesso & Permissões (RBAC)</span>
+          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+            abaSecundaria === 'niveis' ? 'bg-[#c9a84e] text-[#1a2b4c]' : 'bg-amber-100 text-amber-900'
+          }`}>
+            {niveis.length} perfis
+          </span>
+        </button>
       </div>
+
+      {abaSecundaria === 'niveis' ? (
+        <GerenciadorNiveisAcesso
+          niveisAcesso={niveis}
+          onChangeNiveisAcesso={onChangeNiveisAcesso || (() => {})}
+          usuarios={usuarios}
+          usuarioLogadoRole={usuarioLogado.role}
+        />
+      ) : (
+        <>
+          {/* Cartões dos Níveis de Acesso (Dinâmicos RBAC Conforme Configuração) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+            {niveis.map((nivel) => {
+              const corClasses = getClassesCorNivel(nivel.cor);
+              const totalDesseNivel = usuarios.filter(
+                (u) =>
+                  u.role === nivel.id ||
+                  (nivel.id === 'operacional' && u.role === 'operador') ||
+                  (nivel.id === 'auxiliar' && u.role === 'visualizador')
+              ).length;
+              return (
+                <div
+                  key={nivel.id}
+                  className={`${corClasses.badge} rounded-xl p-4 shadow-xs flex flex-col justify-between`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-1.5 font-bold text-xs uppercase tracking-wider">
+                        <span className="text-lg">{nivel.icone}</span>
+                        <h3>{nivel.nome}</h3>
+                      </div>
+                      {nivel.sistema && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-black/10 opacity-70">
+                          Padrão
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs opacity-90 leading-relaxed line-clamp-3">
+                      {nivel.descricao}
+                    </p>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between">
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-black/10">
+                      {totalDesseNivel} usuário(s)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setAbaSecundaria('niveis')}
+                      className="text-[10px] font-bold underline opacity-75 hover:opacity-100 cursor-pointer"
+                    >
+                      Editar Permissões →
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
 
       {/* Barra de Filtros e Busca */}
       <div className="bg-white rounded-xl shadow-xs border border-slate-200 p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -618,11 +659,19 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
             className="px-3 py-1.5 text-xs border border-slate-300 rounded-lg bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#c9a84e]"
           >
             <option value="todos">Todos os Perfis ({usuarios.length})</option>
-            <option value="admin">👑 Administradores ({totalAdmins})</option>
-            <option value="uge">📑 UGE ({totalUge})</option>
-            <option value="3cfo">🎓 3º CFO ({total3CFO})</option>
-            <option value="operacional">🛠️ Operacional ({totalOperacionais})</option>
-            <option value="auxiliar">👁️ Auxiliares ({totalAuxiliares})</option>
+            {niveis.map((n) => {
+              const count = usuarios.filter(
+                (u) =>
+                  u.role === n.id ||
+                  (n.id === 'operacional' && u.role === 'operador') ||
+                  (n.id === 'auxiliar' && u.role === 'visualizador')
+              ).length;
+              return (
+                <option key={n.id} value={n.id}>
+                  {n.icone} {n.nome} ({count})
+                </option>
+              );
+            })}
           </select>
         </div>
       </div>
@@ -651,6 +700,8 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
               ) : (
                 usuariosFiltrados.map((u) => {
                   const isEu = u.id === usuarioLogado.id;
+                  const nivelU = obterNivelDef(u.role, niveis);
+                  const corU = getClassesCorNivel(nivelU.cor);
                   const isEfetivoFixo =
                     u.id.startsWith('user-membro-') ||
                     (membros &&
@@ -671,19 +722,10 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-2.5">
                           <div
-                            className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
-                              u.role === 'admin'
-                                ? 'bg-[#c9a84e] text-[#1a2b4c]'
-                                : u.role === 'uge'
-                                ? 'bg-indigo-600 text-white'
-                                : u.role === '3cfo'
-                                ? 'bg-purple-600 text-white'
-                                : u.role === 'operacional' || u.role === 'operador'
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-emerald-600 text-white'
-                            }`}
+                            className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${corU.badge}`}
+                            title={`${nivelU.icone} ${nivelU.nome}`}
                           >
-                            {u.graduacaoOuCargo.slice(0, 2).toUpperCase()}
+                            {nivelU.icone || u.graduacaoOuCargo.slice(0, 2).toUpperCase()}
                           </div>
                           <div>
                             <div className="font-bold text-slate-900 flex flex-wrap items-center gap-1.5">
@@ -719,23 +761,13 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
                           value={u.role === 'operador' ? 'operacional' : u.role === 'visualizador' ? 'auxiliar' : u.role}
                           disabled={isEu}
                           onChange={(e) => handleAlterarRole(u, e.target.value as UserRole)}
-                          className={`text-[11px] font-bold px-2.5 py-1 rounded-full border cursor-pointer focus:outline-none transition ${
-                            u.role === 'admin'
-                              ? 'bg-[#c9a84e]/20 text-[#1a2b4c] border-[#c9a84e]'
-                              : u.role === 'uge'
-                              ? 'bg-indigo-100 text-indigo-900 border-indigo-300'
-                              : u.role === '3cfo'
-                              ? 'bg-purple-100 text-purple-900 border-purple-300'
-                              : u.role === 'operacional' || u.role === 'operador'
-                              ? 'bg-blue-100 text-blue-900 border-blue-300'
-                              : 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                          }`}
+                          className={`text-[11px] font-bold px-2.5 py-1 rounded-full border cursor-pointer focus:outline-none transition ${corU.badge}`}
                         >
-                          <option value="admin">👑 Administrador (Full)</option>
-                          <option value="uge">📑 UGE</option>
-                          <option value="3cfo">🎓 3º CFO</option>
-                          <option value="operacional">🛠️ Operacional</option>
-                          <option value="auxiliar">👁️ Auxiliares</option>
+                          {niveis.map((n) => (
+                            <option key={n.id} value={n.id}>
+                              {n.icone} {n.nome}
+                            </option>
+                          ))}
                         </select>
                       </td>
 
@@ -797,6 +829,8 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
           </table>
         </div>
       </div>
+      </>
+      )}
 
       {/* Modal Cadastrar Novo Usuário */}
       {modalNovo && (
@@ -887,70 +921,33 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
                   Nível de Acesso (Perfil) *
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setRole('admin')}
-                    className={`p-2.5 rounded-xl border text-left cursor-pointer transition ${
-                      role === 'admin'
-                        ? 'bg-amber-50 border-[#c9a84e] text-amber-900 shadow-xs ring-1 ring-[#c9a84e]'
-                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    <div className="font-bold text-xs flex items-center gap-1">👑 Admin</div>
-                    <div className="text-[10px] text-slate-500 mt-0.5">Acesso total full</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setRole('uge')}
-                    className={`p-2.5 rounded-xl border text-left cursor-pointer transition ${
-                      role === 'uge'
-                        ? 'bg-indigo-50 border-indigo-500 text-indigo-900 shadow-xs ring-1 ring-indigo-400'
-                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    <div className="font-bold text-xs flex items-center gap-1">📑 UGE</div>
-                    <div className="text-[10px] text-slate-500 mt-0.5">Contas, Informe e Cronograma</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setRole('3cfo')}
-                    className={`p-2.5 rounded-xl border text-left cursor-pointer transition ${
-                      role === '3cfo'
-                        ? 'bg-purple-50 border-purple-500 text-purple-900 shadow-xs ring-1 ring-purple-400'
-                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    <div className="font-bold text-xs flex items-center gap-1">🎓 3º CFO</div>
-                    <div className="text-[10px] text-slate-500 mt-0.5">Materiais, Informe e Cronograma</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setRole('operacional')}
-                    className={`p-2.5 rounded-xl border text-left cursor-pointer transition ${
-                      role === 'operacional' || role === 'operador'
-                        ? 'bg-blue-50 border-blue-500 text-blue-900 shadow-xs ring-1 ring-blue-400'
-                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    <div className="font-bold text-xs flex items-center gap-1">🛠️ Operacional</div>
-                    <div className="text-[10px] text-slate-500 mt-0.5">Materiais e Cronograma</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setRole('auxiliar')}
-                    className={`p-2.5 rounded-xl border text-left cursor-pointer transition ${
-                      role === 'auxiliar' || role === 'visualizador'
-                        ? 'bg-emerald-50 border-emerald-500 text-emerald-900 shadow-xs ring-1 ring-emerald-400'
-                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    <div className="font-bold text-xs flex items-center gap-1">👁️ Auxiliares</div>
-                    <div className="text-[10px] text-slate-500 mt-0.5">Cronograma, fotos, conclusão e resultado</div>
-                  </button>
+                  {niveis.map((n) => {
+                    const isSel =
+                      role === n.id ||
+                      (n.id === 'operacional' && role === 'operador') ||
+                      (n.id === 'auxiliar' && role === 'visualizador');
+                    const corClasses = getClassesCorNivel(n.cor);
+                    return (
+                      <button
+                        key={n.id}
+                        type="button"
+                        onClick={() => setRole(n.id as UserRole)}
+                        className={`p-2.5 rounded-xl border text-left cursor-pointer transition ${
+                          isSel
+                            ? `${corClasses.badge} shadow-xs ring-2 ring-offset-1 font-bold`
+                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        <div className="font-bold text-xs flex items-center gap-1">
+                          <span>{n.icone}</span>
+                          <span>{n.nome}</span>
+                        </div>
+                        <div className="text-[10px] opacity-80 mt-0.5 line-clamp-2">
+                          {n.descricao}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -1186,82 +1183,37 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
                   )}
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setEditRole('admin')}
-                    className={`p-2.5 rounded-xl border text-left cursor-pointer transition ${
-                      editRole === 'admin'
-                        ? 'bg-amber-50 border-[#c9a84e] text-amber-900 shadow-xs ring-1 ring-[#c9a84e]'
-                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    <div className="font-bold text-xs flex items-center gap-1">👑 Admin</div>
-                    <div className="text-[10px] text-slate-500 mt-0.5">Acesso total full</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={usuarioEditando.id === usuarioLogado.id}
-                    onClick={() => setEditRole('uge')}
-                    className={`p-2.5 rounded-xl border text-left transition ${
-                      usuarioEditando.id === usuarioLogado.id
-                        ? 'opacity-40 cursor-not-allowed bg-slate-50 border-slate-200 text-slate-400'
-                        : editRole === 'uge'
-                        ? 'bg-indigo-50 border-indigo-500 text-indigo-900 shadow-xs ring-1 ring-indigo-400 cursor-pointer'
-                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 cursor-pointer'
-                    }`}
-                  >
-                    <div className="font-bold text-xs flex items-center gap-1">📑 UGE</div>
-                    <div className="text-[10px] text-slate-500 mt-0.5">Contas, Informe e Cronograma</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={usuarioEditando.id === usuarioLogado.id}
-                    onClick={() => setEditRole('3cfo')}
-                    className={`p-2.5 rounded-xl border text-left transition ${
-                      usuarioEditando.id === usuarioLogado.id
-                        ? 'opacity-40 cursor-not-allowed bg-slate-50 border-slate-200 text-slate-400'
-                        : editRole === '3cfo'
-                        ? 'bg-purple-50 border-purple-500 text-purple-900 shadow-xs ring-1 ring-purple-400 cursor-pointer'
-                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 cursor-pointer'
-                    }`}
-                  >
-                    <div className="font-bold text-xs flex items-center gap-1">🎓 3º CFO</div>
-                    <div className="text-[10px] text-slate-500 mt-0.5">Materiais, Informe e Cronograma</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={usuarioEditando.id === usuarioLogado.id}
-                    onClick={() => setEditRole('operacional')}
-                    className={`p-2.5 rounded-xl border text-left transition ${
-                      usuarioEditando.id === usuarioLogado.id
-                        ? 'opacity-40 cursor-not-allowed bg-slate-50 border-slate-200 text-slate-400'
-                        : editRole === 'operacional' || editRole === 'operador'
-                        ? 'bg-blue-50 border-blue-500 text-blue-900 shadow-xs ring-1 ring-blue-400 cursor-pointer'
-                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 cursor-pointer'
-                    }`}
-                  >
-                    <div className="font-bold text-xs flex items-center gap-1">🛠️ Operacional</div>
-                    <div className="text-[10px] text-slate-500 mt-0.5">Materiais e Cronograma</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={usuarioEditando.id === usuarioLogado.id}
-                    onClick={() => setEditRole('auxiliar')}
-                    className={`p-2.5 rounded-xl border text-left transition ${
-                      usuarioEditando.id === usuarioLogado.id
-                        ? 'opacity-40 cursor-not-allowed bg-slate-50 border-slate-200 text-slate-400'
-                        : editRole === 'auxiliar' || editRole === 'visualizador'
-                        ? 'bg-emerald-50 border-emerald-500 text-emerald-900 shadow-xs ring-1 ring-emerald-400 cursor-pointer'
-                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 cursor-pointer'
-                    }`}
-                  >
-                    <div className="font-bold text-xs flex items-center gap-1">👁️ Auxiliares</div>
-                    <div className="text-[10px] text-slate-500 mt-0.5">Cronograma, fotos, conclusão e resultado</div>
-                  </button>
+                  {niveis.map((n) => {
+                    const isSel =
+                      editRole === n.id ||
+                      (n.id === 'operacional' && editRole === 'operador') ||
+                      (n.id === 'auxiliar' && editRole === 'visualizador');
+                    const isDesabilitado = usuarioEditando.id === usuarioLogado.id && n.id !== 'admin';
+                    const corClasses = getClassesCorNivel(n.cor);
+                    return (
+                      <button
+                        key={n.id}
+                        type="button"
+                        disabled={isDesabilitado}
+                        onClick={() => setEditRole(n.id as UserRole)}
+                        className={`p-2.5 rounded-xl border text-left transition ${
+                          isDesabilitado
+                            ? 'opacity-40 cursor-not-allowed bg-slate-50 border-slate-200 text-slate-400'
+                            : isSel
+                            ? `${corClasses.badge} shadow-xs ring-2 ring-offset-1 font-bold cursor-pointer`
+                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 cursor-pointer'
+                        }`}
+                      >
+                        <div className="font-bold text-xs flex items-center gap-1">
+                          <span>{n.icone}</span>
+                          <span>{n.nome}</span>
+                        </div>
+                        <div className="text-[10px] opacity-80 mt-0.5 line-clamp-2">
+                          {n.descricao}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 

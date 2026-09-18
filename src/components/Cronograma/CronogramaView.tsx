@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { MissaoDiaria, EquipeManutencao, MembroEquipe, InformeMensal, UserRole } from '../../types';
+import React, { useState, useMemo, useEffect } from 'react';
+import { MissaoDiaria, EquipeManutencao, MembroEquipe, InformeMensal, UserRole, PermissoesAcesso, NivelAcessoDef } from '../../types';
 import { MissoesDiariasTab } from './MissoesDiariasTab';
 import { CadastroEquipesTab } from './CadastroEquipesTab';
 import { ResultadoEfetivoTab } from './ResultadoEfetivoTab';
@@ -10,6 +10,7 @@ import {
   DADOS_INICIAIS_EQUIPES,
   DADOS_INICIAIS_MEMBROS,
 } from '../../utils';
+import { obterPermissoesRole } from '../../utils/permissoes';
 import {
   CalendarDays,
   Users,
@@ -34,6 +35,8 @@ interface CronogramaViewProps {
   onChangeInformeAtual?: (informe: InformeMensal) => void;
   onNavegarParaInforme?: () => void;
   usuarioRole?: UserRole;
+  permissoes?: PermissoesAcesso;
+  niveisAcesso?: NivelAcessoDef[];
 }
 
 export const CronogramaView: React.FC<CronogramaViewProps> = ({
@@ -47,12 +50,38 @@ export const CronogramaView: React.FC<CronogramaViewProps> = ({
   onChangeInformeAtual,
   onNavegarParaInforme,
   usuarioRole,
+  permissoes,
+  niveisAcesso,
 }) => {
-  const isAuxiliar = usuarioRole === 'auxiliar' || usuarioRole === 'visualizador';
-  const [subAbaAtiva, setSubAbaAtiva] = useState<'missoes' | 'equipes' | 'resultado'>('missoes');
+  const perms = useMemo(() => {
+    return permissoes || obterPermissoesRole(usuarioRole, niveisAcesso);
+  }, [permissoes, usuarioRole, niveisAcesso]);
+
+  const canVerMissoes = perms.cronogramaMissoes;
+  const canVerEquipes = perms.cronogramaEquipes;
+  const canVerResultado = perms.cronogramaResultado;
+  const canRestaurar = perms.cronogramaRestaurar;
+  const modoAuxiliar = !perms.cronogramaEquipes;
+
+  const [subAbaAtiva, setSubAbaAtiva] = useState<'missoes' | 'equipes' | 'resultado'>(() => {
+    if (canVerMissoes) return 'missoes';
+    if (canVerResultado) return 'resultado';
+    if (canVerEquipes) return 'equipes';
+    return 'missoes';
+  });
   const hoje = formatarDataISO();
   const [dataSelecionada, setDataSelecionada] = useState<string>(hoje);
   const [mensagemRestauracao, setMensagemRestauracao] = useState<string | null>(null);
+
+  // Redireciona caso a sub-aba ativa não seja permitida
+  useEffect(() => {
+    if (subAbaAtiva === 'equipes' && !canVerEquipes) {
+      setSubAbaAtiva('missoes');
+    }
+    if (subAbaAtiva === 'resultado' && !canVerResultado) {
+      setSubAbaAtiva('missoes');
+    }
+  }, [subAbaAtiva, canVerEquipes, canVerResultado]);
 
   // Restaurar TODOS os dados da aba Cronograma (Missões de todas as datas, Equipes e Efetivo/Impedimentos)
   const handleRestaurarTudoCronograma = () => {
@@ -169,8 +198,8 @@ export const CronogramaView: React.FC<CronogramaViewProps> = ({
             )}
           </button>
 
-          {/* Subaba Equipes (apenas para Admin, UGE e Operacional) */}
-          {!isAuxiliar && (
+          {/* Subaba Equipes (conforme permissões do perfil) */}
+          {canVerEquipes && (
             <button
               type="button"
               onClick={() => setSubAbaAtiva('equipes')}
@@ -197,41 +226,43 @@ export const CronogramaView: React.FC<CronogramaViewProps> = ({
             </button>
           )}
 
-          {/* Subaba Resultado ao lado de Equipes e Efetivo da Manutenção (Acessível a todos os perfis incluindo Auxiliar) */}
-          <button
-            type="button"
-            onClick={() => setSubAbaAtiva('resultado')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs sm:text-sm font-bold transition cursor-pointer ${
-              subAbaAtiva === 'resultado'
-                ? 'bg-[#1a2b4c] text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-[#1a2b4c]'
-            }`}
-          >
-            <ClipboardCheck
-              size={16}
-              className={subAbaAtiva === 'resultado' ? 'text-[#c9a84e]' : 'text-slate-400'}
-            />
-            <span>Resultado</span>
-            <span
-              className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+          {/* Subaba Resultado ao lado de Equipes e Efetivo da Manutenção */}
+          {canVerResultado && (
+            <button
+              type="button"
+              onClick={() => setSubAbaAtiva('resultado')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs sm:text-sm font-bold transition cursor-pointer ${
                 subAbaAtiva === 'resultado'
-                  ? 'bg-white/20 text-white'
-                  : 'bg-slate-100 text-slate-600'
+                  ? 'bg-[#1a2b4c] text-white shadow-xs'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-[#1a2b4c]'
               }`}
             >
-              {contadores.totalEfetivoResultado} militares
-              {contadores.impedidosEfetivo > 0 && (
-                <span className="text-red-400 font-extrabold ml-1">
-                  • {contadores.impedidosEfetivo} impedido(s)
-                </span>
-              )}
-            </span>
-          </button>
+              <ClipboardCheck
+                size={16}
+                className={subAbaAtiva === 'resultado' ? 'text-[#c9a84e]' : 'text-slate-400'}
+              />
+              <span>Resultado</span>
+              <span
+                className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                  subAbaAtiva === 'resultado'
+                    ? 'bg-white/20 text-white'
+                    : 'bg-slate-100 text-slate-600'
+                }`}
+              >
+                {contadores.totalEfetivoResultado} militares
+                {contadores.impedidosEfetivo > 0 && (
+                  <span className="text-red-400 font-extrabold ml-1">
+                    • {contadores.impedidosEfetivo} impedido(s)
+                  </span>
+                )}
+              </span>
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-2 pr-1">
-          {/* Botão de restauração global de todos os dados do Cronograma (Apenas Admin/Operacional/UGE) */}
-          {!isAuxiliar && (
+          {/* Botão de restauração global de todos os dados do Cronograma */}
+          {canRestaurar && (
             <button
               type="button"
               onClick={handleRestaurarTudoCronograma}
@@ -248,7 +279,7 @@ export const CronogramaView: React.FC<CronogramaViewProps> = ({
             <Shield size={14} className="text-[#c9a84e]" />
             <span className="font-semibold text-[#1a2b4c]">3ª Cia Escola</span>
             <span>•</span>
-            <span>{isAuxiliar ? 'Missões & Resultado' : 'Ordem Diária de Serviço'}</span>
+            <span>{modoAuxiliar ? 'Missões & Resultado' : 'Ordem Diária de Serviço'}</span>
           </div>
         </div>
       </div>
@@ -285,7 +316,7 @@ export const CronogramaView: React.FC<CronogramaViewProps> = ({
             onNavegarParaInforme={onNavegarParaInforme}
             dataSelecionada={dataSelecionada}
             onChangeDataSelecionada={setDataSelecionada}
-            modoAuxiliar={isAuxiliar}
+            modoAuxiliar={modoAuxiliar}
           />
         )}
 

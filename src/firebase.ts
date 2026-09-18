@@ -34,7 +34,9 @@ import {
   EmpresaCadastrada,
   UsuarioSistema,
   UserRole,
+  NivelAcessoDef,
 } from './types';
+import { NIVEIS_ACESSO_PADRAO } from './utils/permissoes';
 
 // Configuração oficial do Firebase fornecida para o projeto manutencao-3-cia
 export const firebaseConfig = {
@@ -60,6 +62,7 @@ export const FIRESTORE_DOC_INFORME = 'dados_informe';
 export const FIRESTORE_DOC_HISTORICO = 'dados_historico';
 export const FIRESTORE_DOC_ARQUIVOS_SALVOS = 'dados_arquivos_salvos';
 export const FIRESTORE_DOC_USUARIOS = 'dados_usuarios';
+export const FIRESTORE_DOC_NIVEIS_ACESSO = 'dados_niveis_acesso';
 
 export interface DadosSistemaFirestore {
   nfs: NFInstance[];
@@ -912,4 +915,79 @@ export async function logoutSistema(): Promise<void> {
     localStorage.removeItem('pmesp_usuario_logado');
   } catch (e) {}
 }
+
+/**
+ * Carrega a lista de níveis de acesso (perfis) do Firestore com fallback local
+ */
+export async function carregarNiveisAcessoFirestore(): Promise<NivelAcessoDef[]> {
+  try {
+    const refDoc = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_NIVEIS_ACESSO);
+    const snap = await getDoc(refDoc);
+
+    if (snap.exists()) {
+      const data = snap.data() as { niveis?: NivelAcessoDef[] };
+      if (Array.isArray(data?.niveis) && data.niveis.length > 0) {
+        const mapaExistentes = new Map(data.niveis.map((n) => [n.id.toLowerCase(), n]));
+        const listaCompleta = [...data.niveis];
+        for (const pPadrao of NIVEIS_ACESSO_PADRAO) {
+          if (!mapaExistentes.has(pPadrao.id.toLowerCase())) {
+            listaCompleta.push(pPadrao);
+          }
+        }
+        try {
+          localStorage.setItem('pmesp_niveis_acesso', JSON.stringify(listaCompleta));
+        } catch (e) {}
+        return listaCompleta;
+      }
+    }
+  } catch (err) {
+    console.warn('Aviso ao carregar níveis de acesso do Firestore:', err);
+  }
+
+  // Fallback para localStorage ou padrão
+  try {
+    const cached = localStorage.getItem('pmesp_niveis_acesso');
+    if (cached) {
+      const parsed = JSON.parse(cached) as NivelAcessoDef[];
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const mapaExistentes = new Map(parsed.map((n) => [n.id.toLowerCase(), n]));
+        const listaCompleta = [...parsed];
+        for (const pPadrao of NIVEIS_ACESSO_PADRAO) {
+          if (!mapaExistentes.has(pPadrao.id.toLowerCase())) {
+            listaCompleta.push(pPadrao);
+          }
+        }
+        return listaCompleta;
+      }
+    }
+  } catch (e) {}
+
+  return NIVEIS_ACESSO_PADRAO;
+}
+
+/**
+ * Salva a lista de níveis de acesso (perfis) no Firestore e localStorage
+ */
+export async function salvarNiveisAcessoFirestore(niveis: NivelAcessoDef[]): Promise<void> {
+  try {
+    const refDoc = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_NIVEIS_ACESSO);
+    await setDoc(
+      refDoc,
+      limparParaFirestore({
+        niveis,
+        ultimaAtualizacao: new Date().toISOString(),
+      }),
+      { merge: true }
+    );
+    try {
+      localStorage.setItem('pmesp_niveis_acesso', JSON.stringify(niveis));
+    } catch (e) {}
+  } catch (err) {
+    console.warn('Aviso ao salvar níveis de acesso no Firestore:', err);
+    try {
+      localStorage.setItem('pmesp_niveis_acesso', JSON.stringify(niveis));
+    } catch (e) {}
+  }
+}
+
 

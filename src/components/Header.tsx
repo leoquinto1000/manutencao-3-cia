@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Shield, 
   FileText, 
@@ -16,7 +16,8 @@ import {
   LogOut,
   UserCheck
 } from 'lucide-react';
-import { UsuarioSistema } from '../types';
+import { UsuarioSistema, NivelAcessoDef, PermissoesAcesso } from '../types';
+import { obterNivelDef, obterPermissoesRole, getClassesCorNivel, NIVEIS_ACESSO_PADRAO } from '../utils/permissoes';
 
 export type AbaNavegacao = 'prestacao' | 'materiais' | 'informe' | 'cronograma' | 'usuarios';
 
@@ -29,6 +30,8 @@ interface HeaderProps {
   onRecarregarBanco?: () => void;
   usuarioLogado?: UsuarioSistema | null;
   onLogout?: () => void;
+  niveisAcesso?: NivelAcessoDef[];
+  permissoesUsuario?: PermissoesAcesso;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -40,21 +43,32 @@ export const Header: React.FC<HeaderProps> = ({
   onRecarregarBanco,
   usuarioLogado,
   onLogout,
+  niveisAcesso = NIVEIS_ACESSO_PADRAO,
+  permissoesUsuario,
 }) => {
   const [modalAjudaRegras, setModalAjudaRegras] = useState(false);
   const role = usuarioLogado?.role;
-  const isAdmin = role === 'admin';
-  const isUGE = role === 'uge';
-  const is3CFO = role === '3cfo';
-  const isOperacional = role === 'operacional' || role === 'operador';
-  const isAuxiliar = role === 'auxiliar' || role === 'visualizador';
 
-  // Visibilidade estrita das abas conforme as diretrizes de nível de acesso
-  const canVerPrestacao = isAdmin || isUGE;
-  const canVerMateriais = isAdmin || isOperacional || is3CFO;
-  const canVerInforme = isAdmin || isUGE || is3CFO;
-  const canVerCronograma = isAdmin || isUGE || isOperacional || isAuxiliar || is3CFO;
-  const canVerUsuarios = isAdmin;
+  // Permissões ativas calculadas dinamicamente
+  const perms = useMemo(() => {
+    return permissoesUsuario || obterPermissoesRole(role, niveisAcesso);
+  }, [permissoesUsuario, role, niveisAcesso]);
+
+  // Definição visual do nível de acesso atual
+  const nivelDef = useMemo(() => {
+    return obterNivelDef(role, niveisAcesso);
+  }, [role, niveisAcesso]);
+
+  const corClasses = useMemo(() => {
+    return getClassesCorNivel(nivelDef.cor);
+  }, [nivelDef.cor]);
+
+  // Visibilidade das abas conforme as permissões configuradas
+  const canVerPrestacao = perms.verPrestacao;
+  const canVerMateriais = perms.verMateriais;
+  const canVerInforme = perms.verInforme;
+  const canVerCronograma = perms.verCronograma;
+  const canVerUsuarios = perms.verUsuarios;
 
   return (
     <header className="no-print sticky top-0 z-50 bg-[#1a2b4c] text-white shadow-md">
@@ -147,17 +161,8 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="flex items-center gap-2 pl-2 border-l border-white/15">
               <div className="flex items-center gap-2 bg-black/25 px-2.5 py-1 rounded-lg border border-white/10">
                 <div
-                  className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 ${
-                    isAdmin
-                      ? 'bg-[#c9a84e] text-[#1a2b4c]'
-                      : isUGE
-                      ? 'bg-amber-500 text-white'
-                      : is3CFO
-                      ? 'bg-purple-600 text-white'
-                      : isOperacional
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-emerald-600 text-white'
-                  }`}
+                  className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 ${corClasses.badge}`}
+                  title={`${nivelDef.icone} ${nivelDef.nome}`}
                 >
                   {usuarioLogado.graduacaoOuCargo.slice(0, 2).toUpperCase()}
                 </div>
@@ -165,31 +170,9 @@ export const Header: React.FC<HeaderProps> = ({
                   <div className="text-xs font-bold leading-tight flex items-center gap-1.5">
                     <span className="text-slate-200">{usuarioLogado.graduacaoOuCargo}</span>
                     <span className="text-white">{usuarioLogado.nome.split(' ')[0]}</span>
-                    {isAdmin && (
-                      <span className="text-[9px] font-bold bg-[#c9a84e] text-[#1a2b4c] px-1.5 py-0.2 rounded">
-                        Admin (Full)
-                      </span>
-                    )}
-                    {isUGE && (
-                      <span className="text-[9px] font-bold bg-amber-500/30 text-amber-200 px-1.5 py-0.2 rounded border border-amber-400/40">
-                        UGE
-                      </span>
-                    )}
-                    {is3CFO && (
-                      <span className="text-[9px] font-bold bg-purple-500/40 text-purple-200 px-1.5 py-0.2 rounded border border-purple-400/40">
-                        3º CFO
-                      </span>
-                    )}
-                    {isOperacional && (
-                      <span className="text-[9px] font-bold bg-blue-500/40 text-blue-200 px-1.5 py-0.2 rounded border border-blue-400/40">
-                        Operacional
-                      </span>
-                    )}
-                    {isAuxiliar && (
-                      <span className="text-[9px] font-bold bg-emerald-500/40 text-emerald-200 px-1.5 py-0.2 rounded border border-emerald-400/40">
-                        Auxiliar
-                      </span>
-                    )}
+                    <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${corClasses.badge}`}>
+                      {nivelDef.icone} {nivelDef.nome}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -333,33 +316,9 @@ service cloud.firestore {
             )}
           </div>
 
-          {isAuxiliar && (
-            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-800 border border-emerald-300 rounded-full text-xs font-bold">
-              <span>📋 Perfil Auxiliar (Cronograma, Fotos, Conclusão & Resultado)</span>
-            </div>
-          )}
-
-          {isOperacional && (
-            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-800 border border-blue-300 rounded-full text-xs font-bold">
-              <span>🛠️ Perfil Operacional (Materiais & Cronograma)</span>
-            </div>
-          )}
-
-          {is3CFO && (
-            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-purple-50 text-purple-800 border border-purple-300 rounded-full text-xs font-bold">
-              <span>🎓 Perfil 3º CFO (Materiais, Informe & Cronograma)</span>
-            </div>
-          )}
-
-          {isUGE && (
-            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-800 border border-amber-300 rounded-full text-xs font-bold">
-              <span>🏛️ Perfil UGE (Prestação, Informe & Cronograma)</span>
-            </div>
-          )}
-
-          {isAdmin && (
-            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-[#c9a84e]/15 text-[#1a2b4c] border border-[#c9a84e]/40 rounded-full text-xs font-bold">
-              <span>👑 Administrador Full</span>
+          {nivelDef && (
+            <div className={`hidden sm:flex items-center gap-1.5 px-3 py-1 ${getClassesCorNivel(nivelDef.cor).badge} rounded-full text-xs font-bold`}>
+              <span>{nivelDef.icone} {nivelDef.nome}</span>
             </div>
           )}
         </div>

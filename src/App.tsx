@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { RefreshCw, CheckCircle2 } from 'lucide-react';
 import {
   NFInstance,
@@ -19,6 +19,8 @@ import {
   EmpresaCadastrada,
   UsuarioSistema,
   UserRole,
+  NivelAcessoDef,
+  PermissoesAcesso,
 } from './types';
 import {
   DADOS_INICIAIS_NF1,
@@ -40,10 +42,13 @@ import {
   excluirInformeArquivadoFirestore,
   carregarUsuariosFirestore,
   salvarUsuariosFirestore,
+  carregarNiveisAcessoFirestore,
+  salvarNiveisAcessoFirestore,
   logoutSistema,
   USUARIOS_INICIAIS,
   DadosSistemaFirestore,
 } from './firebase';
+import { NIVEIS_ACESSO_PADRAO, obterPermissoesRole } from './utils/permissoes';
 import { salvarItemIndexedDB, carregarItemIndexedDB } from './utils/indexedDbStorage';
 import { Header, AbaNavegacao } from './components/Header';
 import { PrestacaoContasView } from './components/PrestacaoContas/PrestacaoContasView';
@@ -65,6 +70,23 @@ export default function App() {
 
   const [usuarios, setUsuarios] = useState<UsuarioSistema[]>(USUARIOS_INICIAIS);
   const [abaPrincipal, setAbaPrincipal] = useState<AbaNavegacao>('prestacao');
+
+  // Estado dos Níveis de Acesso e Perfis do Sistema (persistido no Firestore)
+  const [niveisAcesso, setNiveisAcesso] = useState<NivelAcessoDef[]>(() => {
+    try {
+      const saved = localStorage.getItem('pmesp_niveis_acesso');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return NIVEIS_ACESSO_PADRAO;
+  });
+
+  // Permissões ativas calculadas dinamicamente para o usuário autenticado
+  const permissoesUsuario = useMemo<PermissoesAcesso>(() => {
+    return obterPermissoesRole(usuarioLogado?.role, niveisAcesso);
+  }, [usuarioLogado?.role, niveisAcesso]);
 
   // Estado de Sincronização em Nuvem com o Firebase Firestore (manutencao-3-cia)
   const [statusFirebase, setStatusFirebase] = useState<'carregando' | 'conectado' | 'salvando' | 'erro-permissao' | 'offline'>('carregando');
@@ -526,6 +548,16 @@ export default function App() {
       })
       .catch((err) => console.warn('Aviso ao carregar usuários:', err));
 
+    // Carrega definições de níveis de acesso personalizadas do banco Firestore
+    carregarNiveisAcessoFirestore()
+      .then((niveisCarregados) => {
+        if (!isMounted) return;
+        if (Array.isArray(niveisCarregados) && niveisCarregados.length > 0) {
+          setNiveisAcesso(niveisCarregados);
+        }
+      })
+      .catch((err) => console.warn('Aviso ao carregar níveis de acesso:', err));
+
     // Timer de segurança para desobstruir a interface caso a conexão esteja offline/muito lenta
     const timerSeguranca = setTimeout(() => {
       if (isMounted) {
@@ -902,6 +934,21 @@ export default function App() {
     salvarDadosFirestore({ informesArquivados: [] }).catch(console.error);
   };
 
+  const handleSalvarNiveisAcesso = async (novosNiveis: NivelAcessoDef[]) => {
+    setNiveisAcesso(novosNiveis);
+    try {
+      localStorage.setItem('pmesp_niveis_acesso', JSON.stringify(novosNiveis));
+    } catch (e) {}
+    try {
+      await salvarNiveisAcessoFirestore(novosNiveis);
+      setFeedbackBanco('Níveis de acesso e permissões salvos com sucesso!');
+    } catch (e) {
+      console.error('Erro ao salvar níveis de acesso no Firestore:', e);
+      setFeedbackBanco('Salvo localmente (offline)');
+    }
+    setTimeout(() => setFeedbackBanco(null), 3000);
+  };
+
   const handleLoginSucesso = (usuario: UsuarioSistema) => {
     setUsuarioLogado(usuario);
     try {
@@ -910,42 +957,53 @@ export default function App() {
     setFeedbackBanco(`Bem-vindo, ${usuario.graduacaoOuCargo} ${usuario.nome}!`);
     setTimeout(() => setFeedbackBanco(null), 3500);
 
-    // Redireciona para a aba inicial apropriada para cada perfil
-    if (usuario.role === 'auxiliar' || usuario.role === 'visualizador') {
+    // Redireciona para a aba inicial apropriada conforme permissões do perfil
+    const perms = obterPermissoesRole(usuario.role, niveisAcesso);
+    if (perms.verCronograma && !perms.verPrestacao && !perms.verMateriais) {
       setAbaPrincipal('cronograma');
-    } else if (usuario.role === 'operacional' || usuario.role === 'operador') {
-      setAbaPrincipal('cronograma');
-    } else if (usuario.role === '3cfo') {
+    } else if (perms.verMateriais && !perms.verPrestacao) {
       setAbaPrincipal('materiais');
-    } else if (usuario.role === 'uge') {
+    } else if (perms.verPrestacao) {
       setAbaPrincipal('prestacao');
-    } else {
-      setAbaPrincipal('prestacao');
+    } else if (perms.verCronograma) {
+      setAbaPrincipal('cronograma');
+    } else if (perms.verInforme) {
+      setAbaPrincipal('informe');
+    } else if (perms.verUsuarios) {
+      setAbaPrincipal('usuarios');
     }
   };
 
   // Garante que o usuário permaneça apenas nas abas autorizadas para seu nível de acesso
   useEffect(() => {
     if (!usuarioLogado) return;
-    const role = usuarioLogado.role;
-    if (role === 'auxiliar' || role === 'visualizador') {
-      if (abaPrincipal !== 'cronograma') {
-        setAbaPrincipal('cronograma');
-      }
-    } else if (role === 'operacional' || role === 'operador') {
-      if (abaPrincipal !== 'materiais' && abaPrincipal !== 'cronograma') {
-        setAbaPrincipal('materiais');
-      }
-    } else if (role === '3cfo') {
-      if (abaPrincipal !== 'materiais' && abaPrincipal !== 'informe' && abaPrincipal !== 'cronograma') {
-        setAbaPrincipal('materiais');
-      }
-    } else if (role === 'uge') {
-      if (abaPrincipal !== 'prestacao' && abaPrincipal !== 'informe' && abaPrincipal !== 'cronograma') {
-        setAbaPrincipal('prestacao');
-      }
+    const perms = permissoesUsuario;
+    if (abaPrincipal === 'prestacao' && !perms.verPrestacao) {
+      if (perms.verCronograma) setAbaPrincipal('cronograma');
+      else if (perms.verMateriais) setAbaPrincipal('materiais');
+      else if (perms.verInforme) setAbaPrincipal('informe');
+      else if (perms.verUsuarios) setAbaPrincipal('usuarios');
+    } else if (abaPrincipal === 'materiais' && !perms.verMateriais) {
+      if (perms.verCronograma) setAbaPrincipal('cronograma');
+      else if (perms.verInforme) setAbaPrincipal('informe');
+      else if (perms.verPrestacao) setAbaPrincipal('prestacao');
+      else if (perms.verUsuarios) setAbaPrincipal('usuarios');
+    } else if (abaPrincipal === 'informe' && !perms.verInforme) {
+      if (perms.verMateriais) setAbaPrincipal('materiais');
+      else if (perms.verCronograma) setAbaPrincipal('cronograma');
+      else if (perms.verPrestacao) setAbaPrincipal('prestacao');
+      else if (perms.verUsuarios) setAbaPrincipal('usuarios');
+    } else if (abaPrincipal === 'cronograma' && !perms.verCronograma) {
+      if (perms.verMateriais) setAbaPrincipal('materiais');
+      else if (perms.verInforme) setAbaPrincipal('informe');
+      else if (perms.verPrestacao) setAbaPrincipal('prestacao');
+      else if (perms.verUsuarios) setAbaPrincipal('usuarios');
+    } else if (abaPrincipal === 'usuarios' && !perms.verUsuarios) {
+      if (perms.verCronograma) setAbaPrincipal('cronograma');
+      else if (perms.verMateriais) setAbaPrincipal('materiais');
+      else if (perms.verPrestacao) setAbaPrincipal('prestacao');
     }
-  }, [usuarioLogado?.role, abaPrincipal]);
+  }, [usuarioLogado?.role, abaPrincipal, permissoesUsuario]);
 
   const handleLogout = async () => {
     await logoutSistema();
@@ -1020,6 +1078,8 @@ export default function App() {
         onRecarregarBanco={handleRecarregarDoBanco}
         usuarioLogado={usuarioLogado}
         onLogout={handleLogout}
+        niveisAcesso={niveisAcesso}
+        permissoesUsuario={permissoesUsuario}
       />
 
       <main className="main-print-container flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 py-6">
@@ -1052,6 +1112,9 @@ export default function App() {
             materiais={materiaisUsados}
             onChangeMateriais={setMateriaisUsados}
             nfs={nfs}
+            usuarioRole={usuarioLogado?.role}
+            permissoes={permissoesUsuario}
+            niveisAcesso={niveisAcesso}
           />
         )}
 
@@ -1080,11 +1143,13 @@ export default function App() {
             onChangeInformeAtual={setInformeAtual}
             onNavegarParaInforme={() => setAbaPrincipal('informe')}
             usuarioRole={usuarioLogado?.role}
+            permissoes={permissoesUsuario}
+            niveisAcesso={niveisAcesso}
           />
         )}
 
         {abaPrincipal === 'usuarios' && (
-          usuarioLogado?.role === 'admin' ? (
+          permissoesUsuario.verUsuarios ? (
             <UsuariosView
               usuarios={usuarios}
               onChangeUsuarios={(novos) => {
@@ -1099,19 +1164,21 @@ export default function App() {
                 } catch (e) {}
               }}
               membros={membros}
+              niveisAcesso={niveisAcesso}
+              onChangeNiveisAcesso={handleSalvarNiveisAcesso}
             />
           ) : (
             <div className="bg-white p-8 rounded-xl shadow-xs border border-slate-200 text-center max-w-md mx-auto my-12">
               <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center mx-auto mb-3 text-xl font-bold">
                 ⚠️
               </div>
-              <h3 className="font-bold text-base text-slate-800">Acesso Restrito ao Comando</h3>
+              <h3 className="font-bold text-base text-slate-800">Acesso Restrito</h3>
               <p className="text-xs text-slate-500 mt-2 mb-4 leading-relaxed">
-                A aba de Gestão de Usuários é exclusiva para o perfil de Administrador da 3ª Cia.
+                A aba de Gestão de Usuários e Níveis de Acesso é restrita a perfis autorizados.
               </p>
               <button
                 type="button"
-                onClick={() => setAbaPrincipal(usuarioLogado?.role === 'operador' ? 'cronograma' : 'informe')}
+                onClick={() => setAbaPrincipal(permissoesUsuario.verCronograma ? 'cronograma' : 'informe')}
                 className="px-4 py-2 bg-[#1a2b4c] text-white text-xs font-bold rounded-lg hover:bg-[#2c4373] transition cursor-pointer"
               >
                 Voltar para meu painel

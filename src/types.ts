@@ -240,7 +240,7 @@ export interface MissaoDiaria {
   informePaginaId?: string;
 }
 
-export type UserRole = 
+export type StandardUserRole = 
   | 'admin' 
   | 'uge' 
   | '3cfo'
@@ -248,6 +248,44 @@ export type UserRole =
   | 'auxiliar'
   | 'operador' 
   | 'visualizador';
+
+export type UserRole = StandardUserRole | (string & {});
+
+export interface PermissoesAcesso {
+  // Abas Principais
+  verPrestacao: boolean;
+  editarPrestacao: boolean;
+  verMateriais: boolean;
+  verInforme: boolean;
+  editarInforme: boolean;
+  verCronograma: boolean;
+  verUsuarios: boolean;
+
+  // Subabas de Materiais
+  materiaisFerramentas: boolean;
+  materiaisSaidas: boolean;
+  materiaisEstoque: boolean;
+  materiaisCompras: boolean;
+
+  // Subabas e Recursos do Cronograma
+  cronogramaMissoes: boolean;
+  cronogramaFotosConclusao: boolean;
+  cronogramaEquipes: boolean;
+  cronogramaResultado: boolean;
+  cronogramaRestaurar: boolean;
+}
+
+export interface NivelAcessoDef {
+  id: string;
+  nome: string;
+  descricao: string;
+  icone: string;
+  cor: 'slate' | 'blue' | 'purple' | 'amber' | 'emerald' | 'red' | 'indigo' | 'cyan';
+  isPadrao?: boolean;
+  permissoes: PermissoesAcesso;
+  criadoEm?: string;
+  atualizadoEm?: string;
+}
 
 export interface UsuarioSistema {
   id: string;
