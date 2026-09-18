@@ -588,7 +588,7 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
               <h3 className="font-bold text-xs uppercase tracking-wider">Auxiliares</h3>
             </div>
             <p className="text-xs text-emerald-800/90 leading-relaxed">
-              Cronograma apenas para visualização de missões, registro de fotos (Antes/Depois) e conclusão.
+              Cronograma com visualização de missões, registro de fotos (Antes/Depois), conclusão e acesso com edição completa na aba Resultado.
             </p>
           </div>
           <div className="mt-3 text-[11px] font-bold text-emerald-900 bg-emerald-100/80 px-2 py-1 rounded inline-block self-start">
@@ -949,7 +949,7 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
                     }`}
                   >
                     <div className="font-bold text-xs flex items-center gap-1">👁️ Auxiliares</div>
-                    <div className="text-[10px] text-slate-500 mt-0.5">Cronograma, fotos e concluir</div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">Cronograma, fotos, conclusão e resultado</div>
                   </button>
                 </div>
               </div>
@@ -1260,7 +1260,7 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
                     }`}
                   >
                     <div className="font-bold text-xs flex items-center gap-1">👁️ Auxiliares</div>
-                    <div className="text-[10px] text-slate-500 mt-0.5">Cronograma, fotos e concluir</div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">Cronograma, fotos, conclusão e resultado</div>
                   </button>
                 </div>
               </div>

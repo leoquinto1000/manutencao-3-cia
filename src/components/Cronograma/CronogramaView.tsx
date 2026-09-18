@@ -197,38 +197,36 @@ export const CronogramaView: React.FC<CronogramaViewProps> = ({
             </button>
           )}
 
-          {/* Subaba Resultado ao lado de Equipes e Efetivo da Manutenção */}
-          {!isAuxiliar && (
-            <button
-              type="button"
-              onClick={() => setSubAbaAtiva('resultado')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs sm:text-sm font-bold transition cursor-pointer ${
+          {/* Subaba Resultado ao lado de Equipes e Efetivo da Manutenção (Acessível a todos os perfis incluindo Auxiliar) */}
+          <button
+            type="button"
+            onClick={() => setSubAbaAtiva('resultado')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs sm:text-sm font-bold transition cursor-pointer ${
+              subAbaAtiva === 'resultado'
+                ? 'bg-[#1a2b4c] text-white shadow-xs'
+                : 'text-slate-600 hover:bg-slate-100 hover:text-[#1a2b4c]'
+            }`}
+          >
+            <ClipboardCheck
+              size={16}
+              className={subAbaAtiva === 'resultado' ? 'text-[#c9a84e]' : 'text-slate-400'}
+            />
+            <span>Resultado</span>
+            <span
+              className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
                 subAbaAtiva === 'resultado'
-                  ? 'bg-[#1a2b4c] text-white shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-[#1a2b4c]'
+                  ? 'bg-white/20 text-white'
+                  : 'bg-slate-100 text-slate-600'
               }`}
             >
-              <ClipboardCheck
-                size={16}
-                className={subAbaAtiva === 'resultado' ? 'text-[#c9a84e]' : 'text-slate-400'}
-              />
-              <span>Resultado</span>
-              <span
-                className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                  subAbaAtiva === 'resultado'
-                    ? 'bg-white/20 text-white'
-                    : 'bg-slate-100 text-slate-600'
-                }`}
-              >
-                {contadores.totalEfetivoResultado} militares
-                {contadores.impedidosEfetivo > 0 && (
-                  <span className="text-red-400 font-extrabold ml-1">
-                    • {contadores.impedidosEfetivo} impedido(s)
-                  </span>
-                )}
-              </span>
-            </button>
-          )}
+              {contadores.totalEfetivoResultado} militares
+              {contadores.impedidosEfetivo > 0 && (
+                <span className="text-red-400 font-extrabold ml-1">
+                  • {contadores.impedidosEfetivo} impedido(s)
+                </span>
+              )}
+            </span>
+          </button>
         </div>
 
         <div className="flex items-center gap-2 pr-1">
@@ -250,7 +248,7 @@ export const CronogramaView: React.FC<CronogramaViewProps> = ({
             <Shield size={14} className="text-[#c9a84e]" />
             <span className="font-semibold text-[#1a2b4c]">3ª Cia Escola</span>
             <span>•</span>
-            <span>{isAuxiliar ? 'Visualização de Missões' : 'Ordem Diária de Serviço'}</span>
+            <span>{isAuxiliar ? 'Missões & Resultado' : 'Ordem Diária de Serviço'}</span>
           </div>
         </div>
       </div>

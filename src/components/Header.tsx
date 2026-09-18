@@ -335,7 +335,7 @@ service cloud.firestore {
 
           {isAuxiliar && (
             <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-800 border border-emerald-300 rounded-full text-xs font-bold">
-              <span>📋 Perfil Auxiliar (Cronograma, Fotos & Conclusão)</span>
+              <span>📋 Perfil Auxiliar (Cronograma, Fotos, Conclusão & Resultado)</span>
             </div>
           )}
 
