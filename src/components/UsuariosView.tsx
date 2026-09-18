@@ -17,14 +17,17 @@ import {
   EyeOff,
   UserCheck,
   Pencil,
-  Save
+  Save,
+  Copy,
+  Check
 } from 'lucide-react';
-import { UsuarioSistema, UserRole } from '../types';
+import { UsuarioSistema, UserRole, MembroEquipe } from '../types';
 import { 
   cadastrarNovoUsuario, 
   redefinirSenhaUsuario, 
   atualizarUsuarioFirestore, 
-  salvarUsuariosFirestore 
+  salvarUsuariosFirestore,
+  excluirUsuarioFirestore
 } from '../firebase';
 
 interface UsuariosViewProps {
@@ -32,6 +35,7 @@ interface UsuariosViewProps {
   onChangeUsuarios: (usuarios: UsuarioSistema[]) => void;
   usuarioLogado: UsuarioSistema;
   onAtualizarUsuarioLogado?: (usuario: UsuarioSistema) => void;
+  membros?: MembroEquipe[];
 }
 
 const GRADUACOES_OPCOES = [
@@ -59,6 +63,7 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
   onChangeUsuarios,
   usuarioLogado,
   onAtualizarUsuarioLogado,
+  membros = [],
 }) => {
   const [busca, setBusca] = useState('');
   const [filtroRole, setFiltroRole] = useState<string>('todos');
@@ -95,6 +100,16 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
   const [editMostrarSenha, setEditMostrarSenha] = useState(false);
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
   const [erroEdicao, setErroEdicao] = useState<string | null>(null);
+
+  // Modal Credenciais do Efetivo
+  const [modalCredenciais, setModalCredenciais] = useState(false);
+  const [buscaCredenciais, setBuscaCredenciais] = useState('');
+  const [copiadoTudo, setCopiadoTudo] = useState(false);
+  const [copiadoId, setCopiadoId] = useState<string | null>(null);
+
+  // Modal Confirmar Exclusão de Usuário
+  const [usuarioParaExcluir, setUsuarioParaExcluir] = useState<UsuarioSistema | null>(null);
+  const [excluindo, setExcluindo] = useState(false);
 
   // Feedback geral
   const [feedback, setFeedback] = useState<{ tipo: 'sucesso' | 'erro'; texto: string } | null>(null);
@@ -178,20 +193,33 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
     exibirFeedback(`Permissão de ${usuario.nome} alterada com sucesso.`);
   };
 
-  const handleExcluirUsuario = async (usuario: UsuarioSistema) => {
+  const handleAbrirExclusao = (usuario: UsuarioSistema) => {
     if (usuario.id === usuarioLogado.id) {
-      alert('Você não pode excluir sua própria conta enquanto estiver conectado.');
+      exibirFeedback('Você não pode excluir sua própria conta enquanto estiver conectado.', 'erro');
+      return;
+    }
+    setUsuarioParaExcluir(usuario);
+  };
+
+  const handleConfirmarExclusao = async () => {
+    if (!usuarioParaExcluir) return;
+    if (usuarioParaExcluir.id === usuarioLogado.id) {
+      exibirFeedback('Você não pode excluir sua própria conta enquanto estiver conectado.', 'erro');
+      setUsuarioParaExcluir(null);
       return;
     }
 
-    if (!confirm(`Deseja realmente remover o usuário ${usuario.graduacaoOuCargo} ${usuario.nome} (${usuario.email})?`)) {
-      return;
+    setExcluindo(true);
+    try {
+      const listaAtualizada = await excluirUsuarioFirestore(usuarioParaExcluir.id);
+      onChangeUsuarios(listaAtualizada);
+      exibirFeedback(`Usuário ${usuarioParaExcluir.graduacaoOuCargo} ${usuarioParaExcluir.nome} excluído com sucesso.`);
+      setUsuarioParaExcluir(null);
+    } catch (err: any) {
+      exibirFeedback(err.message || 'Erro ao excluir usuário.', 'erro');
+    } finally {
+      setExcluindo(false);
     }
-
-    const novaLista = usuarios.filter((u) => u.id !== usuario.id);
-    onChangeUsuarios(novaLista);
-    await salvarUsuariosFirestore(novaLista);
-    exibirFeedback(`Usuário ${usuario.nome} removido do sistema.`);
   };
 
   const handleAbrirEdicao = (usuario: UsuarioSistema) => {
@@ -300,6 +328,101 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
     }
   };
 
+  // Sincronização automática de militares do efetivo fixo para a lista de usuários
+  const handleSincronizarEfetivo = () => {
+    const listaFonte = membros && membros.length > 0 ? membros : [];
+    const fixos = listaFonte.filter((m) => m.tipoEfetivo !== 'apoio');
+
+    if (fixos.length === 0) {
+      exibirFeedback('Nenhum militar do efetivo fixo encontrado para sincronizar.', 'erro');
+      return;
+    }
+
+    let adicionados = 0;
+    const novosUsuarios = [...usuarios];
+
+    for (const m of fixos) {
+      const reLimpo = m.re ? m.re.replace(/\D/g, '') : '';
+      const jaExiste = novosUsuarios.some((u) => {
+        const uReLimpo = u.re ? u.re.replace(/\D/g, '') : '';
+        if (reLimpo && uReLimpo && reLimpo === uReLimpo) return true;
+        const nomeAlvo = (m.nomeGuerra || m.nomeCompleto || '').toLowerCase().replace(/^(1º ten pm|cad pm)\s*/i, '').trim();
+        if (nomeAlvo && u.nome.toLowerCase().includes(nomeAlvo)) return true;
+        return false;
+      });
+
+      if (!jaExiste) {
+        const nomeGuerraLimpo = (m.nomeGuerra || '')
+          .toLowerCase()
+          .replace(/^(1º ten pm|cad pm)\s*/i, '')
+          .trim()
+          .split(' ')[0]
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-z]/g, '');
+
+        const emailSugerido = `${nomeGuerraLimpo || 'militar'}@pmesp.sp.gov.br`;
+
+        let userRole: UserRole = 'auxiliar';
+        const esp = (m.especialidade || '').toLowerCase();
+        const grad = (m.graduacao || '').toLowerCase();
+        if (esp.includes('coordenador') || esp.includes('supervisor') || grad.includes('ten') || grad.includes('cap')) {
+          userRole = 'admin';
+        } else if (esp.includes('uge') || esp.includes('compras') || esp.includes('administração')) {
+          userRole = 'uge';
+        } else if (esp.includes('elétrica') || esp.includes('pintura') || esp.includes('gestão') || esp.includes('hidráulica')) {
+          userRole = 'operacional';
+        }
+
+        novosUsuarios.push({
+          id: `user-membro-${m.id || Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          nome: m.nomeCompleto || m.nomeGuerra,
+          email: emailSugerido,
+          graduacaoOuCargo: m.graduacao === 'Cad PM' ? 'Cadete PM' : m.graduacao,
+          re: m.re,
+          role: userRole,
+          ativo: true,
+          criadoEm: new Date().toISOString(),
+          senhaHash: 'pmesp123456',
+        });
+        adicionados++;
+      }
+    }
+
+    if (adicionados > 0) {
+      onChangeUsuarios(novosUsuarios);
+      exibirFeedback(`${adicionados} usuário(s) do efetivo fixo foram cadastrados com sucesso!`);
+    } else {
+      exibirFeedback('Todos os militares do efetivo fixo já possuem cadastro de usuário no sistema.');
+    }
+  };
+
+  // Copiar relação de credenciais
+  const handleCopiarCredenciaisTodas = () => {
+    const texto = usuarios
+      .map(
+        (u) =>
+          `• ${u.graduacaoOuCargo} ${u.nome} (RE: ${u.re || 'N/D'})\n  E-mail: ${u.email}\n  Perfil: ${
+            u.role === 'admin' ? 'Administrador (Full)' : u.role === 'uge' ? 'UGE' : u.role === 'operacional' ? 'Operacional' : 'Auxiliar'
+          }\n  Senha Padrão: ${u.senhaHash || 'pmesp123456'}\n`
+      )
+      .join('\n');
+
+    navigator.clipboard.writeText(
+      `--- CREDENCIAIS DE ACESSO - EFETIVO 3ª COMPANHIA (PMESP) ---\nSistema de Manutenção & Prestação de Contas\n\n${texto}`
+    );
+    setCopiadoTudo(true);
+    setTimeout(() => setCopiadoTudo(false), 2500);
+    exibirFeedback('Relação de credenciais copiada para a área de transferência!');
+  };
+
+  const handleCopiarLinha = (u: UsuarioSistema) => {
+    const texto = `Login: ${u.email} | Senha: ${u.senhaHash || 'pmesp123456'} | Perfil: ${u.role}`;
+    navigator.clipboard.writeText(texto);
+    setCopiadoId(u.id);
+    setTimeout(() => setCopiadoId(null), 2000);
+  };
+
   // Filtragem
   const usuariosFiltrados = usuarios.filter((u) => {
     const correspondeBusca =
@@ -354,14 +477,36 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setModalNovo(true)}
-          className="px-4 py-2.5 bg-[#1a2b4c] hover:bg-[#2c4373] text-white text-xs font-bold rounded-lg flex items-center gap-2 shadow-xs transition cursor-pointer"
-        >
-          <UserPlus size={15} className="text-[#c9a84e]" />
-          <span>Cadastrar Novo Usuário</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setModalCredenciais(true)}
+            className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-lg flex items-center gap-1.5 transition border border-slate-300 cursor-pointer shadow-2xs"
+            title="Visualizar a relação de e-mails, permissões e senhas padrão de acesso"
+          >
+            <Key size={14} className="text-[#c9a84e]" />
+            <span>Credenciais do Efetivo</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSincronizarEfetivo}
+            className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold rounded-lg flex items-center gap-1.5 transition border border-amber-300 cursor-pointer shadow-2xs"
+            title="Garante que todos os policiais militares do efetivo fixo possuam conta de usuário cadastrada"
+          >
+            <RefreshCw size={14} className="text-amber-700" />
+            <span>Sincronizar Efetivo Fixo</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setModalNovo(true)}
+            className="px-4 py-2 bg-[#1a2b4c] hover:bg-[#2c4373] text-white text-xs font-bold rounded-lg flex items-center gap-2 shadow-xs transition cursor-pointer"
+          >
+            <UserPlus size={15} className="text-[#c9a84e]" />
+            <span>Cadastrar Novo Usuário</span>
+          </button>
+        </div>
       </div>
 
       {/* Cartões dos Níveis de Acesso (Explicação RBAC Conforme Diretrizes) */}
@@ -480,6 +625,21 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
               ) : (
                 usuariosFiltrados.map((u) => {
                   const isEu = u.id === usuarioLogado.id;
+                  const isEfetivoFixo =
+                    u.id.startsWith('user-membro-') ||
+                    (membros &&
+                      membros.some((m) => {
+                        if (m.tipoEfetivo === 'apoio') return false;
+                        const mRe = m.re ? m.re.replace(/\D/g, '') : '';
+                        const uRe = u.re ? u.re.replace(/\D/g, '') : '';
+                        if (mRe && uRe && mRe === uRe) return true;
+                        const nomeBase = (m.nomeGuerra || m.nomeCompleto || '')
+                          .toLowerCase()
+                          .replace(/^(1º ten pm|cad pm)\s*/i, '')
+                          .trim();
+                        return Boolean(nomeBase && u.nome.toLowerCase().includes(nomeBase));
+                      }));
+
                   return (
                     <tr key={u.id} className={`hover:bg-slate-50/80 transition ${!u.ativo ? 'opacity-60 bg-slate-50/40' : ''}`}>
                       <td className="py-3.5 px-4">
@@ -498,10 +658,15 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
                             {u.graduacaoOuCargo.slice(0, 2).toUpperCase()}
                           </div>
                           <div>
-                            <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                            <div className="font-bold text-slate-900 flex flex-wrap items-center gap-1.5">
                               <span>{u.graduacaoOuCargo} {u.nome}</span>
+                              {isEfetivoFixo && (
+                                <span className="bg-amber-100 text-amber-900 border border-amber-300 text-[9px] px-1.5 py-0.2 rounded font-bold shrink-0">
+                                  Efetivo Fixo
+                                </span>
+                              )}
                               {isEu && (
-                                <span className="bg-[#1a2b4c] text-white text-[9px] px-1.5 py-0.5 rounded font-bold">
+                                <span className="bg-[#1a2b4c] text-white text-[9px] px-1.5 py-0.2 rounded font-bold">
                                   Você
                                 </span>
                               )}
@@ -585,9 +750,9 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
                           <button
                             type="button"
                             disabled={isEu}
-                            onClick={() => handleExcluirUsuario(u)}
+                            onClick={() => handleAbrirExclusao(u)}
                             className="p-1.5 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                            title={isEu ? 'Não é possível excluir a si mesmo' : 'Excluir usuário'}
+                            title={isEu ? 'Não é possível excluir a sua própria conta conectada' : 'Excluir usuário do sistema'}
                           >
                             <Trash2 size={15} />
                           </button>
@@ -1132,33 +1297,309 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
                 )}
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setUsuarioEditando(null)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={salvandoEdicao}
-                  className="px-5 py-2 text-xs font-bold bg-[#1a2b4c] text-white hover:bg-[#2c4373] rounded-lg transition cursor-pointer flex items-center gap-1.5 shadow-xs disabled:opacity-50"
-                >
-                  {salvandoEdicao ? (
-                    <>
-                      <RefreshCw size={14} className="animate-spin text-[#c9a84e]" />
-                      <span>Salvando Alterações...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Save size={14} className="text-[#c9a84e]" />
-                      <span>Salvar Alterações</span>
-                    </>
-                  )}
-                </button>
+              <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-200">
+                {usuarioEditando.id !== usuarioLogado.id ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const u = usuarioEditando;
+                      setUsuarioEditando(null);
+                      handleAbrirExclusao(u);
+                    }}
+                    className="px-3 py-1.5 text-xs font-semibold text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition cursor-pointer flex items-center gap-1.5 border border-red-200"
+                  >
+                    <Trash2 size={13} />
+                    <span>Excluir Usuário</span>
+                  </button>
+                ) : (
+                  <div />
+                )}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setUsuarioEditando(null)}
+                    className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={salvandoEdicao}
+                    className="px-5 py-2 text-xs font-bold bg-[#1a2b4c] text-white hover:bg-[#2c4373] rounded-lg transition cursor-pointer flex items-center gap-1.5 shadow-xs disabled:opacity-50"
+                  >
+                    {salvandoEdicao ? (
+                      <>
+                        <RefreshCw size={14} className="animate-spin text-[#c9a84e]" />
+                        <span>Salvando Alterações...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Save size={14} className="text-[#c9a84e]" />
+                        <span>Salvar Alterações</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Credenciais do Efetivo da 3ª Cia */}
+      {modalCredenciais && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#1a2b4c] text-white">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-[#c9a84e]/20 rounded-lg text-[#c9a84e]">
+                  <Key size={20} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base">Credenciais de Acesso — Efetivo 3ª Cia</h3>
+                  <p className="text-xs text-slate-300">
+                    Relação de logins e senhas para distribuição ao efetivo militar da Manutenção
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleCopiarCredenciaisTodas}
+                  className="px-3.5 py-1.5 bg-[#c9a84e] hover:bg-[#b8953f] text-[#1a2b4c] font-bold text-xs rounded-lg flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+                >
+                  {copiadoTudo ? <Check size={14} /> : <Copy size={14} />}
+                  <span>{copiadoTudo ? 'Copiado!' : 'Copiar Relação'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalCredenciais(false)}
+                  className="p-1.5 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition cursor-pointer"
+                >
+                  <XCircle size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Sub-header com busca e instruções */}
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="relative flex-1 max-w-md">
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={buscaCredenciais}
+                  onChange={(e) => setBuscaCredenciais(e.target.value)}
+                  placeholder="Pesquisar militar por nome, RE ou e-mail..."
+                  className="w-full pl-9 pr-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#c9a84e]"
+                />
+              </div>
+
+              <div className="text-[11px] text-slate-500 font-medium">
+                Total: <span className="font-bold text-slate-800">{usuarios.length}</span> usuários cadastrados
+              </div>
+            </div>
+
+            {/* Conteúdo da Tabela */}
+            <div className="p-4 overflow-y-auto flex-1 space-y-4">
+              <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2.5">
+                <Shield size={16} className="text-amber-700 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-bold">Diretriz de Segurança Militar</p>
+                  <p className="text-[11px] text-amber-800/90 leading-relaxed">
+                    A senha padrão inicial de todos os usuários é <strong>pmesp123456</strong>. Cada militar pode alterar sua senha a qualquer momento através do seu painel de usuário ou solicitando ao Administrador da 3ª Cia.
+                  </p>
+                </div>
+              </div>
+
+              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+                <table className="w-full text-left text-xs text-slate-700">
+                  <thead className="bg-slate-100 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[10px]">
+                    <tr>
+                      <th className="py-2.5 px-3">Militar / Função</th>
+                      <th className="py-2.5 px-3">RE</th>
+                      <th className="py-2.5 px-3">E-mail (Login)</th>
+                      <th className="py-2.5 px-3">Nível de Acesso</th>
+                      <th className="py-2.5 px-3">Senha Padrão</th>
+                      <th className="py-2.5 px-3 text-center">Copiar</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 bg-white">
+                    {usuarios
+                      .filter((u) => {
+                        if (!buscaCredenciais.trim()) return true;
+                        const b = buscaCredenciais.toLowerCase();
+                        return (
+                          u.nome.toLowerCase().includes(b) ||
+                          u.email.toLowerCase().includes(b) ||
+                          (u.re && u.re.toLowerCase().includes(b)) ||
+                          u.graduacaoOuCargo.toLowerCase().includes(b)
+                        );
+                      })
+                      .map((u) => {
+                        const isCopiado = copiadoId === u.id;
+                        return (
+                          <tr key={u.id} className="hover:bg-slate-50 transition">
+                            <td className="py-2.5 px-3 font-semibold text-slate-900">
+                              <div className="flex items-center gap-1.5">
+                                <span>{u.graduacaoOuCargo} {u.nome}</span>
+                                {u.id.startsWith('user-membro-') && (
+                                  <span className="bg-amber-100 text-amber-900 text-[9px] px-1.5 py-0.2 rounded font-bold">
+                                    Efetivo
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-3 font-mono text-slate-600">
+                              {u.re || '-'}
+                            </td>
+                            <td className="py-2.5 px-3 font-mono text-slate-700 font-medium select-all">
+                              {u.email}
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-block ${
+                                  u.role === 'admin'
+                                    ? 'bg-[#c9a84e]/20 text-[#1a2b4c] border border-[#c9a84e]'
+                                    : u.role === 'uge'
+                                    ? 'bg-indigo-100 text-indigo-900 border border-indigo-200'
+                                    : u.role === 'operacional' || u.role === 'operador'
+                                    ? 'bg-blue-100 text-blue-900 border border-blue-200'
+                                    : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                }`}
+                              >
+                                {u.role === 'admin'
+                                  ? '👑 Administrador'
+                                  : u.role === 'uge'
+                                  ? '📑 UGE'
+                                  : u.role === 'operacional' || u.role === 'operador'
+                                  ? '🛠️ Operacional'
+                                  : '👁️ Auxiliares'}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 font-mono text-slate-800 font-bold select-all">
+                              {u.senhaHash || 'pmesp123456'}
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleCopiarLinha(u)}
+                                className={`p-1.5 rounded transition cursor-pointer ${
+                                  isCopiado
+                                    ? 'bg-emerald-100 text-emerald-700'
+                                    : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
+                                }`}
+                                title="Copiar login e senha deste militar"
+                              >
+                                {isCopiado ? <Check size={14} /> : <Copy size={14} />}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+              <span className="text-[11px] text-slate-500">
+                Pressione ESC ou clique em Fechar para sair
+              </span>
+              <button
+                type="button"
+                onClick={() => setModalCredenciais(false)}
+                className="px-5 py-2 text-xs font-bold bg-[#1a2b4c] text-white hover:bg-[#2c4373] rounded-lg transition cursor-pointer"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirmar Exclusão de Usuário */}
+      {usuarioParaExcluir && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            <div className="p-5 border-b border-red-100 bg-red-50/70 flex items-center gap-3">
+              <div className="p-2.5 bg-red-100 text-red-700 rounded-xl shrink-0">
+                <AlertTriangle size={22} />
+              </div>
+              <div>
+                <h3 className="font-bold text-base text-red-950">Excluir Usuário</h3>
+                <p className="text-xs text-red-700">Esta ação revogará o acesso do militar ao sistema</p>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs text-slate-700">
+              <p className="leading-relaxed">
+                Tem certeza de que deseja excluir o cadastro deste militar? Ele perderá imediatamente as credenciais de autenticação e o acesso a todos os módulos da 3ª Companhia.
+              </p>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
+                <div className="flex justify-between items-center border-b border-slate-200/70 pb-2">
+                  <span className="text-slate-500 text-[11px]">Militar:</span>
+                  <span className="font-bold text-slate-900">
+                    {usuarioParaExcluir.graduacaoOuCargo} {usuarioParaExcluir.nome}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center border-b border-slate-200/70 pb-2">
+                  <span className="text-slate-500 text-[11px]">RE:</span>
+                  <span className="font-mono font-bold text-slate-800">
+                    {usuarioParaExcluir.re || 'N/D'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center border-b border-slate-200/70 pb-2">
+                  <span className="text-slate-500 text-[11px]">E-mail de Login:</span>
+                  <span className="font-mono text-slate-700 font-medium">
+                    {usuarioParaExcluir.email}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 text-[11px]">Nível de Acesso:</span>
+                  <span className="font-semibold text-slate-800 uppercase text-[10px] bg-slate-200 px-2 py-0.5 rounded">
+                    {usuarioParaExcluir.role}
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-[11px] text-amber-900 leading-relaxed">
+                <strong>Aviso:</strong> A exclusão é sincronizada com o banco de dados e impede novos acessos. Caso necessário futuramente, o usuário poderá ser recadastrado manualmente ou pela sincronização do efetivo.
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                disabled={excluindo}
+                onClick={() => setUsuarioParaExcluir(null)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-200 rounded-lg transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={excluindo}
+                onClick={handleConfirmarExclusao}
+                className="px-4 py-2 text-xs font-bold bg-red-600 hover:bg-red-700 text-white rounded-lg transition cursor-pointer flex items-center gap-1.5 shadow-xs disabled:opacity-50"
+              >
+                {excluindo ? (
+                  <>
+                    <RefreshCw size={14} className="animate-spin" />
+                    <span>Excluindo...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={14} />
+                    <span>Confirmar Exclusão</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -380,6 +380,7 @@ export function escutarDadosFirestore(
 // ==========================================
 
 export const USUARIOS_INICIAIS: UsuarioSistema[] = [
+  // Administradores do Sistema e Comando
   {
     id: 'user-admin-1',
     email: 'leoquinto1000@gmail.com',
@@ -402,6 +403,132 @@ export const USUARIOS_INICIAIS: UsuarioSistema[] = [
     criadoEm: '2026-01-01T00:00:00.000Z',
     senhaHash: 'pmesp123456',
   },
+  // Oficial Coordenador / Supervisor do Efetivo Fixo da Manutenção
+  {
+    id: 'user-membro-froes',
+    email: 'froes@pmesp.sp.gov.br',
+    nome: 'João Froes',
+    graduacaoOuCargo: '1º Ten PM',
+    re: '142.890-1',
+    role: 'admin',
+    ativo: true,
+    criadoEm: '2026-01-01T00:00:00.000Z',
+    senhaHash: 'pmesp123456',
+  },
+  // Efetivo Fixo da Manutenção - Equipe Alfa (Elétrica & Gestão)
+  {
+    id: 'user-membro-perozin',
+    email: 'perozin@pmesp.sp.gov.br',
+    nome: 'Gustavo Perozin',
+    graduacaoOuCargo: 'Cadete PM',
+    re: '230060-5',
+    role: 'operacional',
+    ativo: true,
+    criadoEm: '2026-01-01T00:00:00.000Z',
+    senhaHash: 'pmesp123456',
+  },
+  {
+    id: 'user-membro-fabio',
+    email: 'fabio@pmesp.sp.gov.br',
+    nome: 'João Batista de Moura Fábio',
+    graduacaoOuCargo: 'Cadete PM',
+    re: '252593-3',
+    role: 'operacional',
+    ativo: true,
+    criadoEm: '2026-01-01T00:00:00.000Z',
+    senhaHash: 'pmesp123456',
+  },
+  {
+    id: 'user-membro-ulisses',
+    email: 'ulisses@pmesp.sp.gov.br',
+    nome: 'Ulisses Silveira da Silva Gonçalves',
+    graduacaoOuCargo: 'Cadete PM',
+    re: '180823-A',
+    role: 'operacional',
+    ativo: true,
+    criadoEm: '2026-01-01T00:00:00.000Z',
+    senhaHash: 'pmesp123456',
+  },
+  // Efetivo Fixo da Manutenção - Equipe Bravo (Compras, Orçamentos & UGE)
+  {
+    id: 'user-membro-diomazio',
+    email: 'diomazio@pmesp.sp.gov.br',
+    nome: 'Gabriel Fernando Diomazio Figueira',
+    graduacaoOuCargo: 'Cadete PM',
+    re: '144966-4',
+    role: 'uge',
+    ativo: true,
+    criadoEm: '2026-01-01T00:00:00.000Z',
+    senhaHash: 'pmesp123456',
+  },
+  {
+    id: 'user-membro-augusto',
+    email: 'augusto@pmesp.sp.gov.br',
+    nome: 'Leonardo Augusto Quinto',
+    graduacaoOuCargo: 'Cadete PM',
+    re: '170429-0',
+    role: 'uge',
+    ativo: true,
+    criadoEm: '2026-01-01T00:00:00.000Z',
+    senhaHash: 'pmesp123456',
+  },
+  {
+    id: 'user-membro-peciukonis',
+    email: 'peciukonis@pmesp.sp.gov.br',
+    nome: 'Thiago Peciukonis',
+    graduacaoOuCargo: 'Cadete PM',
+    re: '191800-1',
+    role: 'uge',
+    ativo: true,
+    criadoEm: '2026-01-01T00:00:00.000Z',
+    senhaHash: 'pmesp123456',
+  },
+  // Efetivo Fixo da Manutenção - Equipe Charlie (Pintura & Auxiliar Geral)
+  {
+    id: 'user-membro-salvioni',
+    email: 'salvioni@pmesp.sp.gov.br',
+    nome: 'Lucas Batista Salvioni',
+    graduacaoOuCargo: 'Cadete PM',
+    re: '252664-6',
+    role: 'operacional',
+    ativo: true,
+    criadoEm: '2026-01-01T00:00:00.000Z',
+    senhaHash: 'pmesp123456',
+  },
+  {
+    id: 'user-membro-freire',
+    email: 'freire@pmesp.sp.gov.br',
+    nome: 'Israel Freire Moreira',
+    graduacaoOuCargo: 'Cadete PM',
+    re: '260062-5',
+    role: 'auxiliar',
+    ativo: true,
+    criadoEm: '2026-01-01T00:00:00.000Z',
+    senhaHash: 'pmesp123456',
+  },
+  {
+    id: 'user-membro-ravely',
+    email: 'ravely@pmesp.sp.gov.br',
+    nome: 'César Ravely Moura da Silva',
+    graduacaoOuCargo: 'Cadete PM',
+    re: '230342-6',
+    role: 'auxiliar',
+    ativo: true,
+    criadoEm: '2026-01-01T00:00:00.000Z',
+    senhaHash: 'pmesp123456',
+  },
+  {
+    id: 'user-membro-isack',
+    email: 'isack@pmesp.sp.gov.br',
+    nome: 'Isack Soares Moreira',
+    graduacaoOuCargo: 'Cadete PM',
+    re: '250021-3',
+    role: 'auxiliar',
+    ativo: true,
+    criadoEm: '2026-01-01T00:00:00.000Z',
+    senhaHash: 'pmesp123456',
+  },
+  // Contas Genéricas de Função
   {
     id: 'user-uge-1',
     email: 'uge@pmesp.sp.gov.br',
@@ -445,14 +572,33 @@ export async function carregarUsuariosFirestore(): Promise<UsuarioSistema[]> {
     const refDoc = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_USUARIOS);
     const snap = await lerDocServidorComFallback(refDoc);
     if (snap && snap.exists()) {
-      const data = snap.data() as { usuarios?: UsuarioSistema[] };
+      const data = snap.data() as { usuarios?: UsuarioSistema[]; excluidos?: string[] };
+      const excluidosSet = new Set((data?.excluidos || []).map((e) => e.toLowerCase()));
+
       if (Array.isArray(data?.usuarios) && data.usuarios.length > 0) {
-        return data.usuarios.map((u) => {
+        const mapaExistentes = new Map(data.usuarios.map((u) => [u.email.toLowerCase(), u]));
+        const listaMesclada: UsuarioSistema[] = data.usuarios.map((u) => {
           let role = u.role;
           if (role === 'operador') role = 'operacional';
           if (role === 'visualizador') role = 'auxiliar';
           return { ...u, role };
         });
+
+        // Garante que todo o efetivo fixo cadastrado em USUARIOS_INICIAIS esteja presente,
+        // EXCETO se o usuário tiver sido explicitamente excluído por um administrador
+        let alterou = false;
+        for (const uPadrao of USUARIOS_INICIAIS) {
+          const emailLower = uPadrao.email.toLowerCase();
+          if (!mapaExistentes.has(emailLower) && !excluidosSet.has(emailLower)) {
+            listaMesclada.push(uPadrao);
+            alterou = true;
+          }
+        }
+
+        if (alterou) {
+          salvarUsuariosFirestore(listaMesclada).catch(console.error);
+        }
+        return listaMesclada;
       }
     }
     // Se não existia ainda, inicializa com os usuários padrão do sistema
@@ -462,7 +608,25 @@ export async function carregarUsuariosFirestore(): Promise<UsuarioSistema[]> {
     console.warn('Aviso ao carregar usuários do Firestore, utilizando base local:', err);
     try {
       const cached = localStorage.getItem('pmesp_usuarios');
-      if (cached) return JSON.parse(cached);
+      const cachedExcluidos = localStorage.getItem('pmesp_usuarios_excluidos');
+      const excluidosSet = new Set<string>(
+        cachedExcluidos ? JSON.parse(cachedExcluidos).map((e: string) => e.toLowerCase()) : []
+      );
+
+      if (cached) {
+        const parsed = JSON.parse(cached) as UsuarioSistema[];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const mapaExistentes = new Map(parsed.map((u) => [u.email.toLowerCase(), u]));
+          const listaMesclada = [...parsed];
+          for (const uPadrao of USUARIOS_INICIAIS) {
+            const emailLower = uPadrao.email.toLowerCase();
+            if (!mapaExistentes.has(emailLower) && !excluidosSet.has(emailLower)) {
+              listaMesclada.push(uPadrao);
+            }
+          }
+          return listaMesclada;
+        }
+      }
     } catch (e) {}
     return USUARIOS_INICIAIS;
   }
@@ -491,6 +655,53 @@ export async function salvarUsuariosFirestore(usuarios: UsuarioSistema[]): Promi
       localStorage.setItem('pmesp_usuarios', JSON.stringify(usuarios));
     } catch (e) {}
   }
+}
+
+/**
+ * Exclui um usuário do sistema (Firestore e LocalStorage) e registra o e-mail na lista de excluídos
+ */
+export async function excluirUsuarioFirestore(id: string): Promise<UsuarioSistema[]> {
+  const usuariosAtuais = await carregarUsuariosFirestore();
+  const usuarioRemovido = usuariosAtuais.find((u) => u.id === id);
+  const novaLista = usuariosAtuais.filter((u) => u.id !== id);
+
+  try {
+    const refDoc = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_USUARIOS);
+    const snap = await lerDocServidorComFallback(refDoc);
+    const dadosAntigos = snap?.exists() ? (snap.data() as { excluidos?: string[] }) : {};
+    const excluidosSet = new Set((dadosAntigos?.excluidos || []).map((e) => e.toLowerCase()));
+    if (usuarioRemovido?.email) {
+      excluidosSet.add(usuarioRemovido.email.toLowerCase());
+    }
+
+    await setDoc(
+      refDoc,
+      limparParaFirestore({
+        usuarios: novaLista,
+        excluidos: Array.from(excluidosSet),
+        ultimaAtualizacao: new Date().toISOString(),
+      }),
+      { merge: true }
+    );
+
+    try {
+      localStorage.setItem('pmesp_usuarios', JSON.stringify(novaLista));
+      localStorage.setItem('pmesp_usuarios_excluidos', JSON.stringify(Array.from(excluidosSet)));
+    } catch (e) {}
+  } catch (err) {
+    console.warn('Aviso ao excluir usuário no Firestore:', err);
+    try {
+      localStorage.setItem('pmesp_usuarios', JSON.stringify(novaLista));
+      const cachedExcluidos = localStorage.getItem('pmesp_usuarios_excluidos');
+      const excluidosArr: string[] = cachedExcluidos ? JSON.parse(cachedExcluidos) : [];
+      if (usuarioRemovido?.email && !excluidosArr.includes(usuarioRemovido.email.toLowerCase())) {
+        excluidosArr.push(usuarioRemovido.email.toLowerCase());
+      }
+      localStorage.setItem('pmesp_usuarios_excluidos', JSON.stringify(excluidosArr));
+    } catch (e) {}
+  }
+
+  return novaLista;
 }
 
 /**

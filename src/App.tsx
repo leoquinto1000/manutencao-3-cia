@@ -1092,6 +1092,7 @@ export default function App() {
                   localStorage.setItem('pmesp_usuario_logado', JSON.stringify(atualizado));
                 } catch (e) {}
               }}
+              membros={membros}
             />
           ) : (
             <div className="bg-white p-8 rounded-xl shadow-xs border border-slate-200 text-center max-w-md mx-auto my-12">
