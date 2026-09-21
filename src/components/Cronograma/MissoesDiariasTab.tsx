@@ -10,7 +10,7 @@ import {
 import { ModalNovaMissao } from './ModalNovaMissao';
 import { ModalPreviaFolhaInforme } from './ModalPreviaFolhaInforme';
 import { formatarAnoPelotao } from './CadastroEquipesTab';
-import { imprimirEmNovaJanela } from '../../utils/pdfPrintHelper';
+import { imprimirEmNovaJanela, executarImpressaoA4 } from '../../utils/pdfPrintHelper';
 import {
   formatarDataISO,
   adicionarDiasISO,
@@ -460,10 +460,10 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
     }
   };
 
-  // Impressão da Ordem do Dia (abre janela dedicada e imprime exatamente a pauta oficial)
+  // Impressão da Ordem do Dia (executa impressão isolada A4 oficial)
   const handleImprimir = () => {
     if (folhaOrdemDoDiaRef.current) {
-      imprimirEmNovaJanela(
+      executarImpressaoA4(
         folhaOrdemDoDiaRef.current,
         `PAUTA DIÁRIA DE MISSÕES - ${formatarDataCurta(dataSelecionada)}`
       );

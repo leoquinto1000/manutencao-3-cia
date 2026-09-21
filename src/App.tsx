@@ -333,14 +333,28 @@ export default function App() {
       // Se os dados do banco Firestore já carregaram, não sobrescreve
       if (isCarregadoInicialmente.current) return;
       try {
-        const [missoesDB, informeDB, arquivadosDB, projetosDB] = await Promise.all([
+        const [missoesDB, informeDB, arquivadosDB, projetosDB, usuarioDB] = await Promise.all([
           carregarItemIndexedDB<MissaoDiaria[]>('pmesp_missoes'),
           carregarItemIndexedDB<InformeMensal>('pmesp_informe_atual'),
           carregarItemIndexedDB<InformeMensal[]>('pmesp_informes_arquivados'),
           carregarItemIndexedDB<ProjetoSalvo[]>('pmesp_projetos_arquivados'),
+          carregarItemIndexedDB<UsuarioSistema>('pmesp_usuario_logado'),
         ]);
 
         if (!isAtivo || isCarregadoInicialmente.current) return;
+
+        // Se o usuário não estava no localStorage (ex: cache de abas limpo), restaura do IndexedDB
+        if (usuarioDB && usuarioDB.ativo) {
+          setUsuarioLogado((atual) => {
+            if (!atual) {
+              try {
+                localStorage.setItem('pmesp_usuario_logado', JSON.stringify(usuarioDB));
+              } catch (e) {}
+              return usuarioDB;
+            }
+            return atual;
+          });
+        }
 
         if (Array.isArray(missoesDB) && missoesDB.length > 0) {
           setMissoes((atuais) => {
@@ -408,6 +422,15 @@ export default function App() {
       isAtivo = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (usuarioLogado) {
+      try {
+        localStorage.setItem('pmesp_usuario_logado', JSON.stringify(usuarioLogado));
+      } catch (e) {}
+      salvarItemIndexedDB('pmesp_usuario_logado', usuarioLogado);
+    }
+  }, [usuarioLogado]);
 
   useEffect(() => {
     try {
@@ -967,6 +990,7 @@ export default function App() {
     try {
       localStorage.setItem('pmesp_usuario_logado', JSON.stringify(usuario));
     } catch (e) {}
+    salvarItemIndexedDB('pmesp_usuario_logado', usuario);
     setFeedbackBanco(`Bem-vindo, ${usuario.graduacaoOuCargo} ${usuario.nome}!`);
     setTimeout(() => setFeedbackBanco(null), 3500);
 

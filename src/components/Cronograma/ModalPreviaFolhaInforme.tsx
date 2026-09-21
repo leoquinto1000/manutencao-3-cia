@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { MissaoDiaria } from '../../types';
-import { imprimirEmNovaJanela } from '../../utils/pdfPrintHelper';
+import { imprimirEmNovaJanela, executarImpressaoA4 } from '../../utils/pdfPrintHelper';
 import { baixarFoto } from '../../utils';
 import { Printer, ExternalLink, X, CheckCircle2, AlertCircle, Download } from 'lucide-react';
 
@@ -32,7 +32,7 @@ export const ModalPreviaFolhaInforme: React.FC<ModalPreviaFolhaInformeProps> = (
 
   const handleImprimirFolha = () => {
     if (folhaRef.current) {
-      imprimirEmNovaJanela(
+      executarImpressaoA4(
         folhaRef.current,
         `INFORME MENSAL - ${missao.titulo.toUpperCase()}`
       );
@@ -135,8 +135,8 @@ export const ModalPreviaFolhaInforme: React.FC<ModalPreviaFolhaInformeProps> = (
         )}
 
         {/* Folha padrão A4 do Informe Mensal (Visualização Idêntica à Impressão) */}
-        <div className="bg-white border border-slate-300 rounded-sm shadow-md overflow-x-auto p-4 sm:p-8 max-w-[210mm] mx-auto">
-          <div ref={folhaRef} className="apmbb-page bg-white max-w-[194mm] mx-auto p-4 sm:p-6 text-black">
+        <div className="bg-slate-200/60 border border-slate-300 rounded-sm shadow-md overflow-x-auto p-2 sm:p-4 max-w-[220mm] mx-auto">
+          <div ref={folhaRef} className="apmbb-page bg-white">
             {/* Top Header Institucional */}
             <div className="flex justify-between items-center border-b-2 border-black pb-1.5 mb-5 font-heading">
               <div className="text-[11px] font-black text-black tracking-wide uppercase">

@@ -3,7 +3,7 @@ import { NFInstance, MaterialItem, Supplier, PesquisaPrecoItem } from '../../typ
 import { formatMoeda, parseMoeda, gerarId } from '../../utils';
 import { Plus, Trash2, Minus, FileCode, Printer, FileText } from 'lucide-react';
 import { ModalVisualizadorPDF } from './ModalVisualizadorPDF';
-import { imprimirEmNovaJanela } from '../../utils/pdfPrintHelper';
+import { imprimirEmNovaJanela, executarImpressaoA4 } from '../../utils/pdfPrintHelper';
 
 interface TabelaComposicaoProps {
   nf: NFInstance;
@@ -230,16 +230,16 @@ export const TabelaComposicao: React.FC<TabelaComposicaoProps> = ({
           <button
             onClick={() => {
               if (sheetRef.current) {
-                imprimirEmNovaJanela(sheetRef.current, `Planilha de Composição de Preços - ${nf?.label || 'NF'}`);
+                executarImpressaoA4(sheetRef.current, `Planilha de Composição de Preços - ${nf?.label || 'NF'}`);
               } else {
                 window.print();
               }
             }}
-            className="flex items-center gap-1.5 bg-[#1a2b4c] hover:bg-[#2c4373] text-white text-xs font-semibold px-3 py-2 rounded transition shadow-sm"
-            title="Imprimir diretamente em nova janela (sem bloqueios)"
+            className="flex items-center gap-1.5 bg-[#1a2b4c] hover:bg-[#2c4373] text-white text-xs font-semibold px-3 py-2 rounded transition shadow-sm cursor-pointer"
+            title="Imprimir folha A4 oficial diretamente"
           >
             <Printer size={14} />
-            <span>Imprimir</span>
+            <span>Imprimir Folha A4</span>
           </button>
         </div>
       </div>

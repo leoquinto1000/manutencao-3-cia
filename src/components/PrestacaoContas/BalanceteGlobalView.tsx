@@ -3,7 +3,7 @@ import { BalanceteState, BalanceteDespesa, NFInstance } from '../../types';
 import { formatMoeda, parseMoeda, gerarId } from '../../utils';
 import { RefreshCw, Plus, Trash2, Upload, Printer, FileText } from 'lucide-react';
 import { ModalVisualizadorPDF } from './ModalVisualizadorPDF';
-import { imprimirEmNovaJanela } from '../../utils/pdfPrintHelper';
+import { imprimirEmNovaJanela, executarImpressaoA4 } from '../../utils/pdfPrintHelper';
 
 interface BalanceteGlobalViewProps {
   balancete: BalanceteState;
@@ -122,16 +122,16 @@ export const BalanceteGlobalView: React.FC<BalanceteGlobalViewProps> = ({
           <button
             onClick={() => {
               if (balanceteRef.current) {
-                imprimirEmNovaJanela(balanceteRef.current, 'Balancete de Prestação de Contas - PMESP');
+                executarImpressaoA4(balanceteRef.current, 'Balancete de Prestação de Contas - PMESP');
               } else {
                 window.print();
               }
             }}
-            className="flex items-center gap-1.5 bg-[#1a2b4c] hover:bg-[#2c4373] text-white text-xs font-semibold px-3 py-1.5 rounded transition shadow-sm"
-            title="Imprimir diretamente em nova janela (sem bloqueios)"
+            className="flex items-center gap-1.5 bg-[#1a2b4c] hover:bg-[#2c4373] text-white text-xs font-semibold px-3 py-1.5 rounded transition shadow-sm cursor-pointer"
+            title="Imprimir folha A4 oficial diretamente"
           >
             <Printer size={13} />
-            <span>Imprimir</span>
+            <span>Imprimir Folha A4</span>
           </button>
         </div>
       </div>

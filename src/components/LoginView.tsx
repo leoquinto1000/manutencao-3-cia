@@ -12,6 +12,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSucesso }) => {
   const [senha, setSenha] = useState('');
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [lembrarSenha, setLembrarSenha] = useState(false);
+  const [manterConectado, setManterConectado] = useState(true);
   const [senhaSalvaFeedback, setSenhaSalvaFeedback] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -27,6 +28,10 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSucesso }) => {
         const senhaSalva = localStorage.getItem('pmesp_senha_salva');
         if (emailSalvo) setEmail(emailSalvo);
         if (senhaSalva) setSenha(senhaSalva);
+      }
+      const manterSalvo = localStorage.getItem('pmesp_manter_conectado');
+      if (manterSalvo !== null) {
+        setManterConectado(manterSalvo === 'true');
       }
     } catch (e) {
       console.warn('Erro ao ler credenciais salvas do localStorage', e);
@@ -229,35 +234,68 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSucesso }) => {
               </div>
             </div>
 
-            {/* Botão de Opção: Deixar Senha Salva */}
-            <div className="flex items-center justify-between py-1 px-1">
-              <button
-                type="button"
-                id="btn-lembrar-senha"
-                onClick={handleAlternarSalvarSenha}
-                className="flex items-center gap-2.5 text-xs text-slate-300 hover:text-white transition cursor-pointer group select-none text-left"
-              >
-                <div
-                  className={`w-4 h-4 rounded flex items-center justify-center border transition ${
-                    lembrarSenha
-                      ? 'bg-[#c9a84e] border-[#c9a84e] text-[#1a2b4c]'
-                      : 'bg-slate-900/90 border-white/30 group-hover:border-white/60 text-transparent'
-                  }`}
+            {/* Opções de Acesso: Senha Salva e Sessão Permanente */}
+            <div className="space-y-2 py-1 px-1">
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  id="btn-lembrar-senha"
+                  onClick={handleAlternarSalvarSenha}
+                  className="flex items-center gap-2.5 text-xs text-slate-300 hover:text-white transition cursor-pointer group select-none text-left"
                 >
-                  <Check size={12} strokeWidth={3} className={lembrarSenha ? 'opacity-100' : 'opacity-0'} />
-                </div>
-                <span className="font-medium">Salvar senha neste dispositivo</span>
-              </button>
+                  <div
+                    className={`w-4 h-4 rounded flex items-center justify-center border transition ${
+                      lembrarSenha
+                        ? 'bg-[#c9a84e] border-[#c9a84e] text-[#1a2b4c]'
+                        : 'bg-slate-900/90 border-white/30 group-hover:border-white/60 text-transparent'
+                    }`}
+                  >
+                    <Check size={12} strokeWidth={3} className={lembrarSenha ? 'opacity-100' : 'opacity-0'} />
+                  </div>
+                  <span className="font-medium">Salvar senha neste dispositivo</span>
+                </button>
 
-              {senhaSalvaFeedback ? (
-                <span className="text-[11px] font-semibold text-[#e5cd8a] animate-in fade-in">
-                  {senhaSalvaFeedback}
+                {senhaSalvaFeedback ? (
+                  <span className="text-[11px] font-semibold text-[#e5cd8a] animate-in fade-in">
+                    {senhaSalvaFeedback}
+                  </span>
+                ) : lembrarSenha ? (
+                  <span className="text-[10px] text-[#e5cd8a] font-medium bg-[#c9a84e]/15 px-2 py-0.5 rounded-full border border-[#c9a84e]/30">
+                    Senha salva
+                  </span>
+                ) : null}
+              </div>
+
+              {/* Manter Conectado - Não Expirar Tempo */}
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  id="btn-manter-conectado"
+                  onClick={() => {
+                    const novo = !manterConectado;
+                    setManterConectado(novo);
+                    try {
+                      localStorage.setItem('pmesp_manter_conectado', String(novo));
+                    } catch (e) {}
+                  }}
+                  className="flex items-center gap-2.5 text-xs text-slate-300 hover:text-white transition cursor-pointer group select-none text-left"
+                >
+                  <div
+                    className={`w-4 h-4 rounded flex items-center justify-center border transition ${
+                      manterConectado
+                        ? 'bg-[#c9a84e] border-[#c9a84e] text-[#1a2b4c]'
+                        : 'bg-slate-900/90 border-white/30 group-hover:border-white/60 text-transparent'
+                    }`}
+                  >
+                    <Check size={12} strokeWidth={3} className={manterConectado ? 'opacity-100' : 'opacity-0'} />
+                  </div>
+                  <span className="font-medium">Manter conectado (não expirar sessão)</span>
+                </button>
+
+                <span className="text-[10px] text-emerald-300 font-medium bg-emerald-950/70 px-2 py-0.5 rounded-full border border-emerald-500/40">
+                  {manterConectado ? 'Sem timeout' : 'Sessão temporária'}
                 </span>
-              ) : lembrarSenha ? (
-                <span className="text-[10px] text-[#e5cd8a] font-medium bg-[#c9a84e]/15 px-2 py-0.5 rounded-full border border-[#c9a84e]/30">
-                  Senha salva
-                </span>
-              ) : null}
+              </div>
             </div>
 
             <button

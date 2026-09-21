@@ -174,6 +174,13 @@ export const Header: React.FC<HeaderProps> = ({
                       {nivelDef.icone} {nivelDef.nome}
                     </span>
                   </div>
+                  <div
+                    className="text-[10px] text-emerald-300 flex items-center gap-1 mt-0.5"
+                    title="Sessão permanente configurada: você não será desconectado por tempo limite de inatividade"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span className="font-medium text-[9.5px]">Sessão Permanente (Não Expira)</span>
+                  </div>
                 </div>
               </div>
 

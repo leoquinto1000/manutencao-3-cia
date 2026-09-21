@@ -584,7 +584,7 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
           {/* Documento Oficial Completo (Capa + Todas as Páginas de Fotos) */}
           <div ref={documentoRef} id="documento-informe-print-wrapper" className="space-y-8 print:space-y-0 print:m-0 print:p-0">
             {/* Document Cover Page (A4) */}
-            <div className="relative group w-full max-w-[210mm] mx-auto print:max-w-[194mm] print:m-0 print:p-0 print:break-after-page print:break-inside-avoid">
+            <div className="relative group w-full max-w-[210mm] mx-auto print:max-w-[210mm] print:m-0 print:p-0">
               <div className="no-print mb-2 flex items-center justify-between text-xs text-slate-500 font-semibold px-1">
                 <span className="flex items-center gap-1.5 text-[#1a2b4c] font-bold">
                   <FileText size={14} className="text-[#c9a84e]" />
@@ -1157,7 +1157,7 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
 
             {/* Dynamic Photo Pages */}
             {informeAtual.paginas.map((pagina, pagIdx) => (
-              <div key={pagina.id} className="relative group w-full max-w-[210mm] mx-auto print:max-w-[194mm] print:m-0 print:p-0 print:break-after-page print:break-inside-avoid">
+              <div key={pagina.id} className="relative group w-full max-w-[210mm] mx-auto print:max-w-[210mm] print:m-0 print:p-0">
                 <div className="no-print mb-2 flex items-center justify-between text-xs text-slate-500 font-semibold px-1">
                   <span className="flex items-center gap-1.5 text-[#1a2b4c] font-bold">
                     <ImageIcon size={14} className="text-[#c9a84e]" />

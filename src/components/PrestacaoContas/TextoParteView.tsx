@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { TextoParteState, NFInstance } from '../../types';
 import { RefreshCw, Printer, FileText } from 'lucide-react';
 import { ModalVisualizadorPDF } from './ModalVisualizadorPDF';
-import { imprimirEmNovaJanela } from '../../utils/pdfPrintHelper';
+import { imprimirEmNovaJanela, executarImpressaoA4 } from '../../utils/pdfPrintHelper';
 
 interface TextoParteViewProps {
   textoParte: TextoParteState;
@@ -86,22 +86,22 @@ export const TextoParteView: React.FC<TextoParteViewProps> = ({
           <button
             onClick={() => {
               if (parteRef.current) {
-                imprimirEmNovaJanela(parteRef.current, 'Documento Oficial: Parte - PMESP');
+                executarImpressaoA4(parteRef.current, 'Documento Oficial: Parte - PMESP');
               } else {
                 window.print();
               }
             }}
-            className="flex items-center gap-1.5 bg-[#1a2b4c] hover:bg-[#2c4373] text-white text-xs font-semibold px-3 py-1.5 rounded-md transition shadow-sm"
-            title="Imprimir diretamente em nova janela (sem bloqueios)"
+            className="flex items-center gap-1.5 bg-[#1a2b4c] hover:bg-[#2c4373] text-white text-xs font-semibold px-3 py-1.5 rounded-md transition shadow-sm cursor-pointer"
+            title="Imprimir folha A4 oficial diretamente"
           >
             <Printer size={13} />
-            <span>Imprimir</span>
+            <span>Imprimir Folha A4</span>
           </button>
         </div>
       </div>
 
       {mensagemSucesso && (
-        <div className="no-print bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-semibold px-4 py-2 rounded-lg max-w-[794px] mx-auto flex items-center justify-between shadow-2xs">
+        <div className="no-print bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-semibold px-4 py-2 rounded-lg max-w-[210mm] mx-auto flex items-center justify-between shadow-2xs">
           <span>{mensagemSucesso}</span>
           <button onClick={() => setMensagemSucesso(null)} className="text-emerald-600 hover:text-emerald-900 font-bold ml-2">✕</button>
         </div>

@@ -1,6 +1,8 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
   getAuth,
+  setPersistence,
+  browserLocalPersistence,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
@@ -37,6 +39,7 @@ import {
   NivelAcessoDef,
 } from './types';
 import { NIVEIS_ACESSO_PADRAO } from './utils/permissoes';
+import { removerItemIndexedDB } from './utils/indexedDbStorage';
 
 // Configuração oficial do Firebase fornecida para o projeto manutencao-3-cia
 export const firebaseConfig = {
@@ -53,6 +56,13 @@ export const firebaseConfig = {
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 export const auth = getAuth(app);
+
+// Garante persistência permanente da sessão no navegador (nunca expira o login)
+try {
+  setPersistence(auth, browserLocalPersistence).catch((err) => {
+    console.warn('Aviso ao definir persistência local no Firebase Auth:', err);
+  });
+} catch (e) {}
 
 // Coleção e Documentos no Firestore para garantir que fotos nunca estourem o limite de 1MB por documento
 export const FIRESTORE_COLLECTION = 'sistema_manutencao';
@@ -969,6 +979,9 @@ export async function logoutSistema(): Promise<void> {
   } catch (e) {}
   try {
     localStorage.removeItem('pmesp_usuario_logado');
+  } catch (e) {}
+  try {
+    await removerItemIndexedDB('pmesp_usuario_logado');
   } catch (e) {}
 }
 

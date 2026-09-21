@@ -12,25 +12,130 @@ export interface ResultadoPdf {
   blob: Blob;
   blobUrl: string;
   totalPaginas: number;
+  paginasImagens: string[];
 }
 
 /**
- * Abre uma janela separada do navegador contendo unicamente os documentos estilizados
- * e dispara a impressão nativa. Isso contorna completamente as limitações e bloqueios de iframe.
+ * Executa a impressão oficial de folhas A4 diretamente no navegador sem depender de popups ou novas abas.
+ * Isola o documento, converte inputs/textareas em texto formatado, oculta toda a UI do sistema
+ * e dispara a caixa de diálogo nativa de impressão em padrão estrito A4.
+ */
+export function executarImpressaoA4(containerElement: HTMLElement, titulo: string = 'Documento Oficial PMESP') {
+  try {
+    // 1. Remove qualquer container de impressão prévio se existir
+    const anterior = document.getElementById('folha-impressao-a4-ativa');
+    if (anterior) {
+      anterior.remove();
+    }
+
+    // 2. Cria o container exclusivo de impressão anexado diretamente ao body
+    const printContainer = document.createElement('div');
+    printContainer.id = 'folha-impressao-a4-ativa';
+    printContainer.className = 'folha-impressao-a4-ativa only-print';
+
+    // 3. Clona o elemento original mantendo estrutura
+    const clone = containerElement.cloneNode(true) as HTMLElement;
+
+    // 4. Converte campos editáveis (inputs, textareas, selects) em texto estático com estilo fiel
+    const origInputs = containerElement.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+      'input, textarea, select'
+    );
+    const cloneInputs = clone.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+      'input, textarea, select'
+    );
+
+    origInputs.forEach((orig, idx) => {
+      const cloned = cloneInputs[idx];
+      if (!cloned) return;
+
+      if (orig instanceof HTMLSelectElement) {
+        const span = document.createElement('span');
+        span.textContent = orig.options[orig.selectedIndex]?.text || orig.value;
+        span.className = (cloned.className || '') + ' print-val-text';
+        span.style.fontWeight = 'bold';
+        span.style.color = '#000';
+        cloned.parentNode?.replaceChild(span, cloned);
+      } else if (orig instanceof HTMLTextAreaElement) {
+        const div = document.createElement('div');
+        div.style.whiteSpace = 'pre-wrap';
+        div.textContent = orig.value;
+        div.className = (cloned.className || '') + ' print-val-text';
+        div.style.color = '#000';
+        cloned.parentNode?.replaceChild(div, cloned);
+      } else if (orig instanceof HTMLInputElement) {
+        if (orig.type === 'checkbox' || orig.type === 'radio') {
+          (cloned as HTMLInputElement).checked = orig.checked;
+        } else {
+          const span = document.createElement('span');
+          span.textContent = orig.value;
+          span.className = (cloned.className || '') + ' print-val-text';
+          span.style.color = '#000';
+          cloned.parentNode?.replaceChild(span, cloned);
+        }
+      }
+    });
+
+    // 5. Remove elementos que possuem a classe .no-print
+    const noPrintList = clone.querySelectorAll('.no-print');
+    noPrintList.forEach((el) => el.remove());
+
+    printContainer.appendChild(clone);
+    document.body.appendChild(printContainer);
+
+    // 6. Ativa classe isoladora no body
+    document.body.classList.add('modo-impressao-a4-ativo');
+
+    const originalTitle = document.title;
+    if (titulo) {
+      document.title = titulo;
+    }
+
+    // 7. Dispara a impressão
+    const triggerPrint = () => {
+      window.focus();
+      window.print();
+    };
+
+    setTimeout(() => {
+      triggerPrint();
+
+      // Limpeza segura após a impressão
+      const cleanup = () => {
+        document.body.classList.remove('modo-impressao-a4-ativo');
+        if (printContainer.parentNode) {
+          printContainer.parentNode.removeChild(printContainer);
+        }
+        document.title = originalTitle;
+        window.removeEventListener('afterprint', cleanup);
+      };
+
+      window.addEventListener('afterprint', cleanup);
+      // Timeout de segurança caso afterprint não seja disparado pelo navegador
+      setTimeout(cleanup, 4000);
+    }, 200);
+  } catch (err) {
+    console.error('Erro ao executar impressão direta A4:', err);
+    window.print();
+  }
+}
+
+/**
+ * Tenta abrir uma janela dedicada para impressão. Caso seja bloqueada pelo navegador
+ * (situação comum em ambientes de iframe), recorre com segurança à função executarImpressaoA4.
  */
 export function imprimirEmNovaJanela(containerElement: HTMLElement, titulo: string = 'Impressão de Documento') {
   try {
     const printWindow = window.open('', '_blank', 'width=1000,height=800');
     if (!printWindow) {
-      // Se popup for bloqueado pelo navegador, tenta o print normal
-      window.print();
+      // Bloqueio de popup detectado: usa impressão isolada local A4
+      executarImpressaoA4(containerElement, titulo);
       return;
     }
 
     // Coleta estilos aplicados
     const styleSheets = Array.from(document.styleSheets);
     let stylesHtml = '';
-    
+
     styleSheets.forEach((sheet) => {
       try {
         if (sheet.href) {
@@ -40,11 +145,44 @@ export function imprimirEmNovaJanela(containerElement: HTMLElement, titulo: stri
           stylesHtml += `<style>${rules}</style>\n`;
         }
       } catch {
-        // Regras protegidas por CORS podem falhar silenciosamente
+        // Regras com restrições de CORS
       }
     });
 
-    const conteudo = containerElement.outerHTML || containerElement.innerHTML;
+    const clone = containerElement.cloneNode(true) as HTMLElement;
+    const origInputs = containerElement.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+      'input, textarea, select'
+    );
+    const cloneInputs = clone.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+      'input, textarea, select'
+    );
+
+    origInputs.forEach((orig, idx) => {
+      const cloned = cloneInputs[idx];
+      if (!cloned) return;
+      if (orig instanceof HTMLSelectElement) {
+        const span = document.createElement('span');
+        span.textContent = orig.options[orig.selectedIndex]?.text || orig.value;
+        span.style.fontWeight = 'bold';
+        cloned.parentNode?.replaceChild(span, cloned);
+      } else if (orig instanceof HTMLTextAreaElement) {
+        const div = document.createElement('div');
+        div.style.whiteSpace = 'pre-wrap';
+        div.textContent = orig.value;
+        cloned.parentNode?.replaceChild(div, cloned);
+      } else if (orig instanceof HTMLInputElement) {
+        if (orig.type !== 'checkbox' && orig.type !== 'radio') {
+          const span = document.createElement('span');
+          span.textContent = orig.value;
+          cloned.parentNode?.replaceChild(span, cloned);
+        }
+      }
+    });
+
+    const noPrints = clone.querySelectorAll('.no-print');
+    noPrints.forEach((el) => el.remove());
+
+    const conteudo = clone.outerHTML || clone.innerHTML;
 
     printWindow.document.open();
     printWindow.document.write(`
@@ -58,7 +196,7 @@ export function imprimirEmNovaJanela(containerElement: HTMLElement, titulo: stri
           <style>
             @page {
               size: A4 portrait;
-              margin: 8mm;
+              margin: 0 !important;
             }
             * {
               box-sizing: border-box !important;
@@ -76,224 +214,93 @@ export function imprimirEmNovaJanela(containerElement: HTMLElement, titulo: stri
             .no-print, input[type="file"], button.no-print {
               display: none !important;
             }
-            button:not(.no-print) {
-              background: transparent !important;
-              border: none !important;
-              box-shadow: none !important;
-              padding: 0 !important;
-              margin: 0 !important;
-              font: inherit !important;
-              color: inherit !important;
-              cursor: default !important;
-            }
             .only-print {
               display: block !important;
             }
+            .pesquisa-page,
+            .sheet-paper,
+            .balancete-page,
+            .textoparte-page,
+            .apmbb-page,
+            .pauta-diaria-page {
+              width: 210mm !important;
+              max-width: 210mm !important;
+              min-height: 297mm !important;
+              height: 297mm !important;
+              max-height: 297mm !important;
+              margin: 0 auto !important;
+              padding: 10mm 12mm !important;
+              page-break-after: always !important;
+              break-after: page !important;
+              page-break-inside: avoid !important;
+              break-inside: avoid !important;
+              box-sizing: border-box !important;
+              overflow: hidden !important;
+              border: none !important;
+              box-shadow: none !important;
+            }
             .pesquisa-page {
               border: 2px solid #000 !important;
-              box-shadow: none !important;
-              margin: 0 auto !important;
-              page-break-after: always !important;
-              page-break-inside: avoid !important;
-              break-inside: avoid !important;
-              width: 100% !important;
-              max-width: 194mm !important;
-              height: 275mm !important;
-              max-height: 275mm !important;
-              display: flex !important;
-              flex-direction: column !important;
-              justify-content: space-between !important;
-              overflow: hidden !important;
-              box-sizing: border-box !important;
-            }
-            .sheet-paper {
-              border: none !important;
-              box-shadow: none !important;
-              padding: 4mm !important;
-              margin: 0 auto !important;
-              width: 100% !important;
-              max-width: none !important;
-              page-break-after: auto !important;
-              box-sizing: border-box !important;
-            }
-            .pauta-diaria-page {
-              border: none !important;
-              box-shadow: none !important;
-              border-radius: 0 !important;
               padding: 0 !important;
-              margin: 0 auto !important;
-              width: 100% !important;
-              max-width: 190mm !important;
-              background: #ffffff !important;
-              box-sizing: border-box !important;
             }
-            .pauta-diaria-page table {
-              width: 100% !important;
-              max-width: 100% !important;
-              table-layout: fixed !important;
-              border-collapse: collapse !important;
-            }
-            .pauta-diaria-page th,
-            .pauta-diaria-page td {
-              box-sizing: border-box !important;
-              word-break: break-word !important;
-              overflow-wrap: anywhere !important;
-              overflow: hidden !important;
-              hyphens: auto;
-            }
-            .pauta-diaria-page div {
-              box-sizing: border-box !important;
-              max-width: 100% !important;
-            }
-            .break-inside-avoid {
-              page-break-inside: avoid !important;
-              break-inside: avoid !important;
-            }
-            .balancete-page {
-              border: none !important;
-              box-shadow: none !important;
-              padding: 6mm 8mm !important;
-              margin: 0 auto !important;
-              page-break-after: always !important;
-              page-break-inside: avoid !important;
-              break-inside: avoid !important;
-              width: 100% !important;
-              max-width: 194mm !important;
-              max-height: 275mm !important;
-              overflow: hidden !important;
-              box-sizing: border-box !important;
-            }
-            .apmbb-page {
-              border: none !important;
-              box-shadow: none !important;
-              padding: 6mm 8mm 6mm 8mm !important;
-              margin: 0 auto !important;
-              page-break-before: auto !important;
-              page-break-after: always !important;
-              break-after: page !important;
-              page-break-inside: avoid !important;
-              break-inside: avoid !important;
-              width: 100% !important;
-              max-width: 194mm !important;
-              min-height: 275mm !important;
-              height: 275mm !important;
-              max-height: 275mm !important;
-              display: flex !important;
-              flex-direction: column !important;
-              justify-content: space-between !important;
-              overflow: hidden !important;
-              box-sizing: border-box !important;
-            }
-            .apmbb-page:last-child {
+            .pesquisa-page:last-child,
+            .sheet-paper:last-child,
+            .balancete-page:last-child,
+            .textoparte-page:last-child,
+            .apmbb-page:last-child,
+            .pauta-diaria-page:last-child {
               page-break-after: auto !important;
               break-after: auto !important;
-            }
-            #documento-informe-print-wrapper,
-            .documento-informe-print-wrapper {
-              margin: 0 !important;
-              padding: 0 !important;
-              width: 100% !important;
-              max-width: 194mm !important;
-            }
-            #documento-informe-print-wrapper > *,
-            .documento-informe-print-wrapper > * {
-              margin: 0 auto !important;
-              padding: 0 !important;
-              width: 100% !important;
-              max-width: 194mm !important;
-              page-break-inside: avoid !important;
-              break-inside: avoid !important;
-              page-break-after: always !important;
-              break-after: page !important;
-            }
-            #documento-informe-print-wrapper > *:last-child,
-            .documento-informe-print-wrapper > *:last-child {
-              page-break-after: auto !important;
-              break-after: auto !important;
-            }
-            .textoparte-page {
-              border: none !important;
-              box-shadow: none !important;
-              padding: 8mm 10mm !important;
-              margin: 0 auto 10mm auto !important;
-              page-break-after: always !important;
-              page-break-inside: avoid !important;
-              break-inside: avoid !important;
-              width: 100% !important;
-              max-width: 194mm !important;
-              box-sizing: border-box !important;
             }
             table {
               border-collapse: collapse !important;
-              page-break-inside: auto;
-            }
-            thead {
-              display: table-header-group;
-            }
-            tr {
-              page-break-inside: avoid;
-              page-break-after: auto;
-            }
-            /* Garantir que inputs pareçam texto normal impresso */
-            input, select, textarea {
-              border: none !important;
-              background: transparent !important;
-              box-shadow: none !important;
             }
           </style>
         </head>
         <body>
-          <div class="no-print" style="position: fixed; top: 12px; right: 12px; z-index: 99999; background: #1a2b4c; padding: 6px 14px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.2);">
-            <button type="button" onclick="window.focus(); window.print();" style="color: #ffffff; font-weight: bold; font-size: 13px; cursor: pointer; border: none; background: transparent; display: flex; items-center; gap: 6px;">
-              🖨️ Clique para Imprimir / Salvar PDF
+          <div class="no-print" style="position: fixed; top: 12px; right: 12px; z-index: 99999; background: #1a2b4c; padding: 6px 14px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.25);">
+            <button type="button" onclick="window.focus(); window.print();" style="color: #ffffff; font-weight: bold; font-size: 13px; cursor: pointer; border: none; background: transparent; display: flex; align-items: center; gap: 6px;">
+              🖨️ Imprimir / Salvar PDF A4
             </button>
           </div>
           ${conteudo}
           <script>
-            function executarImpressao() {
-              setTimeout(function() {
-                try {
-                  window.focus();
-                  window.print();
-                } catch (e) {
-                  console.error('Erro ao acionar impressão:', e);
-                }
-              }, 400);
-            }
-            if (document.readyState === 'complete' || document.readyState === 'interactive') {
-              executarImpressao();
-            } else {
-              window.addEventListener('DOMContentLoaded', executarImpressao);
-              window.addEventListener('load', executarImpressao);
-            }
+            setTimeout(function() {
+              try {
+                window.focus();
+                window.print();
+              } catch (e) {
+                console.error(e);
+              }
+            }, 350);
           </script>
         </body>
       </html>
     `);
     printWindow.document.close();
   } catch (err) {
-    console.error('Erro ao abrir janela de impressão:', err);
-    window.print();
+    console.error('Erro ao abrir janela de impressão, recorrendo à impressão direta:', err);
+    executarImpressaoA4(containerElement, titulo);
   }
 }
 
 /**
- * Converte um elemento ou conjunto de páginas A4 em documento PDF navegável/baixável
+ * Converte um elemento ou conjunto de páginas em documento PDF oficial formato A4 (210mm x 297mm)
+ * e gera prévias visuais em alta resolução de cada folha renderizada.
  */
 export async function gerarDocumentoPdf(
   container: HTMLElement,
   opcoes: GerarPdfOptions = {}
 ): Promise<ResultadoPdf> {
   const {
-    nomeArquivo = 'documento.pdf',
     orientacao = 'p',
     onProgresso,
   } = opcoes;
 
-  // Busca páginas individuais (ex: .pesquisa-page, .sheet-paper, .balancete-page, .textoparte-page)
+  // Busca páginas individuais formatadas
   let paginas = Array.from(
     container.querySelectorAll<HTMLElement>(
-      '.pesquisa-page, .sheet-paper, .balancete-page, .textoparte-page, .apmbb-page'
+      '.pesquisa-page, .sheet-paper, .balancete-page, .textoparte-page, .apmbb-page, .pauta-diaria-page'
     )
   );
 
@@ -312,13 +319,15 @@ export async function gerarDocumentoPdf(
   const pdfLargura = orientacao === 'p' ? 210 : 297;
   const pdfAltura = orientacao === 'p' ? 297 : 210;
 
+  const paginasImagens: string[] = [];
+
   for (let i = 0; i < paginas.length; i++) {
     const pagina = paginas[i];
     if (onProgresso) {
-      onProgresso(`Processando página ${i + 1} de ${paginas.length}...`, Math.round(((i) / paginas.length) * 100));
+      onProgresso(`Processando folha A4 (${i + 1} de ${paginas.length})...`, Math.round(((i) / paginas.length) * 100));
     }
 
-    // Garante que todas as imagens da página estejam carregadas antes da captura pelo canvas
+    // Garante que todas as imagens da folha estejam totalmente carregadas
     const imagens = Array.from(pagina.querySelectorAll<HTMLImageElement>('img'));
     if (imagens.length > 0) {
       await Promise.all(
@@ -337,17 +346,15 @@ export async function gerarDocumentoPdf(
       );
     }
 
-    // Cria canvas de alta resolução com suporte a oklch e sincronização de campos
-    const isA4Formatada = pagina.classList.contains('apmbb-page') || pagina.classList.contains('pesquisa-page');
-
+    // Gera canvas de alta resolução com proporção estrita de 794px (~210mm a 96DPI)
     const canvas = await html2canvas(pagina, {
-      scale: 2, // 2x para boa nitidez
+      scale: 2, // 2x para nitidez
       useCORS: true,
       allowTaint: true,
       backgroundColor: '#ffffff',
       logging: false,
       ignoreElements: (element) => element.classList.contains('no-print'),
-      windowWidth: isA4Formatada ? 794 : 1024,
+      windowWidth: 794,
       onclone: (clonedDoc) => {
         // Sincroniza valores de inputs e textareas no DOM clonado
         try {
@@ -358,51 +365,39 @@ export async function gerarDocumentoPdf(
             if (clone) {
               clone.value = orig.value;
               clone.setAttribute('value', orig.value);
-              if (clone instanceof HTMLTextAreaElement) {
-                clone.textContent = orig.value;
-              }
             }
           });
-
-          // Oculta elementos que não devem sair na impressão
-          clonedDoc.querySelectorAll('.no-print').forEach((el) => {
-            (el as HTMLElement).style.display = 'none';
-          });
-        } catch (e) {
-          console.warn('Aviso ao sincronizar elementos clonados:', e);
+        } catch {
+          // Ignora erros de sincronização
         }
       },
     });
 
     const imgData = canvas.toDataURL('image/jpeg', 0.95);
+    paginasImagens.push(imgData);
 
     if (i > 0) {
       pdf.addPage('a4', orientacao);
     }
 
-    // Se a página já está estritamente dimensionada em A4 (como .apmbb-page),
-    // ela já possui seus próprios paddings internos que atuam como margens da folha.
-    const margem = isA4Formatada ? 0 : 5;
-    const larguraDisponivel = pdfLargura - (margem * 2);
-    const alturaDisponivel = pdfAltura - (margem * 2);
-
+    // Cada folha no PDF ocupa exatamente o tamanho da página A4 (210mm x 297mm)
     const aspectCanvas = canvas.width / canvas.height;
-    let renderW = larguraDisponivel;
+    let renderW = pdfLargura;
     let renderH = renderW / aspectCanvas;
 
-    if (renderH > alturaDisponivel) {
-      renderH = alturaDisponivel;
+    if (renderH > pdfAltura) {
+      renderH = pdfAltura;
       renderW = renderH * aspectCanvas;
     }
 
-    const posX = margem + (larguraDisponivel - renderW) / 2;
-    const posY = margem + (alturaDisponivel - renderH) / 2;
+    const posX = (pdfLargura - renderW) / 2;
+    const posY = (pdfAltura - renderH) / 2;
 
     pdf.addImage(imgData, 'JPEG', posX, posY, renderW, renderH, undefined, 'FAST');
   }
 
   if (onProgresso) {
-    onProgresso('Finalizando PDF...', 100);
+    onProgresso('Finalizando documento PDF...', 100);
   }
 
   const blob = pdf.output('blob');
@@ -413,5 +408,6 @@ export async function gerarDocumentoPdf(
     blob,
     blobUrl,
     totalPaginas: paginas.length,
+    paginasImagens,
   };
 }

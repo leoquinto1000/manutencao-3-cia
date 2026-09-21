@@ -3,7 +3,7 @@ import { PesquisaPrecoItem, NFInstance } from '../../types';
 import { formatMoeda, parseMoeda, gerarId } from '../../utils';
 import { RefreshCw, Plus, Trash2, Upload, Image as ImageIcon, Check, Printer, Link, ExternalLink, Eye, FileText, Download, Building2 } from 'lucide-react';
 import { ModalVisualizadorPDF } from './ModalVisualizadorPDF';
-import { imprimirEmNovaJanela } from '../../utils/pdfPrintHelper';
+import { imprimirEmNovaJanela, executarImpressaoA4 } from '../../utils/pdfPrintHelper';
 
 interface PesquisasPrecosViewProps {
   pesquisas: PesquisaPrecoItem[];
@@ -317,23 +317,23 @@ export const PesquisasPrecosView: React.FC<PesquisasPrecosViewProps> = ({
           <button
             onClick={() => {
               if (containerRef.current) {
-                imprimirEmNovaJanela(containerRef.current, 'Pesquisas de Preços - PMESP');
+                executarImpressaoA4(containerRef.current, 'Pesquisas de Preços - PMESP');
               } else {
                 window.print();
               }
             }}
             disabled={pesquisas.length === 0}
-            className="flex items-center gap-1.5 bg-[#1a2b4c] hover:bg-[#2c4373] disabled:opacity-50 text-white text-xs font-semibold px-3 py-2 rounded-md transition shadow-sm"
-            title="Imprimir diretamente em nova janela (sem bloqueios)"
+            className="flex items-center gap-1.5 bg-[#1a2b4c] hover:bg-[#2c4373] disabled:opacity-50 text-white text-xs font-semibold px-3 py-2 rounded-md transition shadow-sm cursor-pointer"
+            title="Imprimir folhas A4 oficiais diretamente"
           >
             <Printer size={14} />
-            <span>Imprimir</span>
+            <span>Imprimir Folha(s) A4</span>
           </button>
         </div>
       </div>
 
       {mensagemSucesso && (
-        <div className="no-print bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-semibold px-4 py-2.5 rounded-lg max-w-[794px] mx-auto flex items-center justify-between shadow-2xs">
+        <div className="no-print bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-semibold px-4 py-2.5 rounded-lg max-w-[210mm] mx-auto flex items-center justify-between shadow-2xs">
           <span>{mensagemSucesso}</span>
           <button onClick={() => setMensagemSucesso(null)} className="text-emerald-600 hover:text-emerald-900 font-bold ml-2">✕</button>
         </div>
@@ -342,7 +342,7 @@ export const PesquisasPrecosView: React.FC<PesquisasPrecosViewProps> = ({
       {/* Pages Container */}
       <div ref={containerRef} className="main-print-container space-y-6">
       {pesquisas.length === 0 ? (
-        <div className="bg-white p-12 text-center rounded-lg border border-slate-300 max-w-[794px] mx-auto text-slate-500">
+        <div className="bg-white p-12 text-center rounded-lg border border-slate-300 max-w-[210mm] mx-auto text-slate-500">
           <ImageIcon className="mx-auto text-slate-300 mb-3" size={48} />
           <p className="text-sm font-semibold text-slate-700 mb-1">
             Nenhuma pesquisa de preço gerada ainda.
@@ -369,7 +369,7 @@ export const PesquisasPrecosView: React.FC<PesquisasPrecosViewProps> = ({
           );
 
           return (
-          <div key={item.id} className="relative group max-w-[794px] mx-auto">
+          <div key={item.id} className="relative group max-w-[210mm] mx-auto">
             {/* Delete button (no-print) */}
             <button
               onClick={() => handleRemove(item.id)}
