@@ -45,6 +45,7 @@ import {
   carregarNiveisAcessoFirestore,
   salvarNiveisAcessoFirestore,
   logoutSistema,
+  deduplicarUsuarios,
   USUARIOS_INICIAIS,
   DadosSistemaFirestore,
 } from './firebase';
@@ -68,7 +69,18 @@ export default function App() {
     return null;
   });
 
-  const [usuarios, setUsuarios] = useState<UsuarioSistema[]>(USUARIOS_INICIAIS);
+  const [usuarios, setUsuarios] = useState<UsuarioSistema[]>(() => {
+    try {
+      const saved = localStorage.getItem('pmesp_usuarios');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return deduplicarUsuarios(parsed);
+        }
+      }
+    } catch (e) {}
+    return deduplicarUsuarios(USUARIOS_INICIAIS);
+  });
   const [abaPrincipal, setAbaPrincipal] = useState<AbaNavegacao>('prestacao');
 
   // Estado dos Níveis de Acesso e Perfis do Sistema (persistido no Firestore)
@@ -528,11 +540,12 @@ export default function App() {
     carregarUsuariosFirestore()
       .then((users) => {
         if (!isMounted) return;
-        if (users && users.length > 0) {
-          setUsuarios(users);
+        if (Array.isArray(users)) {
+          const listaLimpa = deduplicarUsuarios(users);
+          setUsuarios(listaLimpa);
           setUsuarioLogado((prev) => {
             if (!prev) return null;
-            const atualizado = users.find((u) => u.id === prev.id || u.email.toLowerCase() === prev.email.toLowerCase());
+            const atualizado = listaLimpa.find((u) => u.id === prev.id || u.email.toLowerCase() === prev.email.toLowerCase());
             if (atualizado) {
               if (!atualizado.ativo) {
                 try {
@@ -1153,8 +1166,9 @@ export default function App() {
             <UsuariosView
               usuarios={usuarios}
               onChangeUsuarios={(novos) => {
-                setUsuarios(novos);
-                salvarUsuariosFirestore(novos).catch(console.error);
+                const listaLimpa = deduplicarUsuarios(novos);
+                setUsuarios(listaLimpa);
+                salvarUsuariosFirestore(listaLimpa).catch(console.error);
               }}
               usuarioLogado={usuarioLogado}
               onAtualizarUsuarioLogado={(atualizado) => {

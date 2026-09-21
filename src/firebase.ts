@@ -568,143 +568,186 @@ export const USUARIOS_INICIAIS: UsuarioSistema[] = [
 ];
 
 /**
+ * Função utilitária para garantir a integridade absoluta da lista de usuários:
+ * - Remove duplicatas por e-mail ou por ID
+ * - Garante que todo usuário tenha um ID único
+ * - Normaliza e-mails para minúsculas sem espaços
+ */
+export function deduplicarUsuarios(lista: UsuarioSistema[]): UsuarioSistema[] {
+  if (!Array.isArray(lista)) return [];
+  const idsVistos = new Set<string>();
+  const emailsVistos = new Set<string>();
+  const resultado: UsuarioSistema[] = [];
+
+  for (const rawItem of lista) {
+    if (!rawItem || typeof rawItem !== 'object') continue;
+
+    // Desempacota caso tenha vindo embrulhado como { novoUsuario } de versões anteriores
+    const u: any = (rawItem as any).novoUsuario && typeof (rawItem as any).novoUsuario === 'object'
+      ? (rawItem as any).novoUsuario
+      : rawItem;
+
+    const rawEmail = (u.email || '').toString().trim().toLowerCase();
+    if (!rawEmail) continue;
+
+    // Se já vimos este e-mail, ignoramos para evitar duplicados no cadastro/listagem
+    if (emailsVistos.has(rawEmail)) {
+      continue;
+    }
+
+    // Garante que cada usuário tenha um ID exclusivo e estável
+    let uid = (u.id || '').toString().trim();
+    if (!uid || idsVistos.has(uid)) {
+      uid = uid && !idsVistos.has(uid) ? uid : `user-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    }
+
+    idsVistos.add(uid);
+    emailsVistos.add(rawEmail);
+
+    let role = u.role;
+    if (role === 'operador') role = 'operacional';
+    if (role === 'visualizador') role = 'auxiliar';
+
+    resultado.push({
+      ...u,
+      id: uid,
+      email: rawEmail,
+      role: role || 'operacional',
+      nome: (u.nome || rawEmail.split('@')[0]).toString().trim(),
+      graduacaoOuCargo: (u.graduacaoOuCargo || '1º Sgt PM').toString().trim(),
+      re: u.re ? String(u.re).trim() : undefined,
+      ativo: u.ativo !== false,
+      senhaHash: u.senhaHash || 'pmesp123456',
+    });
+  }
+
+  return resultado;
+}
+
+/**
  * Carrega a lista de usuários salvos no Firestore
+ * O banco de dados Firestore é a autoridade máxima:
+ * NÃO reinjeta usuários padrão caso tenham sido editados ou excluídos pelo Administrador.
  */
 export async function carregarUsuariosFirestore(): Promise<UsuarioSistema[]> {
   try {
     const refDoc = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_USUARIOS);
     const snap = await lerDocServidorComFallback(refDoc);
     if (snap && snap.exists()) {
-      const data = snap.data() as { usuarios?: UsuarioSistema[]; excluidos?: string[] };
-      const excluidosSet = new Set((data?.excluidos || []).map((e) => e.toLowerCase()));
+      const data = snap.data() as { usuarios?: UsuarioSistema[] };
 
-      if (Array.isArray(data?.usuarios) && data.usuarios.length > 0) {
-        const mapaExistentes = new Map(data.usuarios.map((u) => [u.email.toLowerCase(), u]));
-        const listaMesclada: UsuarioSistema[] = data.usuarios.map((u) => {
-          let role = u.role;
-          if (role === 'operador') role = 'operacional';
-          if (role === 'visualizador') role = 'auxiliar';
-          return { ...u, role };
-        });
+      if (Array.isArray(data?.usuarios)) {
+        const listaLimpa = deduplicarUsuarios(data.usuarios);
 
-        // Garante que todo o efetivo fixo cadastrado em USUARIOS_INICIAIS esteja presente,
-        // EXCETO se o usuário tiver sido explicitamente excluído por um administrador
-        let alterou = false;
-        for (const uPadrao of USUARIOS_INICIAIS) {
-          const emailLower = uPadrao.email.toLowerCase();
-          if (!mapaExistentes.has(emailLower) && !excluidosSet.has(emailLower)) {
-            listaMesclada.push(uPadrao);
-            alterou = true;
-          }
+        // Se foram encontradas e removidas duplicidades antigas no banco, salva a versão limpa imediatamente
+        if (listaLimpa.length !== data.usuarios.length) {
+          salvarUsuariosFirestore(listaLimpa).catch(console.error);
+        } else {
+          try {
+            localStorage.setItem('pmesp_usuarios', JSON.stringify(listaLimpa));
+          } catch (e) {}
         }
-
-        if (alterou) {
-          salvarUsuariosFirestore(listaMesclada).catch(console.error);
-        }
-        return listaMesclada;
+        return listaLimpa;
       }
     }
-    // Se não existia ainda, inicializa com os usuários padrão do sistema
-    await salvarUsuariosFirestore(USUARIOS_INICIAIS);
-    return USUARIOS_INICIAIS;
+    // Se o documento ainda não existia no Firestore, verifica se há cache local prévio
+    try {
+      const cached = localStorage.getItem('pmesp_usuarios');
+      if (cached) {
+        const parsed = JSON.parse(cached) as UsuarioSistema[];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const limpaCache = deduplicarUsuarios(parsed);
+          await salvarUsuariosFirestore(limpaCache);
+          return limpaCache;
+        }
+      }
+    } catch (e) {}
+
+    // Apenas na primeira inicialização absoluta do sistema
+    const usuariosPadrao = deduplicarUsuarios(USUARIOS_INICIAIS);
+    await salvarUsuariosFirestore(usuariosPadrao);
+    return usuariosPadrao;
   } catch (err) {
     console.warn('Aviso ao carregar usuários do Firestore, utilizando base local:', err);
     try {
       const cached = localStorage.getItem('pmesp_usuarios');
-      const cachedExcluidos = localStorage.getItem('pmesp_usuarios_excluidos');
-      const excluidosSet = new Set<string>(
-        cachedExcluidos ? JSON.parse(cachedExcluidos).map((e: string) => e.toLowerCase()) : []
-      );
-
       if (cached) {
         const parsed = JSON.parse(cached) as UsuarioSistema[];
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const mapaExistentes = new Map(parsed.map((u) => [u.email.toLowerCase(), u]));
-          const listaMesclada = [...parsed];
-          for (const uPadrao of USUARIOS_INICIAIS) {
-            const emailLower = uPadrao.email.toLowerCase();
-            if (!mapaExistentes.has(emailLower) && !excluidosSet.has(emailLower)) {
-              listaMesclada.push(uPadrao);
-            }
-          }
-          return listaMesclada;
+          return deduplicarUsuarios(parsed);
         }
       }
     } catch (e) {}
-    return USUARIOS_INICIAIS;
+    return deduplicarUsuarios(USUARIOS_INICIAIS);
   }
 }
 
 /**
- * Salva a lista de usuários no Firestore
+ * Salva a lista de usuários no Firestore e no cache local com deduplicação garantida
  */
 export async function salvarUsuariosFirestore(usuarios: UsuarioSistema[]): Promise<void> {
+  const listaLimpa = deduplicarUsuarios(usuarios);
   try {
     const refDoc = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_USUARIOS);
     await setDoc(
       refDoc,
       limparParaFirestore({
-        usuarios,
+        usuarios: listaLimpa,
         ultimaAtualizacao: new Date().toISOString(),
       }),
       { merge: true }
     );
     try {
-      localStorage.setItem('pmesp_usuarios', JSON.stringify(usuarios));
+      localStorage.setItem('pmesp_usuarios', JSON.stringify(listaLimpa));
     } catch (e) {}
   } catch (err) {
     console.warn('Aviso ao salvar usuários no Firestore:', err);
     try {
-      localStorage.setItem('pmesp_usuarios', JSON.stringify(usuarios));
+      localStorage.setItem('pmesp_usuarios', JSON.stringify(listaLimpa));
     } catch (e) {}
   }
 }
 
 /**
- * Exclui um usuário do sistema (Firestore e LocalStorage) e registra o e-mail na lista de excluídos
+ * Exclui pontualmente um usuário do sistema (Firestore e LocalStorage)
+ * Remove estritamente o usuário correspondente ao ID informado, sem remover duplicados incorretamente
+ * e garante que ele não volte após recarregar.
  */
 export async function excluirUsuarioFirestore(id: string): Promise<UsuarioSistema[]> {
   const usuariosAtuais = await carregarUsuariosFirestore();
-  const usuarioRemovido = usuariosAtuais.find((u) => u.id === id);
-  const novaLista = usuariosAtuais.filter((u) => u.id !== id);
+  const usuarioAlvo = usuariosAtuais.find((u) => u.id === id);
+  const emailAlvo = usuarioAlvo ? usuarioAlvo.email.trim().toLowerCase() : '';
+
+  // Filtra removendo estritamente o usuário selecionado
+  const novaLista = usuariosAtuais.filter((u) => {
+    if (u.id === id) return false;
+    if (emailAlvo && u.email.trim().toLowerCase() === emailAlvo) return false;
+    return true;
+  });
+
+  const listaAtualizada = deduplicarUsuarios(novaLista);
 
   try {
     const refDoc = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_USUARIOS);
-    const snap = await lerDocServidorComFallback(refDoc);
-    const dadosAntigos = snap?.exists() ? (snap.data() as { excluidos?: string[] }) : {};
-    const excluidosSet = new Set((dadosAntigos?.excluidos || []).map((e) => e.toLowerCase()));
-    if (usuarioRemovido?.email) {
-      excluidosSet.add(usuarioRemovido.email.toLowerCase());
-    }
-
     await setDoc(
       refDoc,
       limparParaFirestore({
-        usuarios: novaLista,
-        excluidos: Array.from(excluidosSet),
+        usuarios: listaAtualizada,
         ultimaAtualizacao: new Date().toISOString(),
       }),
       { merge: true }
     );
-
     try {
-      localStorage.setItem('pmesp_usuarios', JSON.stringify(novaLista));
-      localStorage.setItem('pmesp_usuarios_excluidos', JSON.stringify(Array.from(excluidosSet)));
+      localStorage.setItem('pmesp_usuarios', JSON.stringify(listaAtualizada));
     } catch (e) {}
   } catch (err) {
     console.warn('Aviso ao excluir usuário no Firestore:', err);
     try {
-      localStorage.setItem('pmesp_usuarios', JSON.stringify(novaLista));
-      const cachedExcluidos = localStorage.getItem('pmesp_usuarios_excluidos');
-      const excluidosArr: string[] = cachedExcluidos ? JSON.parse(cachedExcluidos) : [];
-      if (usuarioRemovido?.email && !excluidosArr.includes(usuarioRemovido.email.toLowerCase())) {
-        excluidosArr.push(usuarioRemovido.email.toLowerCase());
-      }
-      localStorage.setItem('pmesp_usuarios_excluidos', JSON.stringify(excluidosArr));
+      localStorage.setItem('pmesp_usuarios', JSON.stringify(listaAtualizada));
     } catch (e) {}
   }
 
-  return novaLista;
+  return listaAtualizada;
 }
 
 /**
@@ -751,7 +794,8 @@ export async function loginSistema(
           criadoEm: new Date().toISOString(),
           ultimoAcesso: new Date().toISOString(),
         };
-        await salvarUsuariosFirestore([...usuarios, novoUser]);
+        const atualizados = deduplicarUsuarios([...usuarios, novoUser]);
+        await salvarUsuariosFirestore(atualizados);
         return { user: novoUser, modo: 'firebase' };
       }
     }
@@ -779,6 +823,7 @@ export async function loginSistema(
 
 /**
  * Cria ou cadastra um novo usuário no sistema
+ * Retorna o usuário criado e a lista completa atualizada e deduplicada
  */
 export async function cadastrarNovoUsuario(
   dados: {
@@ -789,25 +834,21 @@ export async function cadastrarNovoUsuario(
     role: UserRole;
     senha: string;
   }
-): Promise<UsuarioSistema> {
+): Promise<{ novoUsuario: UsuarioSistema; listaAtualizada: UsuarioSistema[] }> {
   const emailNorm = dados.email.trim().toLowerCase();
+  const reNorm = dados.re ? dados.re.trim().toLowerCase() : '';
   const usuarios = await carregarUsuariosFirestore();
 
-  if (usuarios.some((u) => u.email.toLowerCase() === emailNorm)) {
-    throw new Error('Já existe um usuário cadastrado com este e-mail.');
+  if (usuarios.some((u) => u.email.trim().toLowerCase() === emailNorm)) {
+    throw new Error('Já existe um usuário cadastrado com este e-mail institucional.');
   }
 
-  let novoUid = 'user-' + Date.now();
-
-  // Tenta criar no Firebase Auth se possível
-  try {
-    const cred = await createUserWithEmailAndPassword(auth, emailNorm, dados.senha);
-    if (cred.user) {
-      novoUid = cred.user.uid;
-    }
-  } catch (err: any) {
-    console.info('Criação no Firebase Auth ignorada ou provedor não ativado, registrando no banco:', err?.code);
+  if (reNorm && usuarios.some((u) => u.re && u.re.trim().toLowerCase() === reNorm)) {
+    throw new Error(`Já existe um militar cadastrado com este RE (${dados.re?.trim()}).`);
   }
+
+  // Gera um identificador único exclusivo e legível
+  const novoUid = `user-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
   const novoUsuario: UsuarioSistema = {
     id: novoUid,
@@ -818,16 +859,17 @@ export async function cadastrarNovoUsuario(
     role: dados.role,
     ativo: true,
     criadoEm: new Date().toISOString(),
-    senhaHash: dados.senha,
+    senhaHash: dados.senha.trim(),
   };
 
-  const listaAtualizada = [...usuarios, novoUsuario];
+  const listaAtualizada = deduplicarUsuarios([...usuarios, novoUsuario]);
   await salvarUsuariosFirestore(listaAtualizada);
-  return novoUsuario;
+  return { novoUsuario, listaAtualizada };
 }
 
 /**
  * Atualiza os dados de um usuário existente
+ * Atualiza estritamente no local sem gerar clones ou duplicatas
  */
 export async function atualizarUsuarioFirestore(
   usuarioId: string,
@@ -842,27 +884,40 @@ export async function atualizarUsuarioFirestore(
   }
 ): Promise<UsuarioSistema[]> {
   const usuarios = await carregarUsuariosFirestore();
-  const index = usuarios.findIndex((u) => u.id === usuarioId);
+  let index = usuarios.findIndex((u) => u.id === usuarioId);
+  if (index === -1 && dadosAtualizados.email) {
+    index = usuarios.findIndex((u) => u.email.trim().toLowerCase() === dadosAtualizados.email!.trim().toLowerCase());
+  }
   if (index === -1) {
     throw new Error('Usuário não encontrado para atualização.');
   }
 
+  const usuarioAtual = usuarios[index];
+
   // Se o e-mail foi alterado, verifica se outro usuário já o possui
   if (dadosAtualizados.email) {
     const emailNorm = dadosAtualizados.email.trim().toLowerCase();
-    const existeOutro = usuarios.some((u) => u.id !== usuarioId && u.email.toLowerCase() === emailNorm);
+    const existeOutro = usuarios.some((u, i) => i !== index && u.email.trim().toLowerCase() === emailNorm);
     if (existeOutro) {
-      throw new Error('Já existe outro militar/usuário cadastrado com este e-mail.');
+      throw new Error('Já existe outro militar/usuário cadastrado com este e-mail institucional.');
     }
   }
 
-  const usuarioAtual = usuarios[index];
+  // Se o RE foi alterado, verifica se outro usuário já o possui
+  if (dadosAtualizados.re) {
+    const reNorm = dadosAtualizados.re.trim().toLowerCase();
+    const existeOutroRe = usuarios.some((u, i) => i !== index && u.re && u.re.trim().toLowerCase() === reNorm);
+    if (existeOutroRe) {
+      throw new Error(`Já existe outro militar cadastrado com este RE (${dadosAtualizados.re.trim()}).`);
+    }
+  }
+
   const usuarioModificado: UsuarioSistema = {
     ...usuarioAtual,
     nome: dadosAtualizados.nome !== undefined ? dadosAtualizados.nome.trim() : usuarioAtual.nome,
     email: dadosAtualizados.email !== undefined ? dadosAtualizados.email.trim().toLowerCase() : usuarioAtual.email,
     graduacaoOuCargo: dadosAtualizados.graduacaoOuCargo !== undefined ? dadosAtualizados.graduacaoOuCargo.trim() : usuarioAtual.graduacaoOuCargo,
-    re: dadosAtualizados.re !== undefined ? dadosAtualizados.re.trim() : usuarioAtual.re,
+    re: dadosAtualizados.re !== undefined ? (dadosAtualizados.re.trim() || undefined) : usuarioAtual.re,
     role: dadosAtualizados.role !== undefined ? dadosAtualizados.role : usuarioAtual.role,
     ativo: dadosAtualizados.ativo !== undefined ? dadosAtualizados.ativo : usuarioAtual.ativo,
     senhaHash: dadosAtualizados.novaSenha && dadosAtualizados.novaSenha.trim().length >= 6
@@ -872,8 +927,9 @@ export async function atualizarUsuarioFirestore(
 
   const listaAtualizada = [...usuarios];
   listaAtualizada[index] = usuarioModificado;
-  await salvarUsuariosFirestore(listaAtualizada);
-  return listaAtualizada;
+  const listaLimpa = deduplicarUsuarios(listaAtualizada);
+  await salvarUsuariosFirestore(listaLimpa);
+  return listaLimpa;
 }
 
 /**

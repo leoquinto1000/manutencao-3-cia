@@ -28,7 +28,8 @@ import {
   redefinirSenhaUsuario, 
   atualizarUsuarioFirestore, 
   salvarUsuariosFirestore,
-  excluirUsuarioFirestore
+  excluirUsuarioFirestore,
+  deduplicarUsuarios
 } from '../firebase';
 import { NIVEIS_ACESSO_PADRAO, obterNivelDef, getClassesCorNivel } from '../utils/permissoes';
 import { GerenciadorNiveisAcesso } from './Usuarios/GerenciadorNiveisAcesso';
@@ -145,21 +146,36 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
       return;
     }
 
+    const emailNorm = email.trim().toLowerCase();
+    const jaExisteEmail = usuarios.some((u) => u.email.trim().toLowerCase() === emailNorm);
+    if (jaExisteEmail) {
+      setErroNovo('Já existe um militar/usuário cadastrado com este e-mail institucional.');
+      return;
+    }
+
+    const reTrim = re.trim();
+    if (reTrim) {
+      const jaExisteRe = usuarios.some((u) => u.re && u.re.trim().toLowerCase() === reTrim.toLowerCase());
+      if (jaExisteRe) {
+        setErroNovo(`Já existe um militar cadastrado com este RE (${reTrim}).`);
+        return;
+      }
+    }
+
     setSalvandoNovo(true);
     setErroNovo(null);
 
     try {
-      const novoUsuario = await cadastrarNovoUsuario({
-        nome,
-        email,
-        graduacaoOuCargo: graduacao,
-        re,
+      const { novoUsuario, listaAtualizada } = await cadastrarNovoUsuario({
+        nome: nome.trim(),
+        email: emailNorm,
+        graduacaoOuCargo: graduacao.trim(),
+        re: reTrim || undefined,
         role,
-        senha,
+        senha: senha.trim(),
       });
 
-      const listaNova = [...usuarios, novoUsuario];
-      onChangeUsuarios(listaNova);
+      onChangeUsuarios(listaAtualizada);
       setModalNovo(false);
       setNome('');
       setEmail('');
@@ -183,8 +199,9 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
     const novaLista = usuarios.map((u) =>
       u.id === usuario.id ? { ...u, ativo: !u.ativo } : u
     );
-    onChangeUsuarios(novaLista);
-    await salvarUsuariosFirestore(novaLista);
+    const listaLimpa = deduplicarUsuarios(novaLista);
+    onChangeUsuarios(listaLimpa);
+    await salvarUsuariosFirestore(listaLimpa);
     exibirFeedback(`Status de ${usuario.nome} alterado para ${!usuario.ativo ? 'Ativo' : 'Inativo'}.`);
   };
 
@@ -197,8 +214,9 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
     const novaLista = usuarios.map((u) =>
       u.id === usuario.id ? { ...u, role: novoRole } : u
     );
-    onChangeUsuarios(novaLista);
-    await salvarUsuariosFirestore(novaLista);
+    const listaLimpa = deduplicarUsuarios(novaLista);
+    onChangeUsuarios(listaLimpa);
+    await salvarUsuariosFirestore(listaLimpa);
     exibirFeedback(`Permissão de ${usuario.nome} alterada com sucesso.`);
   };
 
@@ -220,8 +238,16 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
 
     setExcluindo(true);
     try {
-      const listaAtualizada = await excluirUsuarioFirestore(usuarioParaExcluir.id);
-      onChangeUsuarios(listaAtualizada);
+      const idParaExcluir = usuarioParaExcluir.id;
+      const emailParaExcluir = usuarioParaExcluir.email.toLowerCase();
+      const listaAtualizada = await excluirUsuarioFirestore(idParaExcluir);
+
+      // Garante remoção exata e definitiva sem chance de ressurgir
+      const listaFinal = listaAtualizada.filter(
+        (u) => u.id !== idParaExcluir && u.email.toLowerCase() !== emailParaExcluir
+      );
+
+      onChangeUsuarios(listaFinal);
       exibirFeedback(`Usuário ${usuarioParaExcluir.graduacaoOuCargo} ${usuarioParaExcluir.nome} excluído com sucesso.`);
       setUsuarioParaExcluir(null);
     } catch (err: any) {
@@ -252,6 +278,22 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
     if (!editNome.trim() || !editEmail.trim()) {
       setErroEdicao('Nome e e-mail institucional são obrigatórios.');
       return;
+    }
+
+    const emailNorm = editEmail.trim().toLowerCase();
+    const jaExisteEmail = usuarios.some((u) => u.id !== usuarioEditando.id && u.email.trim().toLowerCase() === emailNorm);
+    if (jaExisteEmail) {
+      setErroEdicao('Já existe outro militar/usuário cadastrado com este e-mail institucional.');
+      return;
+    }
+
+    const reTrim = editRe.trim();
+    if (reTrim) {
+      const jaExisteRe = usuarios.some((u) => u.id !== usuarioEditando.id && u.re && u.re.trim().toLowerCase() === reTrim.toLowerCase());
+      if (jaExisteRe) {
+        setErroEdicao(`Já existe outro militar cadastrado com este RE (${reTrim}).`);
+        return;
+      }
     }
 
     if (usuarioEditando.id === usuarioLogado.id) {
@@ -399,7 +441,9 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
     }
 
     if (adicionados > 0) {
-      onChangeUsuarios(novosUsuarios);
+      const listaLimpa = deduplicarUsuarios(novosUsuarios);
+      onChangeUsuarios(listaLimpa);
+      salvarUsuariosFirestore(listaLimpa).catch(console.error);
       exibirFeedback(`${adicionados} usuário(s) do efetivo fixo foram cadastrados com sucesso!`);
     } else {
       exibirFeedback('Todos os militares do efetivo fixo já possuem cadastro de usuário no sistema.');
