@@ -373,10 +373,10 @@ export const ModalVisualizadorPDF: React.FC<ModalVisualizadorPDFProps> = ({
             modoVisualizador === 'a4' ? (
               /* Visualizador de Folhas Renderizadas A4 */
               <div
-                className="flex flex-col items-center gap-8 py-4 transition-all duration-150"
+                className="flex flex-col items-center gap-8 py-4 transition-all duration-150 mx-auto"
                 style={{
                   width: `${Math.round(794 * (zoom / 100))}px`,
-                  maxWidth: '100%',
+                  minWidth: `${Math.round(794 * (zoom / 100))}px`,
                 }}
               >
                 {layoutExibicao === 'todas' ? (
@@ -399,7 +399,7 @@ export const ModalVisualizadorPDF: React.FC<ModalVisualizadorPDFProps> = ({
 
                       {/* Folha A4 em Papel Branco com Sombra */}
                       <div
-                        className="bg-white rounded shadow-2xl overflow-hidden border border-slate-400/30 transition-transform w-full"
+                        className="bg-white rounded-xs shadow-2xl overflow-hidden border border-slate-400/40 w-full"
                         style={{
                           aspectRatio: '210 / 297',
                         }}
@@ -407,7 +407,7 @@ export const ModalVisualizadorPDF: React.FC<ModalVisualizadorPDFProps> = ({
                         <img
                           src={imgSrc}
                           alt={`Folha ${idx + 1} em Formato A4`}
-                          className="w-full h-full object-contain block bg-white"
+                          className="w-full h-full object-fill block bg-white"
                         />
                       </div>
                     </div>
@@ -425,7 +425,7 @@ export const ModalVisualizadorPDF: React.FC<ModalVisualizadorPDFProps> = ({
                     </div>
 
                     <div
-                      className="bg-white rounded shadow-2xl overflow-hidden border border-slate-400/30 w-full"
+                      className="bg-white rounded-xs shadow-2xl overflow-hidden border border-slate-400/40 w-full"
                       style={{
                         aspectRatio: '210 / 297',
                       }}
@@ -433,7 +433,7 @@ export const ModalVisualizadorPDF: React.FC<ModalVisualizadorPDFProps> = ({
                       <img
                         src={resultadoPdf.paginasImagens[paginaAtual] || resultadoPdf.paginasImagens[0]}
                         alt={`Folha ${paginaAtual + 1} em Formato A4`}
-                        className="w-full h-full object-contain block bg-white"
+                        className="w-full h-full object-fill block bg-white"
                       />
                     </div>
                   </div>

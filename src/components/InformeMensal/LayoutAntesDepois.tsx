@@ -278,14 +278,15 @@ export const LayoutAntesDepois: React.FC<LayoutAntesDepoisProps> = ({
         )}
 
         {/* Área Visual da Imagem */}
-        <div className="relative w-full overflow-hidden bg-slate-100 flex-1 min-h-[260px] sm:min-h-[290px] flex items-center justify-center">
+        <div className="relative w-full overflow-hidden bg-slate-100 flex-1 min-h-[260px] flex items-center justify-center">
           {temFoto ? (
             <div className="w-full h-full relative group/fotoContainer">
               <img
                 src={foto.url}
+                crossOrigin="anonymous"
                 referrerPolicy="no-referrer"
                 alt={foto.legenda || (isAntes ? 'Foto do Antes' : 'Foto do Depois')}
-                className="w-full h-64 sm:h-72 object-cover block"
+                className="w-full h-64 object-cover block"
               />
 
               {/* Botão flutuante de substituição rápida no hover */}
@@ -346,7 +347,9 @@ export const LayoutAntesDepois: React.FC<LayoutAntesDepoisProps> = ({
                 const el = document.getElementById(inputId) as HTMLInputElement;
                 el?.click();
               }}
-              className="w-full h-64 sm:h-72 bg-white/70 hover:bg-blue-50/40 border-2 border-dashed border-slate-300 hover:border-[#1a2b4c] flex flex-col items-center justify-center gap-2.5 p-6 text-center cursor-pointer transition"
+              className={`w-full h-64 bg-white/70 border-2 border-dashed border-slate-300 flex flex-col items-center justify-center gap-2.5 p-6 text-center transition ${
+                modoEdicao ? 'hover:bg-blue-50/40 hover:border-[#1a2b4c] cursor-pointer' : 'cursor-default'
+              }`}
             >
               <div
                 className={`w-12 h-12 rounded-full flex items-center justify-center text-white shadow-md ${
@@ -360,7 +363,7 @@ export const LayoutAntesDepois: React.FC<LayoutAntesDepoisProps> = ({
                   {estiloTema.placeholderUpload}
                 </span>
                 <span className="text-[11px] text-slate-500 mt-0.5 block">
-                  Clique para selecionar arquivo ou arraste a imagem para cá
+                  {modoEdicao ? 'Clique para selecionar arquivo ou arraste a imagem para cá' : 'Nenhuma imagem inserida'}
                 </span>
               </div>
               <span
@@ -398,21 +401,26 @@ export const LayoutAntesDepois: React.FC<LayoutAntesDepoisProps> = ({
 
         {/* Rodapé do Card com Legenda Técnica */}
         <div className="p-2.5 bg-white border-t border-slate-200">
-          <label className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-0.5">
+          <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block mb-0.5">
             Legenda Técnica ({isAntes ? 'Antes' : 'Depois'}):
-          </label>
-          <input
-            type="text"
-            value={foto.legenda}
-            disabled={!modoEdicao}
-            onChange={(e) => handleUpdateFotoEspecifica(idx, { legenda: e.target.value })}
-            placeholder={
-              isAntes
-                ? 'Descreva a avaria ou condição inicial...'
-                : 'Descreva a solução e intervenção executada...'
-            }
-            className="w-full font-heading text-xs font-bold text-slate-900 bg-transparent border border-transparent hover:border-slate-300 focus:border-[#1a2b4c] focus:bg-blue-50/20 rounded px-1.5 py-1 outline-none transition"
-          />
+          </span>
+          {modoEdicao ? (
+            <input
+              type="text"
+              value={foto.legenda}
+              onChange={(e) => handleUpdateFotoEspecifica(idx, { legenda: e.target.value })}
+              placeholder={
+                isAntes
+                  ? 'Descreva a avaria ou condição inicial...'
+                  : 'Descreva a solução e intervenção executada...'
+              }
+              className="w-full font-heading text-xs font-bold text-slate-900 bg-transparent border border-transparent hover:border-slate-300 focus:border-[#1a2b4c] focus:bg-blue-50/20 rounded px-1.5 py-1 outline-none transition"
+            />
+          ) : (
+            <p className="font-heading text-xs font-bold text-slate-900 leading-snug">
+              {foto.legenda || (isAntes ? 'Registro da avaria e condição inicial.' : 'Serviço finalizado com revitalização.')}
+            </p>
+          )}
         </div>
       </div>
     );
@@ -446,14 +454,14 @@ export const LayoutAntesDepois: React.FC<LayoutAntesDepoisProps> = ({
         </div>
       )}
 
-      {/* Grid Comparativo Lado a Lado de Alta Definição */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative">
+      {/* Grid Comparativo Lado a Lado Estritamente A4 */}
+      <div className="grid grid-cols-2 gap-4 relative">
         {/* Card ANTES */}
         {renderCardComparativo(fotoAntes, 0, 'antes')}
 
         {/* Divisor Central Estilizado de Transformação */}
-        <div className="hidden md:flex absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none">
-          <div className="w-9 h-9 rounded-full bg-[#1a2b4c] text-[#c9a84e] border-2 border-white shadow-lg flex items-center justify-center font-heading font-black text-[11px] tracking-tighter">
+        <div className="flex absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none">
+          <div className="w-8 h-8 rounded-full bg-[#1a2b4c] text-[#c9a84e] border-2 border-white shadow-lg flex items-center justify-center font-heading font-black text-[10px] tracking-tighter">
             VS
           </div>
         </div>

@@ -182,121 +182,139 @@ export async function gerarDocumentoPdf(
               } else {
                 img.onload = () => resolve();
                 img.onerror = () => resolve();
-                setTimeout(resolve, 800);
+                setTimeout(resolve, 600);
               }
             })
         )
       );
     }
 
-    // Identificador temporário para achar a página exata no clonedDoc
-    const pageIdAttr = `a4-page-render-${Date.now()}-${i}`;
-    pagina.setAttribute('data-render-id', pageIdAttr);
-
-    // Gera canvas de alta resolução com proporção estrita de 794px × 1123px (A4 a 96DPI)
-    const canvas = await html2canvas(pagina, {
-      scale: 2, // 2x para nitidez
-      useCORS: true,
-      allowTaint: true,
-      backgroundColor: '#ffffff',
-      logging: false,
-      ignoreElements: (element) => element.classList.contains('no-print'),
-      width: 794,
-      height: 1123,
-      windowWidth: 794,
-      windowHeight: 1123,
-      onclone: (clonedDoc) => {
-        // 1. Remove qualquer elemento .no-print
-        const noPrintElements = clonedDoc.querySelectorAll('.no-print');
-        noPrintElements.forEach((el) => el.remove());
-
-        // 2. Localiza a página clonada exata
-        const clonedPage = clonedDoc.querySelector<HTMLElement>(`[data-render-id="${pageIdAttr}"]`);
-        if (clonedPage) {
-          // Força a página a ter exatamente 794px x 1123px (A4 a 96DPI)
-          clonedPage.style.width = '794px';
-          clonedPage.style.minWidth = '794px';
-          clonedPage.style.maxWidth = '794px';
-          clonedPage.style.height = '1123px';
-          clonedPage.style.minHeight = '1123px';
-          clonedPage.style.maxHeight = '1123px';
-          clonedPage.style.margin = '0 auto';
-          clonedPage.style.padding = '38px 45px 30px 45px';
-          clonedPage.style.border = 'none';
-          clonedPage.style.boxShadow = 'none';
-          clonedPage.style.boxSizing = 'border-box';
-          clonedPage.style.overflow = 'hidden';
-          clonedPage.style.backgroundColor = '#ffffff';
-          clonedPage.style.display = 'flex';
-          clonedPage.style.flexDirection = 'column';
-          clonedPage.style.justifyContent = 'space-between';
-        }
-
-        // Também normaliza todas as outras páginas A4 no documento clonado
-        const allClonedPages = clonedDoc.querySelectorAll<HTMLElement>(
-          '.pesquisa-page, .sheet-paper, .balancete-page, .textoparte-page, .apmbb-page, .pauta-diaria-page'
-        );
-        allClonedPages.forEach((p) => {
-          p.style.width = '794px';
-          p.style.minWidth = '794px';
-          p.style.maxWidth = '794px';
-          p.style.boxShadow = 'none';
-        });
-
-        // 3. Converte inputs, textareas e selects em texto estático idêntico
-        const origInputs = pagina.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
-          'input, textarea, select'
-        );
-        const clonedTarget = clonedPage || clonedDoc;
-        const clonedInputs = clonedTarget.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
-          'input, textarea, select'
-        );
-
-        origInputs.forEach((orig, idx) => {
-          const cloned = clonedInputs[idx];
-          if (!cloned) return;
-
-          if (orig instanceof HTMLSelectElement) {
-            const span = clonedDoc.createElement('span');
-            span.textContent = orig.options[orig.selectedIndex]?.text || orig.value || '';
-            span.className = cloned.className || '';
-            span.style.cssText = cloned.style.cssText;
-            span.style.border = 'none';
-            span.style.outline = 'none';
-            span.style.background = 'transparent';
-            span.style.display = 'inline-block';
-            span.style.fontWeight = 'bold';
-            cloned.parentNode?.replaceChild(span, cloned);
-          } else if (orig instanceof HTMLTextAreaElement) {
-            const div = clonedDoc.createElement('div');
-            div.textContent = orig.value || '';
-            div.className = cloned.className || '';
-            div.style.cssText = cloned.style.cssText;
-            div.style.whiteSpace = 'pre-wrap';
-            div.style.wordBreak = 'break-word';
-            div.style.border = 'none';
-            div.style.outline = 'none';
-            div.style.background = 'transparent';
-            div.style.resize = 'none';
-            cloned.parentNode?.replaceChild(div, cloned);
-          } else if (orig instanceof HTMLInputElement) {
-            if (orig.type !== 'checkbox' && orig.type !== 'radio') {
-              const span = clonedDoc.createElement('span');
-              span.textContent = orig.value || '';
-              span.className = cloned.className || '';
-              span.style.cssText = cloned.style.cssText;
-              span.style.display = 'inline-block';
-              span.style.border = 'none';
-              span.style.outline = 'none';
-              span.style.background = 'transparent';
-              cloned.parentNode?.replaceChild(span, cloned);
-            }
-          }
-        });
-      },
+    // 1. Associa marcadores temporários nos inputs para mapeamento fiel dos valores
+    const origInputs = Array.from(
+      pagina.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+        'input, textarea, select'
+      )
+    );
+    origInputs.forEach((el, idx) => {
+      el.setAttribute('data-print-field-id', String(idx));
     });
 
-    pagina.removeAttribute('data-render-id');
+    // 2. Clona a página isolada do restante da aplicação
+    const pageClone = pagina.cloneNode(true) as HTMLElement;
+
+    // Limpa atributo do DOM ativo
+    origInputs.forEach((el) => {
+      el.removeAttribute('data-print-field-id');
+    });
+
+    // 3. Remove todos os elementos .no-print do clone
+    const noPrintList = pageClone.querySelectorAll('.no-print');
+    noPrintList.forEach((el) => el.remove());
+
+    // 4. Converte os inputs clonados em texto estático com estilo correspondente
+    const clonedInputs = Array.from(
+      pageClone.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+        '[data-print-field-id]'
+      )
+    );
+
+    clonedInputs.forEach((cloned) => {
+      const idx = Number(cloned.getAttribute('data-print-field-id'));
+      const orig = origInputs[idx];
+      if (!orig) return;
+
+      if (orig instanceof HTMLSelectElement) {
+        const span = document.createElement('span');
+        span.textContent = orig.options[orig.selectedIndex]?.text || orig.value || '';
+        span.className = cloned.className || '';
+        span.style.cssText = cloned.style.cssText;
+        span.style.border = 'none';
+        span.style.background = 'transparent';
+        span.style.display = 'inline-block';
+        span.style.fontWeight = 'bold';
+        cloned.parentNode?.replaceChild(span, cloned);
+      } else if (orig instanceof HTMLTextAreaElement) {
+        const div = document.createElement('div');
+        div.textContent = orig.value || '';
+        div.className = cloned.className || '';
+        div.style.cssText = cloned.style.cssText;
+        div.style.whiteSpace = 'pre-wrap';
+        div.style.wordBreak = 'break-word';
+        div.style.border = 'none';
+        div.style.background = 'transparent';
+        div.style.resize = 'none';
+        div.style.overflow = 'visible';
+        cloned.parentNode?.replaceChild(div, cloned);
+      } else if (orig instanceof HTMLInputElement) {
+        if (orig.type === 'file' || orig.type === 'hidden') {
+          cloned.remove();
+        } else if (orig.type !== 'checkbox' && orig.type !== 'radio') {
+          const span = document.createElement('span');
+          span.textContent = orig.value || '';
+          span.className = cloned.className || '';
+          span.style.cssText = cloned.style.cssText;
+          span.style.display = 'inline-block';
+          span.style.border = 'none';
+          span.style.background = 'transparent';
+          cloned.parentNode?.replaceChild(span, cloned);
+        }
+      }
+    });
+
+    // 5. Configura proporções estritas A4 (794px × 1123px) no clone
+    pageClone.style.width = '794px';
+    pageClone.style.minWidth = '794px';
+    pageClone.style.maxWidth = '794px';
+    pageClone.style.height = '1123px';
+    pageClone.style.minHeight = '1123px';
+    pageClone.style.maxHeight = '1123px';
+    pageClone.style.margin = '0';
+    pageClone.style.padding = '36px 45px 30px 45px';
+    pageClone.style.border = 'none';
+    pageClone.style.boxShadow = 'none';
+    pageClone.style.boxSizing = 'border-box';
+    pageClone.style.overflow = 'hidden';
+    pageClone.style.backgroundColor = '#ffffff';
+    pageClone.style.display = 'flex';
+    pageClone.style.flexDirection = 'column';
+    pageClone.style.justifyContent = 'space-between';
+
+    // 6. Anexa a página em container isolado no topo do body para renderização sem desvios de rolagem
+    const mountWrapper = document.createElement('div');
+    mountWrapper.style.position = 'fixed';
+    mountWrapper.style.left = '0';
+    mountWrapper.style.top = '0';
+    mountWrapper.style.width = '794px';
+    mountWrapper.style.height = '1123px';
+    mountWrapper.style.zIndex = '-9999';
+    mountWrapper.style.opacity = '0';
+    mountWrapper.style.pointerEvents = 'none';
+    mountWrapper.style.overflow = 'hidden';
+    mountWrapper.appendChild(pageClone);
+    document.body.appendChild(mountWrapper);
+
+    let canvas: HTMLCanvasElement;
+    try {
+      canvas = await html2canvas(pageClone, {
+        scale: 2, // 2x para máxima nitidez A4
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        width: 794,
+        height: 1123,
+        windowWidth: 794,
+        windowHeight: 1123,
+        scrollX: 0,
+        scrollY: 0,
+        x: 0,
+        y: 0,
+      });
+    } finally {
+      if (mountWrapper.parentNode) {
+        mountWrapper.parentNode.removeChild(mountWrapper);
+      }
+    }
 
     const imgData = canvas.toDataURL('image/jpeg', 0.95);
     paginasImagens.push(imgData);
@@ -305,20 +323,8 @@ export async function gerarDocumentoPdf(
       pdf.addPage('a4', orientacao);
     }
 
-    // Cada folha no PDF ocupa exatamente o tamanho da página A4 (210mm x 297mm)
-    const aspectCanvas = canvas.width / canvas.height;
-    let renderW = pdfLargura;
-    let renderH = renderW / aspectCanvas;
-
-    if (renderH > pdfAltura) {
-      renderH = pdfAltura;
-      renderW = renderH * aspectCanvas;
-    }
-
-    const posX = (pdfLargura - renderW) / 2;
-    const posY = (pdfAltura - renderH) / 2;
-
-    pdf.addImage(imgData, 'JPEG', posX, posY, renderW, renderH, undefined, 'FAST');
+    // Cada folha no PDF ocupa exatamente o tamanho padrão da página A4 (210mm x 297mm)
+    pdf.addImage(imgData, 'JPEG', 0, 0, pdfLargura, pdfAltura, undefined, 'FAST');
   }
 
   if (onProgresso) {

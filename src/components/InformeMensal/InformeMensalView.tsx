@@ -10,6 +10,7 @@ import {
 } from '../../types';
 import { gerarId, baixarFoto, comprimirImagemParaArmazenamento, DADOS_INICIAIS_INFORME } from '../../utils';
 import { ModalVisualizadorPDF } from '../PrestacaoContas/ModalVisualizadorPDF';
+import { executarImpressaoA4, gerarDocumentoPdf } from '../../utils/pdfPrintHelper';
 import { LayoutAntesDepois } from './LayoutAntesDepois';
 import { BadgeFotoColorido } from './BadgeFotoColorido';
 import { ModalHistoricoAuditoria } from './ModalHistoricoAuditoria';
@@ -36,7 +37,11 @@ import {
   Check,
   ChevronUp,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
+  ZoomIn,
+  ZoomOut,
+  Layers,
   Copy,
   RotateCcw,
   ArrowLeft,
@@ -78,7 +83,12 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
   usuarioLogado,
   membros = [],
 }) => {
-  const [subAba, setSubAba] = useState<'edicao' | 'arquivo'>('edicao');
+  const [subAba, setSubAba] = useState<'edicao' | 'visualizar' | 'arquivo'>('edicao');
+  const [zoomVisualizacao, setZoomVisualizacao] = useState<number>(100);
+  const [modoExibicaoFolhas, setModoExibicaoFolhas] = useState<'todas' | 'individual'>('todas');
+  const [folhaVisualizacaoAtual, setFolhaVisualizacaoAtual] = useState<number>(0);
+  const [gerandoPdfDownload, setGerandoPdfDownload] = useState<boolean>(false);
+  const documentoOficialVisualizacaoRef = useRef<HTMLDivElement>(null);
   const [informeParaExcluir, setInformeParaExcluir] = useState<InformeMensal | null>(null);
   const [informeParaVisualizar, setInformeParaVisualizar] = useState<InformeMensal | null>(null);
   const [modalLimparAberto, setModalLimparAberto] = useState<boolean>(false);
@@ -123,6 +133,36 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
 
   const handleUpdateField = (field: keyof InformeMensal, val: any) => {
     onChangeInformeAtual({ ...informeAtualRef.current, [field]: val });
+  };
+
+  const handleImprimirOficial = () => {
+    const el = documentoOficialVisualizacaoRef.current || documentoRef.current;
+    if (el) {
+      executarImpressaoA4(el, `Informe_Mensal_APMBB_${(informeAtual.mesAno || 'Mensal').replace(/[\s/]+/g, '_')}`);
+    } else {
+      window.print();
+    }
+  };
+
+  const handleBaixarPdfOficial = async () => {
+    const el = documentoOficialVisualizacaoRef.current || documentoRef.current;
+    if (!el) return;
+    setGerandoPdfDownload(true);
+    try {
+      const res = await gerarDocumentoPdf(el, {
+        nomeArquivo: `Informe_Mensal_APMBB_${(informeAtual.mesAno || 'Mensal').replace(/[\s/]+/g, '_')}.pdf`,
+        orientacao: 'p',
+      });
+      res.pdf.save(`Informe_Mensal_APMBB_${(informeAtual.mesAno || 'Mensal').replace(/[\s/]+/g, '_')}.pdf`);
+      setMensagemSucesso('📥 Documento oficial baixado em PDF com sucesso!');
+      setTimeout(() => setMensagemSucesso(null), 4000);
+    } catch (e: any) {
+      console.error('Erro ao gerar PDF oficial:', e);
+      setMensagemSucesso('❌ Erro ao gerar o PDF oficial.');
+      setTimeout(() => setMensagemSucesso(null), 4000);
+    } finally {
+      setGerandoPdfDownload(false);
+    }
   };
 
   const handleUploadCapa = async (file: File) => {
@@ -596,6 +636,17 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
           📝 1. Edição do Informe do Mês
         </button>
         <button
+          onClick={() => setSubAba('visualizar')}
+          className={`px-4 py-2 text-xs font-bold rounded-md transition flex items-center gap-1.5 ${
+            subAba === 'visualizar'
+              ? 'bg-[#b89535] text-white shadow-sm font-extrabold'
+              : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
+          }`}
+        >
+          <Eye size={14} />
+          <span>👁️ 2. Visualizar Relatório Oficial (A4)</span>
+        </button>
+        <button
           onClick={() => setSubAba('arquivo')}
           className={`px-4 py-2 text-xs font-bold rounded-md transition ${
             subAba === 'arquivo'
@@ -603,7 +654,7 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
               : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
           }`}
         >
-          📁 2. Arquivo de Informes ({informesArquivados.length})
+          📁 3. Arquivo de Informes ({informesArquivados.length})
         </button>
       </div>
 
@@ -773,7 +824,7 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => setModalPdfAberto(true)}
+                onClick={() => setSubAba('visualizar')}
                 className="flex items-center gap-1.5 bg-[#b89535] hover:bg-[#a48228] text-white text-xs font-bold px-3 py-2 rounded-md transition shadow-sm cursor-pointer"
                 title="Visualizar relatório oficial formatado em folhas A4, exportar PDF ou imprimir"
               >
@@ -1888,6 +1939,382 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
         </div>
       )}
 
+      {subAba === 'visualizar' && (
+        <div className="space-y-4 animate-in fade-in duration-150">
+          {/* Top Control Bar for Official Viewing */}
+          <div className="no-print bg-white p-3.5 rounded-lg border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-3 max-w-[820px] mx-auto">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSubAba('edicao')}
+                className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-3 py-1.5 rounded-md transition border border-slate-300 cursor-pointer"
+                title="Voltar para a tela de edição do informe"
+              >
+                <ArrowLeft size={14} />
+                <span>Voltar à Edição</span>
+              </button>
+
+              <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded border border-slate-200">
+                Mês: <strong className="text-[#1a2b4c]">{informeAtual.mesAno}</strong>
+              </span>
+
+              {/* Status Badge */}
+              <span className={`text-[11px] font-extrabold px-2.5 py-1 rounded-md border ${
+                informeAtual.status === 'Rascunho'
+                  ? 'bg-amber-50 text-amber-900 border-amber-300'
+                  : informeAtual.status === 'Em Revisão'
+                  ? 'bg-blue-50 text-blue-900 border-blue-300'
+                  : informeAtual.status === 'Arquivado'
+                  ? 'bg-purple-50 text-purple-900 border-purple-300'
+                  : 'bg-emerald-50 text-emerald-900 border-emerald-300'
+              }`}>
+                {informeAtual.status === 'Rascunho'
+                  ? '🟡 Rascunho'
+                  : informeAtual.status === 'Em Revisão'
+                  ? '🔵 Em Revisão'
+                  : informeAtual.status === 'Arquivado'
+                  ? '🟣 Arquivado'
+                  : '🟢 Aprovado Oficial'}
+              </span>
+            </div>
+
+            {/* Visualizer Controls: Mode, Navigation & Zoom */}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Modo de exibição: todas ou individual */}
+              <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-md border border-slate-300">
+                <button
+                  type="button"
+                  onClick={() => setModoExibicaoFolhas('todas')}
+                  className={`px-2 py-1 rounded text-xs font-semibold transition cursor-pointer ${
+                    modoExibicaoFolhas === 'todas'
+                      ? 'bg-[#1a2b4c] text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="Ver todas as folhas enfileiradas"
+                >
+                  <span className="flex items-center gap-1">
+                    <Layers size={12} />
+                    <span>Todas ({informeAtual.paginas.length + 1})</span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModoExibicaoFolhas('individual')}
+                  className={`px-2 py-1 rounded text-xs font-semibold transition cursor-pointer ${
+                    modoExibicaoFolhas === 'individual'
+                      ? 'bg-[#1a2b4c] text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="Navegar folha por folha"
+                >
+                  <span>Individual</span>
+                </button>
+              </div>
+
+              {/* Paginação se individual */}
+              {modoExibicaoFolhas === 'individual' && (
+                <div className="flex items-center gap-1 bg-slate-100 px-2 py-1 rounded-md border border-slate-300 text-xs font-bold text-slate-700">
+                  <button
+                    type="button"
+                    onClick={() => setFolhaVisualizacaoAtual((p) => Math.max(0, p - 1))}
+                    disabled={folhaVisualizacaoAtual === 0}
+                    className="p-0.5 text-slate-600 hover:text-slate-900 disabled:opacity-30 cursor-pointer"
+                    title="Folha anterior"
+                  >
+                    <ChevronLeft size={14} />
+                  </button>
+                  <span className="px-1 text-[11px]">
+                    Folha {folhaVisualizacaoAtual + 1} de {informeAtual.paginas.length + 1}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setFolhaVisualizacaoAtual((p) => Math.min(informeAtual.paginas.length, p + 1))}
+                    disabled={folhaVisualizacaoAtual === informeAtual.paginas.length}
+                    className="p-0.5 text-slate-600 hover:text-slate-900 disabled:opacity-30 cursor-pointer"
+                    title="Próxima folha"
+                  >
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
+              )}
+
+              {/* Zoom Controls */}
+              <div className="flex items-center gap-1 bg-slate-100 px-2 py-1 rounded-md border border-slate-300">
+                <button
+                  type="button"
+                  onClick={() => setZoomVisualizacao((z) => Math.max(50, z - 15))}
+                  disabled={zoomVisualizacao <= 50}
+                  className="p-0.5 text-slate-600 hover:text-slate-900 disabled:opacity-30 cursor-pointer"
+                  title="Diminuir zoom"
+                >
+                  <ZoomOut size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setZoomVisualizacao(100)}
+                  className="text-[11px] font-bold text-slate-700 px-1 hover:text-[#1a2b4c] cursor-pointer"
+                  title="Ajustar zoom para 100%"
+                >
+                  {zoomVisualizacao}%
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setZoomVisualizacao((z) => Math.min(150, z + 15))}
+                  disabled={zoomVisualizacao >= 150}
+                  className="p-0.5 text-slate-600 hover:text-slate-900 disabled:opacity-30 cursor-pointer"
+                  title="Aumentar zoom"
+                >
+                  <ZoomIn size={13} />
+                </button>
+              </div>
+
+              {/* Action Buttons: Download PDF and Print */}
+              <button
+                type="button"
+                onClick={handleBaixarPdfOficial}
+                disabled={gerandoPdfDownload}
+                className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold px-3 py-1.5 rounded-md transition shadow-xs cursor-pointer"
+                title="Baixar arquivo oficial em formato PDF A4"
+              >
+                {gerandoPdfDownload ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+                <span>{gerandoPdfDownload ? 'Gerando...' : 'Baixar PDF'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleImprimirOficial}
+                className="flex items-center gap-1.5 bg-[#c9a84e] hover:bg-[#b8973f] text-[#1a2b4c] text-xs font-bold px-3.5 py-1.5 rounded-md transition shadow-xs cursor-pointer"
+                title="Enviar diretamente para a impressora no formato A4"
+              >
+                <Printer size={13} />
+                <span>Imprimir Folhas A4</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setModalPdfAberto(true)}
+                className="flex items-center gap-1 bg-slate-700 hover:bg-slate-800 text-white text-xs font-semibold px-2.5 py-1.5 rounded-md transition shadow-xs cursor-pointer"
+                title="Abrir no leitor avançado com PDF embutido"
+              >
+                <FileText size={13} className="text-[#c9a84e]" />
+                <span className="hidden sm:inline">PDF Embutido</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Main Visualizer Stage */}
+          <div className="bg-slate-800 rounded-xl p-4 sm:p-8 overflow-x-auto min-h-[75vh] flex flex-col items-center border border-slate-700 shadow-inner">
+            <div
+              ref={documentoOficialVisualizacaoRef}
+              id="documento-informe-oficial-wrapper"
+              style={{
+                width: `${Math.round(794 * (zoomVisualizacao / 100))}px`,
+                minWidth: `${Math.round(794 * (zoomVisualizacao / 100))}px`,
+              }}
+              className="space-y-10 transition-all duration-150"
+            >
+              {/* Folha 1: Capa Oficial */}
+              {(modoExibicaoFolhas === 'todas' || folhaVisualizacaoAtual === 0) && (
+                <div className="flex flex-col items-center w-full">
+                  <div className="no-print w-full flex items-center justify-between text-[11px] text-slate-300 font-semibold mb-2 px-1">
+                    <span className="flex items-center gap-1.5 text-slate-200">
+                      <span className="bg-[#c9a84e] text-[#1a2b4c] font-black px-1.5 py-0.5 rounded text-[10px]">
+                        FOLHA 1 DE {informeAtual.paginas.length + 1}
+                      </span>
+                      <span>Página 1 (Capa Oficial A4 • 210 × 297 mm)</span>
+                    </span>
+                    <span className="text-slate-400 text-[10px]">Padrão Institucional APMBB</span>
+                  </div>
+
+                  <div className="apmbb-page bg-white shadow-2xl relative w-full" style={{ minHeight: '297mm' }}>
+                    <div>
+                      {/* Header Institucional */}
+                      <div className="flex justify-between items-start border-b-2 border-black pb-1.5 mb-4 font-heading gap-4 text-[11px] font-black text-black tracking-wide uppercase">
+                        <span>{informeAtual.cabecalhoEsquerda || 'ACADEMIA DE POLÍCIA MILITAR DO BARRO BRANCO - O003'}</span>
+                        <span className="text-right whitespace-pre-line leading-tight">{informeAtual.cabecalhoDireita || 'MANUTENÇÃO 3ª CIA\nCIA ES'}</span>
+                      </div>
+
+                      {/* Fachada / Capa */}
+                      <div className="mb-4 rounded-xl overflow-hidden border border-slate-300 shadow-xs bg-black" style={{ height: `${informeAtual.capaAltura || 195}px` }}>
+                        <img
+                          src={informeAtual.capaUrl || DADOS_INICIAIS_INFORME.capaUrl}
+                          alt="Fachada Institucional"
+                          className="w-full h-full object-cover block"
+                          crossOrigin="anonymous"
+                        />
+                      </div>
+
+                      {/* Titles */}
+                      <div className="text-center mb-4 space-y-1">
+                        <h1 className="font-heading text-xl font-extrabold text-[#1a2b4c] uppercase tracking-wide">
+                          {informeAtual.titulo || 'INFORME DE MANUTENÇÃO'}
+                        </h1>
+                        <p className="font-heading text-xs font-black text-[#b89535] uppercase tracking-wider">
+                          {informeAtual.subtitulo || 'AÇÕES DE INFRAESTRUTURA E GESTÃO PREDIAL'}
+                        </p>
+                        <p className="font-heading text-[11px] font-bold text-slate-700 uppercase tracking-widest mt-0.5">
+                          PERÍODO: {informeAtual.mesAno || 'MENSAL'}
+                        </p>
+                      </div>
+
+                      {/* Editorial Grid: Team & Text */}
+                      <div className="grid grid-cols-[250px_1fr] gap-5 mt-2 border-t border-slate-200 pt-3">
+                        {/* Team Roster */}
+                        <div className="border-r border-slate-300 pr-3 font-mono text-[10.5px] font-bold leading-relaxed text-slate-900 flex flex-col">
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 font-sans mb-1.5 pb-1 border-b border-slate-200 flex items-center gap-1">
+                            <Users size={12} className="text-[#1a2b4c]" />
+                            <span>Equipe de Manutenção</span>
+                          </div>
+                          <div className="whitespace-pre-line leading-relaxed text-slate-900 font-bold">
+                            {informeAtual.equipeTexto || 'Efetivo da 3ª Cia Manutenção'}
+                          </div>
+                        </div>
+
+                        {/* Editorial Content */}
+                        <div className="text-xs leading-relaxed text-slate-900 text-justify space-y-3 font-sans flex flex-col">
+                          <div>
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                              Resumo Editorial:
+                            </div>
+                            <p className="leading-relaxed text-justify text-slate-800 font-normal">
+                              {informeAtual.resumoTexto || 'Relatório mensal das atividades de manutenção preventiva, corretiva e melhorias prediais executadas nas instalações da APMBB.'}
+                            </p>
+                          </div>
+
+                          <div className="pt-1">
+                            <p className="font-bold text-[#1a2b4c] text-xs mb-1.5">
+                              {informeAtual.tituloDestaques || 'Dentre as principais atividades executadas, destacam-se:'}
+                            </p>
+                            <div className="space-y-1.5 text-xs text-slate-800">
+                              {(informeAtual.destaques || []).map((dest, i) => (
+                                <div key={dest.id || i} className="flex items-start gap-1.5 text-justify">
+                                  <span className="font-bold text-[#1a2b4c] mt-0.5 select-none">•</span>
+                                  <div className="leading-relaxed">
+                                    <span className="font-bold text-slate-900 mr-1.5">{dest.titulo}:</span>
+                                    <span>{dest.desc}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Footer Institucional */}
+                    <div className="border-t-2 border-black pt-2 text-center font-heading text-[11px] font-black tracking-widest text-black uppercase mt-4">
+                      {informeAtual.rodapeTexto || 'BERÇO DO OFICIALATO PAULISTA'}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Folhas 2..N: Páginas de Fotos e Serviços */}
+              {informeAtual.paginas.map((pagina, idx) => {
+                const numeroFolha = idx + 2;
+                if (modoExibicaoFolhas === 'individual' && folhaVisualizacaoAtual !== idx + 1) {
+                  return null;
+                }
+
+                return (
+                  <div key={pagina.id} className="flex flex-col items-center w-full">
+                    <div className="no-print w-full flex items-center justify-between text-[11px] text-slate-300 font-semibold mb-2 px-1">
+                      <span className="flex items-center gap-1.5 text-slate-200">
+                        <span className="bg-[#c9a84e] text-[#1a2b4c] font-black px-1.5 py-0.5 rounded text-[10px]">
+                          FOLHA {numeroFolha} DE {informeAtual.paginas.length + 1}
+                        </span>
+                        <span>{pagina.tituloServico || `Serviço ${idx + 1}`} • Padrão A4</span>
+                      </span>
+                      <span className="text-slate-400 text-[10px]">Relatório Fotográfico</span>
+                    </div>
+
+                    <div className="apmbb-page bg-white shadow-2xl relative w-full" style={{ minHeight: '297mm' }}>
+                      <div>
+                        {/* Header Institucional */}
+                        <div className="flex justify-between items-start border-b-2 border-black pb-1.5 mb-4 font-heading gap-4 text-[11px] font-black text-black tracking-wide uppercase">
+                          <span>{informeAtual.cabecalhoEsquerda || 'ACADEMIA DE POLÍCIA MILITAR DO BARRO BRANCO - O003'}</span>
+                          <span className="text-right whitespace-pre-line leading-tight">{informeAtual.cabecalhoDireita || 'MANUTENÇÃO 3ª CIA\nCIA ES'}</span>
+                        </div>
+
+                        {/* Service Title, Date and Description */}
+                        <div className="text-center mb-5 space-y-1">
+                          <h2 className="font-heading text-lg font-extrabold text-[#1a2b4c] uppercase tracking-wide">
+                            {pagina.tituloServico || 'SERVIÇO EXECUTADO'}
+                          </h2>
+                          <div className="font-heading text-xs font-bold text-[#b89535] uppercase tracking-wider">
+                            {pagina.dataServico || informeAtual.mesAno}
+                          </div>
+                          {pagina.descricao && (
+                            <p className="text-xs text-slate-700 text-center max-w-xl mx-auto block mt-1 leading-relaxed">
+                              {pagina.descricao}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Layout Antes e Depois OU Grid Padrão */}
+                        {pagina.tipoGrid === 'antes_depois' || pagina.layoutDedicado === 'antes_depois' ? (
+                          <LayoutAntesDepois
+                            pagina={pagina}
+                            onUpdatePagina={() => {}}
+                            onUploadFoto={() => {}}
+                            uploadingFotoKey={null}
+                            dragOverFotoKey={null}
+                            setDragOverFotoKey={() => {}}
+                            onBaixarFoto={baixarFoto}
+                            modoEdicao={false}
+                          />
+                        ) : (
+                          <div className={`grid gap-4 my-4 ${
+                            pagina.tipoGrid === '1'
+                              ? 'grid-cols-1 max-w-lg mx-auto'
+                              : pagina.tipoGrid === '3'
+                              ? 'grid-cols-3'
+                              : 'grid-cols-2'
+                          }`}>
+                            {pagina.fotos.map((foto) => (
+                              <div key={foto.id} className="bg-white rounded-xl overflow-hidden shadow-xs border border-slate-300 flex flex-col items-center relative">
+                                {foto.tipoBadge && foto.tipoBadge !== 'nenhum' && (
+                                  <div className="absolute top-2 left-2 z-10">
+                                    <BadgeFotoColorido
+                                      tipoBadge={foto.tipoBadge}
+                                      badgeTexto={foto.badgeTexto}
+                                      badgeCor={foto.badgeCor}
+                                      tamanho="sm"
+                                    />
+                                  </div>
+                                )}
+                                <div className="w-full bg-slate-100 flex items-center justify-center overflow-hidden">
+                                  <img
+                                    src={foto.url}
+                                    alt={foto.legenda || 'Foto do serviço'}
+                                    crossOrigin="anonymous"
+                                    className="w-full h-60 object-cover block"
+                                  />
+                                </div>
+                                <div className="p-2.5 w-full bg-white border-t border-slate-200 text-center">
+                                  <span className="text-xs font-bold text-slate-900 block leading-snug">
+                                    {foto.legenda || 'Registro fotográfico da intervenção de manutenção.'}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Footer Institucional */}
+                      <div className="border-t-2 border-black pt-2 text-center font-heading text-[11px] font-black tracking-widest text-black uppercase mt-4">
+                        {informeAtual.rodapeTexto || 'BERÇO DO OFICIALATO PAULISTA'}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       {subAba === 'arquivo' && (
         <DashboardGestaoArquivo
           informesArquivados={informesArquivados}
@@ -1933,8 +2360,7 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
                   onClick={() => {
                     onChangeInformeAtual(informeParaVisualizar);
                     setInformeParaVisualizar(null);
-                    setSubAba('edicao');
-                    setTimeout(() => setModalPdfAberto(true), 200);
+                    setSubAba('visualizar');
                   }}
                   className="bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold px-3 py-1.5 rounded transition shadow-xs cursor-pointer flex items-center gap-1.5"
                   title="Abrir diretamente no Visualizador Oficial de PDF"
@@ -2380,7 +2806,7 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
       <ModalVisualizadorPDF
         isOpen={modalPdfAberto}
         onClose={() => setModalPdfAberto(false)}
-        targetElement={documentoRef.current}
+        targetElement={documentoOficialVisualizacaoRef.current || documentoRef.current}
         titulo={`Informe Mensal • ${informeAtual.titulo || '3ª Cia Manutenção'}`}
         subtitulo={`Relatório oficial da APMBB • Período: ${informeAtual.mesAno || 'Mensal'}`}
         nomeArquivo={`Informe_Mensal_APMBB_${(informeAtual.mesAno || 'Mensal').replace(/[\s/]+/g, '_')}.pdf`}
