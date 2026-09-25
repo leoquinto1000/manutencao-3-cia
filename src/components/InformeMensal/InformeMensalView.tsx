@@ -824,15 +824,6 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => setSubAba('visualizar')}
-                className="flex items-center gap-1.5 bg-[#b89535] hover:bg-[#a48228] text-white text-xs font-bold px-3 py-2 rounded-md transition shadow-sm cursor-pointer"
-                title="Visualizar relatório oficial formatado em folhas A4, exportar PDF ou imprimir"
-              >
-                <Eye size={14} />
-                <span>Visualizar Relatório Oficial</span>
-              </button>
-              <button
-                type="button"
                 onClick={() => handleArquivarComAuditoria()}
                 className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-2.5 py-2 rounded-md transition shadow-sm cursor-pointer"
                 title="Salvar este informe no arquivo permanente de relatórios com auditoria"
