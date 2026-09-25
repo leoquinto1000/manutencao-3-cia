@@ -11,6 +11,8 @@ import {
   BalanceteState,
   TextoParteState,
   MaterialUsado,
+  Ferramenta,
+  ItemListaCompras,
   InformeMensal,
   ProjetoSalvo,
   MissaoDiaria,
@@ -27,6 +29,8 @@ import {
   DADOS_INICIAIS_BALANCETE,
   DADOS_INICIAIS_TEXTOPARTE,
   DADOS_INICIAIS_MATERIAIS_USADOS,
+  DADOS_INICIAIS_FERRAMENTAS,
+  DADOS_INICIAIS_LISTA_COMPRAS,
   DADOS_INICIAIS_INFORME,
   DADOS_INICIAIS_MISSOES,
   MISSOES_OFICIAIS_HISTORICAS,
@@ -178,6 +182,32 @@ export default function App() {
     return DADOS_INICIAIS_MATERIAIS_USADOS;
   });
 
+  const [ferramentas, setFerramentas] = useState<Ferramenta[]>(() => {
+    try {
+      const saved = localStorage.getItem('pmesp_ferramentas');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return DADOS_INICIAIS_FERRAMENTAS;
+  });
+
+  const [itensCompras, setItensCompras] = useState<ItemListaCompras[]>(() => {
+    try {
+      const saved = localStorage.getItem('pmesp_lista_compras');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return DADOS_INICIAIS_LISTA_COMPRAS;
+  });
+
   const [informeAtual, setInformeAtual] = useState<InformeMensal>(() => {
     try {
       const saved = localStorage.getItem('pmesp_informe_atual');
@@ -325,6 +355,20 @@ export default function App() {
       localStorage.setItem('pmesp_materiais_usados', JSON.stringify(materiaisUsados));
     } catch (e) {}
   }, [materiaisUsados]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('pmesp_ferramentas', JSON.stringify(ferramentas));
+    } catch (e) {}
+    salvarItemIndexedDB('pmesp_ferramentas', ferramentas);
+  }, [ferramentas]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('pmesp_lista_compras', JSON.stringify(itensCompras));
+    } catch (e) {}
+    salvarItemIndexedDB('pmesp_lista_compras', itensCompras);
+  }, [itensCompras]);
 
   // Carregamento inicial de segurança via IndexedDB (garante fotos preservadas mesmo que localStorage estoure a cota de 5MB)
   useEffect(() => {
@@ -488,6 +532,8 @@ export default function App() {
     const balanceteFinal = { ...DADOS_INICIAIS_BALANCETE, ...(dados.balancete || {}) };
     const textoParteFinal = { ...DADOS_INICIAIS_TEXTOPARTE, ...(dados.textoParte || {}) };
     const materiaisFinal = Array.isArray(dados.materiaisUsados) ? dados.materiaisUsados : [];
+    const ferramentasFinais = Array.isArray(dados.ferramentas) && dados.ferramentas.length > 0 ? dados.ferramentas : DADOS_INICIAIS_FERRAMENTAS;
+    const itensComprasFinais = Array.isArray(dados.itensCompras) && dados.itensCompras.length > 0 ? dados.itensCompras : DADOS_INICIAIS_LISTA_COMPRAS;
     const informeFinal = dados.informeAtual ? { ...DADOS_INICIAIS_INFORME, ...dados.informeAtual } : DADOS_INICIAIS_INFORME;
     const informesArquivadosFinais = Array.isArray(dados.informesArquivados) ? dados.informesArquivados : [];
     const arquivosSalvosFinais = Array.isArray(dados.arquivosSalvos) ? dados.arquivosSalvos : [];
@@ -501,6 +547,8 @@ export default function App() {
     setBalancete(balanceteFinal);
     setTextoParte(textoParteFinal);
     setMateriaisUsados(materiaisFinal);
+    setFerramentas(ferramentasFinais);
+    setItensCompras(itensComprasFinais);
     setInformeAtual(informeFinal);
     setInformesArquivados(informesArquivadosFinais);
     setArquivosSalvos(arquivosSalvosFinais);
@@ -516,6 +564,8 @@ export default function App() {
       localStorage.setItem('pmesp_balancete', JSON.stringify(balanceteFinal));
       localStorage.setItem('pmesp_textoparte', JSON.stringify(textoParteFinal));
       localStorage.setItem('pmesp_materiais_usados', JSON.stringify(materiaisFinal));
+      localStorage.setItem('pmesp_ferramentas', JSON.stringify(ferramentasFinais));
+      localStorage.setItem('pmesp_lista_compras', JSON.stringify(itensComprasFinais));
       localStorage.setItem('pmesp_informe_atual', JSON.stringify(informeFinal));
       localStorage.setItem('pmesp_informes_arquivados', JSON.stringify(informesArquivadosFinais));
       localStorage.setItem('pmesp_projetos_arquivados', JSON.stringify(arquivosSalvosFinais));
@@ -523,6 +573,8 @@ export default function App() {
       localStorage.setItem('pmesp_equipes', JSON.stringify(equipesFinais));
       localStorage.setItem('pmesp_membros', JSON.stringify(membrosFinais));
       localStorage.setItem('pmesp_banco_fornecedores', JSON.stringify(bancoFornecedoresFinal));
+      salvarItemIndexedDB('pmesp_ferramentas', ferramentasFinais);
+      salvarItemIndexedDB('pmesp_lista_compras', itensComprasFinais);
       salvarItemIndexedDB('pmesp_informe_atual', informeFinal);
       salvarItemIndexedDB('pmesp_informes_arquivados', informesArquivadosFinais);
       salvarItemIndexedDB('pmesp_projetos_arquivados', arquivosSalvosFinais);
@@ -536,6 +588,8 @@ export default function App() {
       balancete: balanceteFinal,
       textoParte: textoParteFinal,
       materiaisUsados: materiaisFinal,
+      ferramentas: ferramentasFinais,
+      itensCompras: itensComprasFinais,
       informeAtual: informeFinal,
       informesArquivados: informesArquivadosFinais,
       arquivosSalvos: arquivosSalvosFinais,
@@ -615,6 +669,8 @@ export default function App() {
             balancete,
             textoParte,
             materiaisUsados,
+            ferramentas,
+            itensCompras,
             informeAtual,
             informesArquivados,
             arquivosSalvos,
@@ -708,6 +764,8 @@ export default function App() {
       balancete,
       textoParte,
       materiaisUsados,
+      ferramentas,
+      itensCompras,
       informeAtual,
       informesArquivados,
       arquivosSalvos,
@@ -748,6 +806,8 @@ export default function App() {
     balancete,
     textoParte,
     materiaisUsados,
+    ferramentas,
+    itensCompras,
     informeAtual,
     informesArquivados,
     arquivosSalvos,
@@ -768,6 +828,8 @@ export default function App() {
         balancete,
         textoParte,
         materiaisUsados,
+        ferramentas,
+        itensCompras,
         informeAtual,
         informesArquivados,
         arquivosSalvos,
@@ -970,6 +1032,26 @@ export default function App() {
     salvarDadosFirestore({ informesArquivados: [] }).catch(console.error);
   };
 
+  const handleImportarBackupInformes = (informes: InformeMensal[]) => {
+    if (!Array.isArray(informes) || informes.length === 0) return;
+    setInformesArquivados((prev) => {
+      const mapa = new Map<string, InformeMensal>();
+      prev.forEach((inf) => mapa.set(inf.id, inf));
+      informes.forEach((inf) => {
+        if (inf && inf.id) {
+          mapa.set(inf.id, inf);
+        }
+      });
+      const novaLista = Array.from(mapa.values());
+      try {
+        localStorage.setItem('pmesp_informes_arquivados', JSON.stringify(novaLista));
+      } catch (e) {}
+      salvarItemIndexedDB('pmesp_informes_arquivados', novaLista);
+      salvarDadosFirestore({ informesArquivados: novaLista }).catch(console.error);
+      return novaLista;
+    });
+  };
+
   const handleSalvarNiveisAcesso = async (novosNiveis: NivelAcessoDef[]) => {
     setNiveisAcesso(novosNiveis);
     try {
@@ -1149,6 +1231,10 @@ export default function App() {
             materiais={materiaisUsados}
             onChangeMateriais={setMateriaisUsados}
             nfs={nfs}
+            ferramentas={ferramentas}
+            onChangeFerramentas={setFerramentas}
+            itensCompras={itensCompras}
+            onChangeItensCompras={setItensCompras}
             usuarioRole={usuarioLogado?.role}
             permissoes={permissoesUsuario}
             niveisAcesso={niveisAcesso}
@@ -1164,6 +1250,8 @@ export default function App() {
             onCarregarInformeArquivado={handleCarregarInformeArquivado}
             onExcluirInformeArquivado={handleExcluirInformeArquivado}
             onLimparHistoricoInformes={handleLimparHistoricoInformes}
+            onImportarBackupInformes={handleImportarBackupInformes}
+            usuarioLogado={usuarioLogado}
             membros={membros}
           />
         )}

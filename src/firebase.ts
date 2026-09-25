@@ -80,6 +80,8 @@ export interface DadosSistemaFirestore {
   balancete: BalanceteState;
   textoParte: TextoParteState;
   materiaisUsados: MaterialUsado[];
+  ferramentas?: import('./types').Ferramenta[];
+  itensCompras?: import('./types').ItemListaCompras[];
   informeAtual: InformeMensal;
   informesArquivados: InformeMensal[];
   arquivosSalvos: ProjetoSalvo[];
@@ -221,6 +223,8 @@ export async function carregarDadosFirestore(): Promise<DadosSistemaFirestore | 
       balancete: dadosGerais.balancete as BalanceteState,
       textoParte: dadosGerais.textoParte as TextoParteState,
       materiaisUsados: dadosGerais.materiaisUsados || [],
+      ferramentas: dadosGerais.ferramentas || undefined,
+      itensCompras: dadosGerais.itensCompras || undefined,
       informeAtual: informeFinal as InformeMensal,
       informesArquivados: informesArquivadosFinais || [],
       arquivosSalvos: arquivosSalvosFinais || [],

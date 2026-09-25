@@ -83,6 +83,16 @@ export const GerenciadorNiveisAcesso: React.FC<GerenciadorNiveisAcessoProps> = (
   const [salvando, setSalvando] = useState(false);
   const [mensagemSucesso, setMensagemSucesso] = useState<string | null>(null);
   const [mensagemErro, setMensagemErro] = useState<string | null>(null);
+  const [modalConfirmacao, setModalConfirmacao] = useState<{
+    titulo: string;
+    mensagem: string;
+    onConfirmar: () => void;
+  } | null>(null);
+
+  const mostrarErro = (msg: string) => {
+    setMensagemErro(msg);
+    setTimeout(() => setMensagemErro(null), 4500);
+  };
 
   // Contagem de usuários por role
   const contagemUsuariosPorRole = (roleId: string) => {
@@ -315,61 +325,67 @@ export const GerenciadorNiveisAcesso: React.FC<GerenciadorNiveisAcessoProps> = (
   const handleExcluirNivel = async (nivel: NivelAcessoDef) => {
     if (!isAdmin) return;
     if (nivel.id === 'admin') {
-      alert('O perfil Administrador raiz não pode ser excluído.');
+      mostrarErro('O perfil Administrador raiz não pode ser excluído.');
       return;
     }
 
     const qtdUsuarios = contagemUsuariosPorRole(nivel.id);
     if (qtdUsuarios > 0) {
-      alert(
+      mostrarErro(
         `Não é possível excluir o nível "${nivel.nome}" porque existem ${qtdUsuarios} usuário(s) associado(s) a ele. Reatribua os usuários a outro perfil primeiro.`
       );
       return;
     }
 
-    const confirmou = window.confirm(
-      `Confirma a exclusão definitiva do nível de acesso "${nivel.nome}" (${nivel.id})?`
-    );
-    if (!confirmou) return;
-
-    try {
-      const novaLista = niveisAcesso.filter((n) => n.id !== nivel.id);
-      await onChangeNiveisAcesso(novaLista);
-      mostrarFeedback(`Nível de acesso "${nivel.nome}" excluído com sucesso.`);
-    } catch (e) {
-      alert('Erro ao excluir nível de acesso.');
-    }
+    setModalConfirmacao({
+      titulo: 'Excluir Nível de Acesso',
+      mensagem: `Confirma a exclusão definitiva do nível de acesso "${nivel.nome}" (${nivel.id})?`,
+      onConfirmar: async () => {
+        try {
+          const novaLista = niveisAcesso.filter((n) => n.id !== nivel.id);
+          await onChangeNiveisAcesso(novaLista);
+          setModalConfirmacao(null);
+          mostrarFeedback(`Nível de acesso "${nivel.nome}" excluído com sucesso.`);
+        } catch (e) {
+          setModalConfirmacao(null);
+          mostrarErro('Erro ao excluir nível de acesso.');
+        }
+      },
+    });
   };
 
   // Restaurar padrões oficiais PMESP
   const handleRestaurarPadroes = async () => {
     if (!isAdmin) return;
-    const confirmou = window.confirm(
-      'Deseja restaurar as definições e permissões oficiais dos 5 perfis padrão da PMESP (Administrador, UGE, 3º CFO, Operacional e Auxiliares)? Seus perfis personalizados adicionais serão mantidos.'
-    );
-    if (!confirmou) return;
+    setModalConfirmacao({
+      titulo: 'Restaurar Perfis Padrão PMESP',
+      mensagem: 'Deseja restaurar as definições e permissões oficiais dos 5 perfis padrão da PMESP (Administrador, UGE, 3º CFO, Operacional e Auxiliares)? Seus perfis personalizados adicionais serão mantidos.',
+      onConfirmar: async () => {
+        try {
+          const mapaPadroes = new Map(NIVEIS_ACESSO_PADRAO.map((p) => [p.id, p]));
+          const listaMesclada: NivelAcessoDef[] = [];
 
-    try {
-      const mapaPadroes = new Map(NIVEIS_ACESSO_PADRAO.map((p) => [p.id, p]));
-      const listaMesclada: NivelAcessoDef[] = [];
+          // Adiciona os padrões oficiais restaurados
+          for (const padrao of NIVEIS_ACESSO_PADRAO) {
+            listaMesclada.push(padrao);
+          }
 
-      // Adiciona os padrões oficiais restaurados
-      for (const padrao of NIVEIS_ACESSO_PADRAO) {
-        listaMesclada.push(padrao);
-      }
+          // Mantém perfis customizados existentes
+          for (const n of niveisAcesso) {
+            if (!mapaPadroes.has(n.id)) {
+              listaMesclada.push(n);
+            }
+          }
 
-      // Mantém perfis customizados existentes
-      for (const n of niveisAcesso) {
-        if (!mapaPadroes.has(n.id)) {
-          listaMesclada.push(n);
+          await onChangeNiveisAcesso(listaMesclada);
+          setModalConfirmacao(null);
+          mostrarFeedback('Perfis padrão da PMESP restaurados para a configuração oficial.');
+        } catch (e) {
+          setModalConfirmacao(null);
+          mostrarErro('Erro ao restaurar perfis padrão.');
         }
-      }
-
-      await onChangeNiveisAcesso(listaMesclada);
-      mostrarFeedback('Perfis padrão da PMESP restaurados para a configuração oficial.');
-    } catch (e) {
-      alert('Erro ao restaurar perfis padrão.');
-    }
+      },
+    });
   };
 
   return (
@@ -1165,6 +1181,36 @@ export const GerenciadorNiveisAcesso: React.FC<GerenciadorNiveisAcessoProps> = (
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Estilizado de Confirmação */}
+      {modalConfirmacao && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 border border-slate-200 animate-in zoom-in-95 duration-200">
+            <h3 className="text-base font-bold text-slate-800 text-center">
+              {modalConfirmacao.titulo}
+            </h3>
+            <p className="text-xs text-slate-600 mt-2.5 text-center leading-relaxed">
+              {modalConfirmacao.mensagem}
+            </p>
+            <div className="flex gap-2.5 mt-5">
+              <button
+                type="button"
+                onClick={() => setModalConfirmacao(null)}
+                className="flex-1 py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={modalConfirmacao.onConfirmar}
+                className="flex-1 py-2 px-3 bg-[#1a2b4c] hover:bg-[#2c4373] text-[#c9a84e] font-bold text-xs rounded-xl shadow-md transition cursor-pointer"
+              >
+                Confirmar
+              </button>
+            </div>
           </div>
         </div>
       )}

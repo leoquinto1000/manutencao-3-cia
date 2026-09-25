@@ -144,10 +144,24 @@ export interface ItemListaCompras {
   dataRegistro: string;
 }
 
+export type TipoBadgeFoto = 'antes' | 'depois' | 'durante' | 'detalhe' | 'personalizado' | 'nenhum';
+
 export interface FotoCard {
   id: string;
   url: string;
   legenda: string;
+  tipoBadge?: TipoBadgeFoto;
+  badgeTexto?: string;
+  badgeCor?: 'vermelho' | 'verde' | 'amarelo' | 'azul' | 'roxo' | 'cinza';
+  dataFoto?: string;
+}
+
+export interface DetalhesIntervencao {
+  local?: string;
+  responsavel?: string;
+  dataInicio?: string;
+  dataTermino?: string;
+  statusIntervencao?: '100% Concluído' | 'Em Andamento' | 'Fase Final' | 'Emergencial';
 }
 
 export interface PaginaFotoServico {
@@ -156,8 +170,20 @@ export interface PaginaFotoServico {
   dataServico: string;
   descricao: string;
   anotacao: string;
-  tipoGrid: '1' | '2' | '3' | '4';
+  tipoGrid: '1' | '2' | '3' | '4' | 'antes_depois';
   fotos: FotoCard[];
+  layoutDedicado?: 'colunas' | 'antes_depois';
+  detalhes?: DetalhesIntervencao;
+}
+
+export type StatusInformeMensal = 'Rascunho' | 'Em Revisão' | 'Aprovado' | 'Arquivado';
+
+export interface HistoricoModificacaoInforme {
+  id: string;
+  dataHora: string;
+  usuario?: string;
+  acao: string;
+  detalhe?: string;
 }
 
 export interface InformeMensal {
@@ -176,6 +202,12 @@ export interface InformeMensal {
   destaques: { id: string; titulo: string; desc: string }[];
   paginas: PaginaFotoServico[];
   criadoEm: string;
+  status?: StatusInformeMensal;
+  ultimaAtualizacao?: string;
+  autorUltimaAtualizacao?: string;
+  versao?: number;
+  historico?: HistoricoModificacaoInforme[];
+  notasInternas?: string;
 }
 
 export interface ProjetoSalvo {

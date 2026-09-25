@@ -18,6 +18,10 @@ interface MateriaisUsadosViewProps {
   materiais: MaterialUsado[];
   onChangeMateriais: (materiais: MaterialUsado[]) => void;
   nfs: NFInstance[];
+  ferramentas?: Ferramenta[];
+  onChangeFerramentas?: (ferramentas: Ferramenta[]) => void;
+  itensCompras?: ItemListaCompras[];
+  onChangeItensCompras?: (itens: ItemListaCompras[]) => void;
   usuarioRole?: UserRole;
   permissoes?: PermissoesAcesso;
   niveisAcesso?: NivelAcessoDef[];
@@ -27,6 +31,10 @@ export const MateriaisUsadosView: React.FC<MateriaisUsadosViewProps> = ({
   materiais,
   onChangeMateriais,
   nfs,
+  ferramentas: propsFerramentas,
+  onChangeFerramentas,
+  itensCompras: propsItensCompras,
+  onChangeItensCompras,
   usuarioRole,
   permissoes,
   niveisAcesso,
@@ -65,8 +73,8 @@ export const MateriaisUsadosView: React.FC<MateriaisUsadosViewProps> = ({
     }
   }, [canVerEstoque, canVerSaidas, canVerFerramentas, canVerCompras, subAbaAtiva]);
 
-  // Estado das Ferramentas da Cia com persistência local
-  const [ferramentas, setFerramentas] = useState<Ferramenta[]>(() => {
+  // Estado das Ferramentas da Cia integrado à sincronização em nuvem
+  const [ferramentasInternas, setFerramentasInternas] = useState<Ferramenta[]>(() => {
     try {
       const saved = localStorage.getItem('pmesp_ferramentas');
       if (saved) return JSON.parse(saved);
@@ -76,16 +84,21 @@ export const MateriaisUsadosView: React.FC<MateriaisUsadosViewProps> = ({
     return DADOS_INICIAIS_FERRAMENTAS;
   });
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('pmesp_ferramentas', JSON.stringify(ferramentas));
-    } catch (e) {
-      console.error(e);
+  const ferramentas = propsFerramentas || ferramentasInternas;
+  const setFerramentas = (novoOuFn: React.SetStateAction<Ferramenta[]>) => {
+    const novoValor = typeof novoOuFn === 'function' ? novoOuFn(ferramentas) : novoOuFn;
+    if (onChangeFerramentas) {
+      onChangeFerramentas(novoValor);
+    } else {
+      setFerramentasInternas(novoValor);
+      try {
+        localStorage.setItem('pmesp_ferramentas', JSON.stringify(novoValor));
+      } catch (e) {}
     }
-  }, [ferramentas]);
+  };
 
-  // Estado da Lista de Compras / Necessidades com persistência local
-  const [itensCompras, setItensCompras] = useState<ItemListaCompras[]>(() => {
+  // Estado da Lista de Compras / Necessidades integrado à sincronização em nuvem
+  const [itensComprasInternos, setItensComprasInternos] = useState<ItemListaCompras[]>(() => {
     try {
       const saved = localStorage.getItem('pmesp_lista_compras');
       if (saved) return JSON.parse(saved);
@@ -95,13 +108,18 @@ export const MateriaisUsadosView: React.FC<MateriaisUsadosViewProps> = ({
     return DADOS_INICIAIS_LISTA_COMPRAS;
   });
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('pmesp_lista_compras', JSON.stringify(itensCompras));
-    } catch (e) {
-      console.error(e);
+  const itensCompras = propsItensCompras || itensComprasInternos;
+  const setItensCompras = (novoOuFn: React.SetStateAction<ItemListaCompras[]>) => {
+    const novoValor = typeof novoOuFn === 'function' ? novoOuFn(itensCompras) : novoOuFn;
+    if (onChangeItensCompras) {
+      onChangeItensCompras(novoValor);
+    } else {
+      setItensComprasInternos(novoValor);
+      try {
+        localStorage.setItem('pmesp_lista_compras', JSON.stringify(novoValor));
+      } catch (e) {}
     }
-  }, [itensCompras]);
+  };
 
   // Contagem para badges do menu
   const contagens = useMemo(() => {

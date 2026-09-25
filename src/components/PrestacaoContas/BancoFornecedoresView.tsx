@@ -52,6 +52,7 @@ export const BancoFornecedoresView: React.FC<BancoFornecedoresViewProps> = ({
   // Modal de Criação / Edição
   const [modalAberto, setModalAberto] = useState(false);
   const [empresaEmEdicao, setEmpresaEmEdicao] = useState<EmpresaCadastrada | null>(null);
+  const [empresaParaExcluir, setEmpresaParaExcluir] = useState<{ id: string; nome: string } | null>(null);
 
   // Formulário
   const [formNome, setFormNome] = useState('');
@@ -190,12 +191,17 @@ export const BancoFornecedoresView: React.FC<BancoFornecedoresViewProps> = ({
 
   // Excluir empresa do banco
   const handleExcluir = (id: string, nome: string) => {
-    if (confirm(`Deseja realmente remover a empresa "${nome}" do banco de fornecedores?`)) {
-      onChangeBancoFornecedores(bancoFornecedores.filter((e) => e.id !== id));
-      setSelecionados((prev) => prev.filter((sId) => sId !== id));
-      setFeedback({ tipo: 'info', texto: `Empresa "${nome}" removida do banco permanente.` });
-      setTimeout(() => setFeedback(null), 3000);
-    }
+    setEmpresaParaExcluir({ id, nome });
+  };
+
+  const confirmarExclusaoEmpresa = () => {
+    if (!empresaParaExcluir) return;
+    const { id, nome } = empresaParaExcluir;
+    onChangeBancoFornecedores(bancoFornecedores.filter((e) => e.id !== id));
+    setSelecionados((prev) => prev.filter((sId) => sId !== id));
+    setEmpresaParaExcluir(null);
+    setFeedback({ tipo: 'info', texto: `Empresa "${nome}" removida do banco permanente.` });
+    setTimeout(() => setFeedback(null), 3000);
   };
 
   // Enviar uma ou múltiplas empresas para a aba Fornecedores de uma NF específica
@@ -810,6 +816,36 @@ export const BancoFornecedoresView: React.FC<BancoFornecedoresViewProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Estilizado de Confirmação de Exclusão de Empresa */}
+      {empresaParaExcluir && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 border border-slate-200 animate-in zoom-in-95 duration-200">
+            <h3 className="text-base font-bold text-slate-800 text-center">
+              Remover Empresa
+            </h3>
+            <p className="text-xs text-slate-600 mt-2.5 text-center leading-relaxed">
+              Deseja realmente remover a empresa <strong>"{empresaParaExcluir.nome}"</strong> do banco permanente de fornecedores?
+            </p>
+            <div className="flex gap-2.5 mt-5">
+              <button
+                type="button"
+                onClick={() => setEmpresaParaExcluir(null)}
+                className="flex-1 py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmarExclusaoEmpresa}
+                className="flex-1 py-2 px-3 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-md transition cursor-pointer"
+              >
+                Remover
+              </button>
+            </div>
           </div>
         </div>
       )}

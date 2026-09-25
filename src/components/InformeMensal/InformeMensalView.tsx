@@ -1,7 +1,19 @@
 import React, { useState, useRef } from 'react';
-import { InformeMensal, PaginaFotoServico, FotoCard, MembroEquipe } from '../../types';
+import {
+  InformeMensal,
+  PaginaFotoServico,
+  FotoCard,
+  MembroEquipe,
+  StatusInformeMensal,
+  TipoBadgeFoto,
+  HistoricoModificacaoInforme,
+} from '../../types';
 import { gerarId, baixarFoto, comprimirImagemParaArmazenamento, DADOS_INICIAIS_INFORME } from '../../utils';
 import { ModalVisualizadorPDF } from '../PrestacaoContas/ModalVisualizadorPDF';
+import { LayoutAntesDepois } from './LayoutAntesDepois';
+import { BadgeFotoColorido } from './BadgeFotoColorido';
+import { ModalHistoricoAuditoria } from './ModalHistoricoAuditoria';
+import { DashboardGestaoArquivo } from './DashboardGestaoArquivo';
 import {
   Plus,
   Trash2,
@@ -30,6 +42,15 @@ import {
   ArrowLeft,
   ArrowRight,
   Loader2,
+  Sparkles,
+  ArrowLeftRight,
+  History,
+  ShieldCheck,
+  Tag,
+  Palette,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
 } from 'lucide-react';
 
 interface InformeMensalViewProps {
@@ -40,6 +61,8 @@ interface InformeMensalViewProps {
   onCarregarInformeArquivado: (informe: InformeMensal) => void;
   onExcluirInformeArquivado: (id: string) => void;
   onLimparHistoricoInformes: () => void;
+  onImportarBackupInformes?: (informes: InformeMensal[]) => void;
+  usuarioLogado?: { nome?: string; graduacaoOuCargo?: string; email?: string } | null;
   membros?: MembroEquipe[];
 }
 
@@ -51,6 +74,8 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
   onCarregarInformeArquivado,
   onExcluirInformeArquivado,
   onLimparHistoricoInformes,
+  onImportarBackupInformes,
+  usuarioLogado,
   membros = [],
 }) => {
   const [subAba, setSubAba] = useState<'edicao' | 'arquivo'>('edicao');
@@ -59,6 +84,8 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
   const [modalLimparAberto, setModalLimparAberto] = useState<boolean>(false);
   const [modalNovoAberto, setModalNovoAberto] = useState<boolean>(false);
   const [modalPdfAberto, setModalPdfAberto] = useState<boolean>(false);
+  const [modalHistoricoAberto, setModalHistoricoAberto] = useState<boolean>(false);
+  const [popoverBadgeFotoKey, setPopoverBadgeFotoKey] = useState<string | null>(null);
   const [paginaParaExcluirId, setPaginaParaExcluirId] = useState<string | null>(null);
   const [mensagemSucesso, setMensagemSucesso] = useState<string | null>(null);
   const [filtroPesquisa, setFiltroPesquisa] = useState<string>('');
@@ -129,7 +156,8 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
       reader.onerror = (err) => {
         console.error('Erro ao ler arquivo da capa:', err);
         setCarregandoCapa(false);
-        alert('Não foi possível ler o arquivo selecionado.');
+        setMensagemSucesso('⚠️ Não foi possível ler o arquivo selecionado.');
+        setTimeout(() => setMensagemSucesso(null), 3500);
       };
       reader.readAsDataURL(file);
     } catch (err) {
@@ -145,6 +173,143 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
     setTimeout(() => setMensagemSucesso(null), 3000);
   };
 
+  // Adiciona página com layout dedicado Antes e Depois
+  const handleAddPaginaAntesDepois = () => {
+    const novaPagina: PaginaFotoServico = {
+      id: gerarId(),
+      tituloServico: 'RECUPERAÇÃO E REVITALIZAÇÃO PREDIAL',
+      dataServico: informeAtualRef.current.mesAno || 'AGOSTO 2026',
+      descricao: 'Registro comparativo entre o estado inicial antes dos reparos e as intervenções técnicas de revitalização executadas.',
+      anotacao: '✅ Intervenção concluída garantindo a segurança, funcionalidade e habitabilidade das instalações.',
+      tipoGrid: 'antes_depois',
+      layoutDedicado: 'antes_depois',
+      detalhes: {
+        local: 'Alojamentos da 3ª Cia',
+        responsavel: usuarioLogado?.nome || 'Equipe da Manutenção',
+        dataInicio: new Date().toLocaleDateString('pt-BR'),
+        dataTermino: new Date().toLocaleDateString('pt-BR'),
+        statusIntervencao: '100% Concluído',
+      },
+      fotos: [
+        {
+          id: gerarId(),
+          url: '',
+          legenda: 'Registro do estado inicial com avarias e desgaste',
+          tipoBadge: 'antes',
+          badgeTexto: 'ANTES • ESTADO INICIAL',
+          badgeCor: 'vermelho',
+        },
+        {
+          id: gerarId(),
+          url: '',
+          legenda: 'Serviço finalizado com revitalização completa',
+          tipoBadge: 'depois',
+          badgeTexto: 'DEPOIS • REVITALIZADO',
+          badgeCor: 'verde',
+        },
+      ],
+    };
+
+    const paginasAtuais = informeAtualRef.current.paginas || [];
+    handleUpdateField('paginas', [...paginasAtuais, novaPagina]);
+    setMensagemSucesso(`⚖️ Página ${paginasAtuais.length + 2} adicionada no Layout Dedicado "Antes e Depois"!`);
+    setTimeout(() => setMensagemSucesso(null), 3500);
+  };
+
+  const handleAtualizarStatus = (novoStatus: StatusInformeMensal) => {
+    const agora = new Date().toLocaleString('pt-BR');
+    const autor = usuarioLogado?.nome || 'Operador';
+    const novoHistorico: HistoricoModificacaoInforme = {
+      id: gerarId(),
+      dataHora: agora,
+      usuario: autor,
+      acao: `Alteração de Situação para "${novoStatus}"`,
+      detalhe: `Status do relatório atualizado para ${novoStatus}.`,
+    };
+    const historicoAtual = informeAtualRef.current.historico || [];
+    onChangeInformeAtual({
+      ...informeAtualRef.current,
+      status: novoStatus,
+      ultimaAtualizacao: agora,
+      autorUltimaAtualizacao: autor,
+      historico: [novoHistorico, ...historicoAtual],
+    });
+    setMensagemSucesso(`📌 Situação do informe definida como "${novoStatus}"!`);
+    setTimeout(() => setMensagemSucesso(null), 3000);
+  };
+
+  const handleArquivarComAuditoria = (idExistente?: string) => {
+    const agora = new Date().toLocaleString('pt-BR');
+    const autor = usuarioLogado?.nome || 'Operador';
+    const qtdPags = (informeAtualRef.current.paginas || []).length + 1;
+    const historicoAtual = informeAtualRef.current.historico || [];
+    const novoHistorico: HistoricoModificacaoInforme = {
+      id: gerarId(),
+      dataHora: agora,
+      usuario: autor,
+      acao: idExistente ? 'Atualização de Arquivamento' : 'Arquivamento no Acervo Histórico',
+      detalhe: `Informe arquivado com ${qtdPags} páginas e registros técnicos de manutenção.`,
+    };
+
+    const informeAtualizado: InformeMensal = {
+      ...informeAtualRef.current,
+      status: informeAtualRef.current.status === 'Rascunho' ? 'Aprovado' : (informeAtualRef.current.status || 'Aprovado'),
+      ultimaAtualizacao: agora,
+      autorUltimaAtualizacao: autor,
+      historico: [novoHistorico, ...historicoAtual],
+    };
+
+    onChangeInformeAtual(informeAtualizado);
+    onArquivarInforme(informeAtualizado, idExistente);
+    setMensagemSucesso('📦 Informe arquivado com sucesso no acervo permanente da subunidade!');
+    setTimeout(() => setMensagemSucesso(null), 4000);
+  };
+
+  const handleDuplicarParaNovoMes = (inf: InformeMensal) => {
+    const meses = [
+      'JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO',
+      'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'
+    ];
+    let proximoMes = 'NOVO MÊS';
+    const match = (inf.mesAno || '').match(/([A-ZÇ]+)\s*(\d{4})/i);
+    if (match) {
+      const mesNome = match[1].toUpperCase();
+      const ano = parseInt(match[2], 10);
+      const idx = meses.findIndex((m) => mesNome.includes(m));
+      if (idx !== -1) {
+        const proxIdx = (idx + 1) % 12;
+        const proxAno = proxIdx === 0 ? ano + 1 : ano;
+        proximoMes = `${meses[proxIdx]} ${proxAno}`;
+      }
+    }
+    const autor = usuarioLogado?.nome || 'Operador';
+    const agora = new Date().toLocaleString('pt-BR');
+    const novoInforme: InformeMensal = {
+      ...JSON.parse(JSON.stringify(inf)),
+      id: gerarId(),
+      mesAno: proximoMes,
+      subtitulo: `REALIZAÇÕES ${proximoMes} • CUIDADO COM O QUE É NOSSO`,
+      status: 'Rascunho',
+      versao: 1,
+      criadoEm: new Date().toLocaleDateString('pt-BR'),
+      ultimaAtualizacao: agora,
+      autorUltimaAtualizacao: autor,
+      historico: [
+        {
+          id: gerarId(),
+          dataHora: agora,
+          usuario: autor,
+          acao: 'Criação a partir de Relatório Anterior',
+          detalhe: `Relatório inicializado para o mês de ${proximoMes} mantendo estrutura e configurações institucionais.`,
+        },
+      ],
+    };
+    onChangeInformeAtual(novoInforme);
+    setSubAba('edicao');
+    setMensagemSucesso(`📄 Novo informe para "${proximoMes}" gerado com base no mês anterior!`);
+    setTimeout(() => setMensagemSucesso(null), 4000);
+  };
+
   const handleAddPaginaFotos = () => {
     const novaPagina: PaginaFotoServico = {
       id: gerarId(),
@@ -157,12 +322,18 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
         {
           id: gerarId(),
           url: '', // Inicia vazio para destacar o espaço de inserção direta do computador
-          legenda: 'ANTES: Registro do estado inicial com avarias',
+          legenda: 'Registro do estado inicial com avarias',
+          tipoBadge: 'antes',
+          badgeTexto: 'ANTES',
+          badgeCor: 'vermelho',
         },
         {
           id: gerarId(),
           url: '', // Inicia vazio para destacar o espaço de inserção direta do computador
-          legenda: 'DEPOIS: Serviço finalizado com revitalização completa',
+          legenda: 'Serviço finalizado com revitalização completa',
+          tipoBadge: 'depois',
+          badgeTexto: 'DEPOIS',
+          badgeCor: 'verde',
         },
       ],
     };
@@ -194,7 +365,8 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
       }
 
       if (fotosCarregadas.length === 0) {
-        alert('Não foi possível ler as fotos selecionadas. Verifique o formato dos arquivos.');
+        setMensagemSucesso('⚠️ Não foi possível ler as fotos selecionadas. Verifique o formato dos arquivos.');
+        setTimeout(() => setMensagemSucesso(null), 3500);
         return;
       }
 
@@ -217,7 +389,8 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
       setTimeout(() => setMensagemSucesso(null), 3500);
     } catch (err) {
       console.error('Erro ao criar página com fotos do computador:', err);
-      alert('Ocorreu um erro ao carregar as fotos selecionadas.');
+      setMensagemSucesso('⚠️ Ocorreu um erro ao carregar as fotos selecionadas.');
+      setTimeout(() => setMensagemSucesso(null), 3500);
     }
   };
 
@@ -283,7 +456,8 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
       setTimeout(() => setMensagemSucesso(null), 2500);
     } catch (err) {
       console.error('Erro ao processar foto da página:', err);
-      alert('Não foi possível carregar esta foto. Por favor, tente com outro arquivo de imagem.');
+      setMensagemSucesso('⚠️ Não foi possível carregar esta foto. Por favor, tente com outro arquivo de imagem.');
+      setTimeout(() => setMensagemSucesso(null), 3500);
     } finally {
       setUploadingFotoKey(null);
     }
@@ -317,7 +491,8 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
       }
     } catch (err) {
       console.error('Erro ao adicionar fotos do computador:', err);
-      alert('Ocorreu um erro ao carregar as imagens selecionadas.');
+      setMensagemSucesso('⚠️ Ocorreu um erro ao carregar as imagens selecionadas.');
+      setTimeout(() => setMensagemSucesso(null), 3500);
     } finally {
       setUploadingFotoKey(null);
     }
@@ -502,25 +677,72 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
 
           {/* Toolbar */}
           <div className="no-print bg-white p-3.5 rounded-lg border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-3 max-w-[820px] mx-auto">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-[#1a2b4c]">Mês Referência:</span>
-              <input
-                type="text"
-                value={informeAtual.mesAno}
-                onChange={(e) => handleUpdateField('mesAno', e.target.value.toUpperCase())}
-                className="w-36 px-2 py-1 font-bold text-xs uppercase border border-slate-300 rounded focus:ring-1 focus:ring-[#1a2b4c]"
-              />
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-[#1a2b4c]">Mês:</span>
+                <input
+                  type="text"
+                  value={informeAtual.mesAno}
+                  onChange={(e) => handleUpdateField('mesAno', e.target.value.toUpperCase())}
+                  className="w-32 px-2 py-1 font-bold text-xs uppercase border border-slate-300 rounded focus:ring-1 focus:ring-[#1a2b4c]"
+                />
+              </div>
+
+              {/* Status do Relatório com Badges Coloridos */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-slate-600">Status:</span>
+                <select
+                  value={informeAtual.status || 'Aprovado'}
+                  onChange={(e) => handleAtualizarStatus(e.target.value as StatusInformeMensal)}
+                  className={`text-xs font-extrabold px-2.5 py-1 rounded-md border outline-none cursor-pointer transition ${
+                    informeAtual.status === 'Rascunho'
+                      ? 'bg-amber-50 text-amber-900 border-amber-300'
+                      : informeAtual.status === 'Em Revisão'
+                      ? 'bg-blue-50 text-blue-900 border-blue-300'
+                      : informeAtual.status === 'Arquivado'
+                      ? 'bg-purple-50 text-purple-900 border-purple-300'
+                      : 'bg-emerald-50 text-emerald-900 border-emerald-300'
+                  }`}
+                >
+                  <option value="Aprovado">🟢 Aprovado Oficial</option>
+                  <option value="Em Revisão">🔵 Em Revisão</option>
+                  <option value="Rascunho">🟡 Rascunho</option>
+                  <option value="Arquivado">🟣 Arquivado</option>
+                </select>
+              </div>
+
+              {/* Botão de Histórico e Auditoria */}
+              <button
+                type="button"
+                onClick={() => setModalHistoricoAberto(true)}
+                className="flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 transition cursor-pointer"
+                title="Visualizar histórico e auditoria de alterações deste relatório"
+              >
+                <History size={13} className="text-[#1a2b4c]" />
+                <span>Histórico ({(informeAtual.historico || []).length})</span>
+              </button>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => setModalNovoAberto(true)}
-                className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold px-3 py-2 rounded-md transition border border-slate-300 cursor-pointer"
+                className="flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold px-2.5 py-2 rounded-md transition border border-slate-300 cursor-pointer"
                 title="Iniciar novo informe em branco ou restaurar modelo padrão"
               >
                 <FileText size={14} className="text-slate-600" />
-                <span>Novo / Limpar</span>
+                <span>Novo</span>
+              </button>
+
+              {/* Botão Dedicado + Antes e Depois */}
+              <button
+                type="button"
+                onClick={handleAddPaginaAntesDepois}
+                className="flex items-center gap-1.5 bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-700 hover:to-red-800 text-white text-xs font-extrabold px-3 py-2 rounded-md transition shadow-sm cursor-pointer"
+                title="Adicionar página com Layout Dedicado Antes e Depois com Badges Coloridos"
+              >
+                <Sparkles size={14} className="text-[#c9a84e]" />
+                <span>+ Antes & Depois</span>
               </button>
 
               {/* Input oculto para carregar fotos do PC e criar nova página automaticamente */}
@@ -540,40 +762,36 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
               <button
                 type="button"
                 onClick={() => inputNovaPaginaFotosRef.current?.click()}
-                className="flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold px-3 py-2 rounded-md transition shadow-sm cursor-pointer"
+                className="flex items-center gap-1 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold px-2.5 py-2 rounded-md transition shadow-sm cursor-pointer"
                 title="Criar nova página carregando diretamente as fotos do seu computador"
               >
                 <Upload size={14} />
-                <span>+ Página (Fotos do PC)</span>
+                <span>+ Fotos PC</span>
               </button>
 
               <button
                 type="button"
                 onClick={handleAddPaginaFotos}
-                className="flex items-center gap-1.5 bg-[#1a2b4c] hover:bg-[#2c4373] text-white text-xs font-semibold px-3 py-2 rounded-md transition shadow-sm cursor-pointer"
+                className="flex items-center gap-1 bg-[#1a2b4c] hover:bg-[#2c4373] text-white text-xs font-semibold px-2.5 py-2 rounded-md transition shadow-sm cursor-pointer"
                 title="Adicionar nova página com fotos de serviços"
               >
                 <Plus size={14} />
-                <span>+ Página ({informeAtual.paginas.length})</span>
+                <span>+ Pág ({informeAtual.paginas.length})</span>
               </button>
               <button
                 type="button"
                 onClick={() => setModalPdfAberto(true)}
-                className="flex items-center gap-1.5 bg-[#b89535] hover:bg-[#a48228] text-white text-xs font-semibold px-3.5 py-2 rounded-md transition shadow-sm cursor-pointer"
+                className="flex items-center gap-1 bg-[#b89535] hover:bg-[#a48228] text-white text-xs font-semibold px-2.5 py-2 rounded-md transition shadow-sm cursor-pointer"
                 title="Visualizar relatório oficial, exportar arquivo em PDF ou imprimir"
               >
                 <Printer size={14} />
-                <span>Imprimir (PDF)</span>
+                <span>PDF</span>
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  onArquivarInforme(informeAtual);
-                  setMensagemSucesso('📦 Informe arquivado com sucesso! Salvo permanentemente para consultas futuras.');
-                  setTimeout(() => setMensagemSucesso(null), 4500);
-                }}
-                className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2 rounded-md transition shadow-sm cursor-pointer"
-                title="Salvar este informe no arquivo permanente de relatórios"
+                onClick={() => handleArquivarComAuditoria()}
+                className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-2.5 py-2 rounded-md transition shadow-sm cursor-pointer"
+                title="Salvar este informe no arquivo permanente de relatórios com auditoria"
               >
                 <Archive size={14} />
                 <span>Arquivar</span>
@@ -1208,16 +1426,38 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
                   <span>Duplicar</span>
                 </button>
 
-                {/* Seletor de Grid / Colunas */}
+                {/* Seletor de Grid / Colunas e Layout Dedicado */}
                 <div className="flex items-center gap-0.5 border-r border-white/20 pr-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleUpdatePagina(pagina.id, 'tipoGrid', 'antes_depois');
+                      handleUpdatePagina(pagina.id, 'layoutDedicado', 'antes_depois');
+                    }}
+                    className={`px-2 py-0.5 text-[10px] font-extrabold rounded cursor-pointer transition flex items-center gap-1 ${
+                      pagina.tipoGrid === 'antes_depois' || pagina.layoutDedicado === 'antes_depois'
+                        ? 'bg-gradient-to-r from-rose-500 to-red-600 text-white font-black shadow-xs ring-1 ring-white/40'
+                        : 'bg-white/10 text-rose-300 hover:bg-white/20'
+                    }`}
+                    title="Layout Dedicado Antes e Depois com Badges Coloridos"
+                  >
+                    <Sparkles size={11} className="text-[#c9a84e]" />
+                    <span>Antes & Depois</span>
+                  </button>
+
+                  <span className="text-[9.5px] text-slate-400 font-bold mx-1">|</span>
+
                   <span className="text-[9.5px] text-slate-300 font-bold mr-0.5">Colunas:</span>
                   {(['1', '2', '3', '4'] as const).map((cols) => (
                     <button
                       key={cols}
                       type="button"
-                      onClick={() => handleUpdatePagina(pagina.id, 'tipoGrid', cols)}
+                      onClick={() => {
+                        handleUpdatePagina(pagina.id, 'tipoGrid', cols);
+                        handleUpdatePagina(pagina.id, 'layoutDedicado', 'colunas');
+                      }}
                       className={`px-1.5 py-0.5 text-[10px] font-bold rounded cursor-pointer transition ${
-                        pagina.tipoGrid === cols
+                        pagina.tipoGrid === cols && pagina.layoutDedicado !== 'antes_depois'
                           ? 'bg-[#c9a84e] text-slate-950 font-black shadow-xs'
                           : 'bg-white/10 text-slate-200 hover:bg-white/20'
                       }`}
@@ -1343,202 +1583,285 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
                     />
                   </div>
 
-                  {/* Photos Grid */}
-                  <div
-                    className={`grid gap-4 my-4 ${
-                      pagina.tipoGrid === '1'
-                        ? 'grid-cols-1 max-w-lg mx-auto'
-                        : pagina.tipoGrid === '3'
-                        ? 'grid-cols-3'
-                        : pagina.tipoGrid === '4'
-                        ? 'grid-cols-2'
-                        : 'grid-cols-2'
-                    }`}
-                  >
-                    {pagina.fotos.map((foto, fIdx) => {
-                      const fotoCardKey = `${pagina.id}-${foto.id}`;
-                      const isUploadingThis = uploadingFotoKey === fotoCardKey;
-                      const isDraggingThis = dragOverFotoKey === fotoCardKey;
-                      const inputFotoId = `input-foto-${pagina.id}-${foto.id}`;
-                      const temFoto = Boolean(foto.url && foto.url.trim() !== '');
+                  {/* Renderização Condicional: Layout Dedicado Antes e Depois ou Grid Padrão */}
+                  {pagina.tipoGrid === 'antes_depois' || pagina.layoutDedicado === 'antes_depois' ? (
+                    <LayoutAntesDepois
+                      pagina={pagina}
+                      onUpdatePagina={(field, val) => handleUpdatePagina(pagina.id, field, val)}
+                      onUploadFoto={(fotoId, file) => handleUploadFotoPagina(pagina.id, fotoId, file)}
+                      uploadingFotoKey={uploadingFotoKey}
+                      dragOverFotoKey={dragOverFotoKey}
+                      setDragOverFotoKey={setDragOverFotoKey}
+                      onBaixarFoto={baixarFoto}
+                      modoEdicao={true}
+                    />
+                  ) : (
+                    /* Photos Grid Padrão */
+                    <div
+                      className={`grid gap-4 my-4 ${
+                        pagina.tipoGrid === '1'
+                          ? 'grid-cols-1 max-w-lg mx-auto'
+                          : pagina.tipoGrid === '3'
+                          ? 'grid-cols-3'
+                          : pagina.tipoGrid === '4'
+                          ? 'grid-cols-2'
+                          : 'grid-cols-2'
+                      }`}
+                    >
+                      {pagina.fotos.map((foto, fIdx) => {
+                        const fotoCardKey = `${pagina.id}-${foto.id}`;
+                        const isUploadingThis = uploadingFotoKey === fotoCardKey;
+                        const isDraggingThis = dragOverFotoKey === fotoCardKey;
+                        const inputFotoId = `input-foto-${pagina.id}-${foto.id}`;
+                        const temFoto = Boolean(foto.url && foto.url.trim() !== '');
 
-                      return (
-                        <div
-                          key={foto.id}
-                          onDragOver={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setDragOverFotoKey(fotoCardKey);
-                          }}
-                          onDragLeave={() => setDragOverFotoKey(null)}
-                          onDrop={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setDragOverFotoKey(null);
-                            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                              handleUploadFotoPagina(pagina.id, foto.id, e.dataTransfer.files[0]);
-                            }
-                          }}
-                          className={`bg-white rounded-xl overflow-hidden shadow-sm border flex flex-col items-center relative group/foto transition-all ${
-                            isDraggingThis
-                              ? 'border-blue-500 ring-2 ring-blue-400/50 bg-blue-50/20'
-                              : 'border-slate-200'
-                          }`}
-                        >
-                          <input
-                            id={inputFotoId}
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={(e) => {
-                              if (e.target.files && e.target.files[0]) {
-                                handleUploadFotoPagina(pagina.id, foto.id, e.target.files[0]);
-                                e.target.value = '';
+                        return (
+                          <div
+                            key={foto.id}
+                            onDragOver={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setDragOverFotoKey(fotoCardKey);
+                            }}
+                            onDragLeave={() => setDragOverFotoKey(null)}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setDragOverFotoKey(null);
+                              if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                                handleUploadFotoPagina(pagina.id, foto.id, e.dataTransfer.files[0]);
                               }
                             }}
-                          />
+                            className={`bg-white rounded-xl overflow-hidden shadow-sm border flex flex-col items-center relative group/foto transition-all ${
+                              isDraggingThis
+                                ? 'border-blue-500 ring-2 ring-blue-400/50 bg-blue-50/20'
+                                : 'border-slate-200'
+                            }`}
+                          >
+                            <input
+                              id={inputFotoId}
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                if (e.target.files && e.target.files[0]) {
+                                  handleUploadFotoPagina(pagina.id, foto.id, e.target.files[0]);
+                                  e.target.value = '';
+                                }
+                              }}
+                            />
 
-                          <div className="relative w-full overflow-hidden">
-                            {temFoto ? (
-                              <img
-                                src={foto.url}
-                                referrerPolicy="no-referrer"
-                                alt={foto.legenda || 'Registro fotográfico'}
-                                className={`w-full object-cover block bg-slate-100 ${
-                                  pagina.tipoGrid === '1'
-                                    ? 'h-80'
-                                    : pagina.tipoGrid === '3'
-                                    ? 'h-44'
-                                    : pagina.tipoGrid === '4'
-                                    ? 'h-48'
-                                    : 'h-64'
-                                }`}
-                              />
-                            ) : (
-                              /* Dropzone de upload quando o espaço está vazio */
-                              <div
-                                onClick={() => {
-                                  const el = document.getElementById(inputFotoId) as HTMLInputElement;
-                                  el?.click();
-                                }}
-                                className={`w-full bg-slate-50 hover:bg-blue-50/50 border-2 border-dashed border-slate-300 hover:border-[#1a2b4c] flex flex-col items-center justify-center gap-2 cursor-pointer transition p-4 text-center ${
-                                  pagina.tipoGrid === '1'
-                                    ? 'h-80'
-                                    : pagina.tipoGrid === '3'
-                                    ? 'h-44'
-                                    : pagina.tipoGrid === '4'
-                                    ? 'h-48'
-                                    : 'h-64'
-                                }`}
-                              >
-                                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-[#1a2b4c]">
-                                  <Upload size={18} />
+                            <div className="relative w-full overflow-hidden">
+                              {/* Badge Colorido na Foto (se ativo) */}
+                              {foto.tipoBadge && foto.tipoBadge !== 'nenhum' && (
+                                <div className="absolute top-2 left-2 z-10 pointer-events-none">
+                                  <BadgeFotoColorido
+                                    tipoBadge={foto.tipoBadge}
+                                    badgeTexto={foto.badgeTexto}
+                                    badgeCor={foto.badgeCor}
+                                    tamanho="sm"
+                                  />
                                 </div>
-                                <span className="font-heading font-bold text-xs text-slate-800">
-                                  Inserir Foto do Computador
-                                </span>
-                                <span className="text-[10px] text-slate-500">
-                                  Clique ou arraste a imagem para cá
-                                </span>
-                              </div>
-                            )}
+                              )}
 
-                            {/* Overlay de carregamento ao processar foto */}
-                            {isUploadingThis && (
-                              <div className="absolute inset-0 bg-slate-900/75 backdrop-blur-xs flex flex-col items-center justify-center gap-2 z-20 text-white">
-                                <Loader2 className="animate-spin text-[#c9a84e]" size={28} />
-                                <span className="text-xs font-bold">Processando foto...</span>
-                              </div>
-                            )}
+                              {temFoto ? (
+                                <img
+                                  src={foto.url}
+                                  referrerPolicy="no-referrer"
+                                  alt={foto.legenda || 'Registro fotográfico'}
+                                  className={`w-full object-cover block bg-slate-100 ${
+                                    pagina.tipoGrid === '1'
+                                      ? 'h-80'
+                                      : pagina.tipoGrid === '3'
+                                      ? 'h-44'
+                                      : pagina.tipoGrid === '4'
+                                      ? 'h-48'
+                                      : 'h-64'
+                                  }`}
+                                />
+                              ) : (
+                                /* Dropzone de upload quando o espaço está vazio */
+                                <div
+                                  onClick={() => {
+                                    const el = document.getElementById(inputFotoId) as HTMLInputElement;
+                                    el?.click();
+                                  }}
+                                  className={`w-full bg-slate-50 hover:bg-blue-50/50 border-2 border-dashed border-slate-300 hover:border-[#1a2b4c] flex flex-col items-center justify-center gap-2 cursor-pointer transition p-4 text-center ${
+                                    pagina.tipoGrid === '1'
+                                      ? 'h-80'
+                                      : pagina.tipoGrid === '3'
+                                      ? 'h-44'
+                                      : pagina.tipoGrid === '4'
+                                      ? 'h-48'
+                                      : 'h-64'
+                                  }`}
+                                >
+                                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-[#1a2b4c]">
+                                    <Upload size={18} />
+                                  </div>
+                                  <span className="font-heading font-bold text-xs text-slate-800">
+                                    Inserir Foto do Computador
+                                  </span>
+                                  <span className="text-[10px] text-slate-500">
+                                    Clique ou arraste a imagem para cá
+                                  </span>
+                                </div>
+                              )}
 
-                            {/* Overlay ao arrastar arquivo por cima */}
-                            {isDraggingThis && (
-                              <div className="absolute inset-0 bg-blue-600/80 backdrop-blur-xs flex flex-col items-center justify-center gap-2 z-20 text-white pointer-events-none">
-                                <Upload className="animate-bounce" size={32} />
-                                <span className="text-xs font-bold">Solte a imagem para substituir!</span>
-                              </div>
-                            )}
+                              {/* Overlay de carregamento ao processar foto */}
+                              {isUploadingThis && (
+                                <div className="absolute inset-0 bg-slate-900/75 backdrop-blur-xs flex flex-col items-center justify-center gap-2 z-20 text-white">
+                                  <Loader2 className="animate-spin text-[#c9a84e]" size={28} />
+                                  <span className="text-xs font-bold">Processando foto...</span>
+                                </div>
+                              )}
 
-                            {/* Botão flutuante para Substituir Foto do PC (visível no hover ou mobile) */}
-                            {temFoto && !isUploadingThis && (
-                              <div className="no-print absolute bottom-2 right-2 opacity-90 group-hover/foto:opacity-100 transition-opacity">
+                              {/* Overlay ao arrastar arquivo por cima */}
+                              {isDraggingThis && (
+                                <div className="absolute inset-0 bg-blue-600/80 backdrop-blur-xs flex flex-col items-center justify-center gap-2 z-20 text-white pointer-events-none">
+                                  <Upload className="animate-bounce" size={32} />
+                                  <span className="text-xs font-bold">Solte a imagem para substituir!</span>
+                                </div>
+                              )}
+
+                              {/* Botão flutuante para Substituir Foto do PC (visível no hover ou mobile) */}
+                              {temFoto && !isUploadingThis && (
+                                <div className="no-print absolute bottom-2 right-2 opacity-90 group-hover/foto:opacity-100 transition-opacity">
+                                  <label
+                                    htmlFor={inputFotoId}
+                                    className="bg-slate-900/80 hover:bg-[#1a2b4c] text-white text-[10.5px] font-bold px-2.5 py-1 rounded-md shadow-md flex items-center gap-1.5 cursor-pointer backdrop-blur-xs transition"
+                                    title="Clique para escolher outra foto do seu computador"
+                                  >
+                                    <Upload size={11} className="pointer-events-none text-[#c9a84e]" />
+                                    <span className="pointer-events-none">Substituir Foto</span>
+                                  </label>
+                                </div>
+                              )}
+
+                              {/* Foto Action Bar (Mover, Baixar, Tag/Badge, Substituir, Excluir) */}
+                              <div className="no-print absolute top-1.5 right-1.5 flex items-center gap-1 bg-slate-900/80 backdrop-blur-xs p-1 rounded-md shadow-md z-10">
+                                {fIdx > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMoverFoto(pagina.id, fIdx, 'esquerda')}
+                                    className="text-white hover:text-[#c9a84e] p-0.5 hover:bg-white/20 rounded transition cursor-pointer"
+                                    title="Mover foto para a esquerda"
+                                  >
+                                    <ArrowLeft size={12} />
+                                  </button>
+                                )}
+                                {fIdx < pagina.fotos.length - 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMoverFoto(pagina.id, fIdx, 'direita')}
+                                    className="text-white hover:text-[#c9a84e] p-0.5 hover:bg-white/20 rounded transition cursor-pointer"
+                                    title="Mover foto para a direita"
+                                  >
+                                    <ArrowRight size={12} />
+                                  </button>
+                                )}
+                                {/* Botão de Badge Colorido */}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setPopoverBadgeFotoKey(popoverBadgeFotoKey === fotoCardKey ? null : fotoCardKey)
+                                  }
+                                  className="text-white hover:text-amber-300 p-0.5 hover:bg-white/20 rounded transition cursor-pointer"
+                                  title="Etiquetar com Badge (Antes, Depois, Durante, Detalhe)"
+                                >
+                                  <Tag size={12} />
+                                </button>
+                                {temFoto && (
+                                  <button
+                                    type="button"
+                                    onClick={() => baixarFoto(foto.url, `pagina-${pagIdx + 1}-${foto.legenda ? foto.legenda.slice(0, 20).replace(/\s+/g, '_') : 'foto'}.jpg`)}
+                                    className="text-white hover:text-emerald-300 p-0.5 hover:bg-white/20 rounded transition cursor-pointer"
+                                    title="Salvar foto no dispositivo"
+                                  >
+                                    <Download size={12} />
+                                  </button>
+                                )}
                                 <label
                                   htmlFor={inputFotoId}
-                                  className="bg-slate-900/80 hover:bg-[#1a2b4c] text-white text-[10.5px] font-bold px-2.5 py-1 rounded-md shadow-md flex items-center gap-1.5 cursor-pointer backdrop-blur-xs transition"
-                                  title="Clique para escolher outra foto do seu computador"
+                                  className="text-white hover:text-blue-300 p-0.5 hover:bg-white/20 rounded transition cursor-pointer flex items-center"
+                                  title="Substituir por outra foto do computador"
                                 >
-                                  <Upload size={11} className="pointer-events-none text-[#c9a84e]" />
-                                  <span className="pointer-events-none">Substituir Foto</span>
+                                  <Upload size={12} className="pointer-events-none" />
                                 </label>
+                                {pagina.fotos.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveFotoFromPagina(pagina.id, foto.id)}
+                                    className="text-red-400 hover:text-red-200 p-0.5 hover:bg-red-900/50 rounded transition cursor-pointer"
+                                    title="Excluir esta foto"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                )}
                               </div>
-                            )}
 
-                            {/* Foto Action Bar (Mover, Baixar, Substituir, Excluir) */}
-                            <div className="no-print absolute top-1.5 right-1.5 flex items-center gap-1 bg-slate-900/80 backdrop-blur-xs p-1 rounded-md shadow-md z-10">
-                              {fIdx > 0 && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleMoverFoto(pagina.id, fIdx, 'esquerda')}
-                                  className="text-white hover:text-[#c9a84e] p-0.5 hover:bg-white/20 rounded transition cursor-pointer"
-                                  title="Mover foto para a esquerda"
-                                >
-                                  <ArrowLeft size={12} />
-                                </button>
-                              )}
-                              {fIdx < pagina.fotos.length - 1 && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleMoverFoto(pagina.id, fIdx, 'direita')}
-                                  className="text-white hover:text-[#c9a84e] p-0.5 hover:bg-white/20 rounded transition cursor-pointer"
-                                  title="Mover foto para a direita"
-                                >
-                                  <ArrowRight size={12} />
-                                </button>
-                              )}
-                              {temFoto && (
-                                <button
-                                  type="button"
-                                  onClick={() => baixarFoto(foto.url, `pagina-${pagIdx + 1}-${foto.legenda ? foto.legenda.slice(0, 20).replace(/\s+/g, '_') : 'foto'}.jpg`)}
-                                  className="text-white hover:text-emerald-300 p-0.5 hover:bg-white/20 rounded transition cursor-pointer"
-                                  title="Salvar foto no dispositivo"
-                                >
-                                  <Download size={12} />
-                                </button>
-                              )}
-                              <label
-                                htmlFor={inputFotoId}
-                                className="text-white hover:text-blue-300 p-0.5 hover:bg-white/20 rounded transition cursor-pointer flex items-center"
-                                title="Substituir por outra foto do computador"
-                              >
-                                <Upload size={12} className="pointer-events-none" />
-                              </label>
-                              {pagina.fotos.length > 1 && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveFotoFromPagina(pagina.id, foto.id)}
-                                  className="text-red-400 hover:text-red-200 p-0.5 hover:bg-red-900/50 rounded transition cursor-pointer"
-                                  title="Excluir esta foto"
-                                >
-                                  <Trash2 size={12} />
-                                </button>
+                              {/* Popover de Escolha Rápida de Badge */}
+                              {popoverBadgeFotoKey === fotoCardKey && (
+                                <div className="no-print absolute top-8 right-1 z-30 bg-slate-900 border border-white/20 rounded-lg p-2 shadow-xl text-white text-[11px] animate-in fade-in duration-100 min-w-[170px]">
+                                  <div className="flex items-center justify-between mb-1.5 pb-1 border-b border-white/10 font-bold text-[#c9a84e]">
+                                    <span>Badge na Foto:</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setPopoverBadgeFotoKey(null)}
+                                      className="text-slate-400 hover:text-white"
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+                                  <div className="flex flex-col gap-1">
+                                    {[
+                                      { label: '🔴 Antes', tipo: 'antes' as TipoBadgeFoto, cor: 'vermelho' as const, txt: 'ANTES' },
+                                      { label: '🟢 Depois', tipo: 'depois' as TipoBadgeFoto, cor: 'verde' as const, txt: 'DEPOIS' },
+                                      { label: '🟡 Durante', tipo: 'durante' as TipoBadgeFoto, cor: 'amarelo' as const, txt: 'EM ANDAMENTO' },
+                                      { label: '🔵 Detalhe', tipo: 'detalhe' as TipoBadgeFoto, cor: 'azul' as const, txt: 'DETALHE' },
+                                      { label: '⚪ Sem Badge', tipo: 'nenhum' as TipoBadgeFoto, cor: 'cinza' as const, txt: '' },
+                                    ].map((item) => (
+                                      <button
+                                        key={item.label}
+                                        type="button"
+                                        onClick={() => {
+                                          const updated = informeAtualRef.current.paginas.map((p) => {
+                                            if (p.id !== pagina.id) return p;
+                                            const updatedFotos = p.fotos.map((f) =>
+                                              f.id === foto.id
+                                                ? { ...f, tipoBadge: item.tipo, badgeTexto: item.txt, badgeCor: item.cor }
+                                                : f
+                                            );
+                                            return { ...p, fotos: updatedFotos };
+                                          });
+                                          handleUpdateField('paginas', updated);
+                                          setPopoverBadgeFotoKey(null);
+                                        }}
+                                        className="text-left px-2 py-1 rounded hover:bg-white/10 font-semibold transition"
+                                      >
+                                        {item.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
                               )}
                             </div>
+                            <div className="w-full bg-slate-50 border-t border-slate-200 p-2 text-center">
+                              <input
+                                type="text"
+                                value={foto.legenda}
+                                onChange={(e) =>
+                                  handleUpdateLegendaFoto(pagina.id, foto.id, e.target.value)
+                                }
+                                placeholder="Legenda da foto..."
+                                className="w-full text-center font-heading text-[11.5px] font-bold text-slate-800 bg-transparent border border-transparent hover:border-slate-300 focus:border-[#1a2b4c] focus:bg-blue-50/20 rounded px-1 py-0.5 outline-none transition"
+                              />
+                            </div>
                           </div>
-                          <div className="w-full bg-slate-50 border-t border-slate-200 p-2 text-center">
-                            <input
-                              type="text"
-                              value={foto.legenda}
-                              onChange={(e) =>
-                                handleUpdateLegendaFoto(pagina.id, foto.id, e.target.value)
-                              }
-                              placeholder="Legenda da foto..."
-                              className="w-full text-center font-heading text-[11.5px] font-bold text-slate-800 bg-transparent border border-transparent hover:border-slate-300 focus:border-[#1a2b4c] focus:bg-blue-50/20 rounded px-1 py-0.5 outline-none transition"
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+                    </div>
+                  )}
 
                   {/* Annotation Box */}
                   <div className="mt-5 flex justify-center">
@@ -1573,147 +1896,25 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
       )}
 
       {subAba === 'arquivo' && (
-        <div className="bg-white rounded-lg border border-slate-200 p-6 shadow-sm">
-          {mensagemSucesso && (
-            <div className="mb-4 bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-semibold px-4 py-2.5 rounded-lg flex items-center justify-between shadow-2xs animate-in fade-in duration-150">
-              <span>{mensagemSucesso}</span>
-              <button onClick={() => setMensagemSucesso(null)} className="text-emerald-600 hover:text-emerald-900 font-bold ml-2">✕</button>
-            </div>
-          )}
-
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 pb-4 border-b border-slate-200">
-            <div>
-              <h2 className="text-base font-bold text-[#1a2b4c]">
-                Arquivo Histórico de Informes Mensais
-              </h2>
-              <p className="text-xs text-slate-500">
-                Informes arquivados permanentemente para consultas, auditorias e edições futuras.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              {informesArquivados.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setModalLimparAberto(true)}
-                  className="text-red-600 hover:text-red-800 text-xs font-semibold px-2.5 py-1.5 rounded hover:bg-red-50 transition cursor-pointer"
-                >
-                  Limpar Histórico
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Barra de Busca rápida para consultas */}
-          {informesArquivados.length > 0 && (
-            <div className="mb-4 relative max-w-md">
-              <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
-              <input
-                type="text"
-                value={filtroPesquisa}
-                onChange={(e) => setFiltroPesquisa(e.target.value)}
-                placeholder="Pesquisar por título, mês de referência..."
-                className="w-full pl-9 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-1 focus:ring-[#1a2b4c] focus:border-[#1a2b4c]"
-              />
-              {filtroPesquisa && (
-                <button
-                  type="button"
-                  onClick={() => setFiltroPesquisa('')}
-                  className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 text-xs cursor-pointer"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-          )}
-
-          <div className="space-y-3">
-            {informesArquivados.length === 0 ? (
-              <div className="text-center p-12 text-slate-400">
-                <Archive className="mx-auto mb-2 text-slate-300" size={42} />
-                <p className="text-sm font-semibold text-slate-700">Nenhum informe arquivado ainda.</p>
-                <p className="text-xs text-slate-400 mt-1">
-                  Na aba "Edição do Informe do Mês", clique em "📦 Arquivar" para salvar edições no histórico seguro.
-                </p>
-              </div>
-            ) : informesFiltrados.length === 0 ? (
-              <div className="text-center p-8 text-slate-400 bg-slate-50 rounded-lg">
-                <p className="text-sm">Nenhum informe corresponde à pesquisa "{filtroPesquisa}".</p>
-              </div>
-            ) : (
-              informesFiltrados.map((inf) => (
-                <div
-                  key={inf.id}
-                  className="bg-slate-50 p-4 rounded-lg border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:border-[#1a2b4c] transition"
-                >
-                  <div className="flex items-start gap-3">
-                    {inf.capaUrl ? (
-                      <img
-                        src={inf.capaUrl}
-                        alt="Capa"
-                        className="w-14 h-14 object-cover rounded-md border border-slate-300 shrink-0"
-                      />
-                    ) : (
-                      <div className="w-14 h-14 bg-slate-200 rounded-md flex items-center justify-center shrink-0 text-slate-400">
-                        <FileText size={22} />
-                      </div>
-                    )}
-                    <div>
-                      <h3 className="text-sm font-bold text-[#1a2b4c] flex items-center gap-2 flex-wrap">
-                        <span>📰 {inf.titulo} - {inf.mesAno}</span>
-                        <span className="bg-[#c9a84e]/20 text-[#1a2b4c] font-bold text-[10px] px-2 py-0.5 rounded">
-                          {inf.paginas.length + 1} páginas
-                        </span>
-                        <span className="bg-emerald-100 text-emerald-800 text-[10px] font-semibold px-2 py-0.5 rounded">
-                          Salvo em Nuvem/Local
-                        </span>
-                      </h3>
-                      <p className="text-xs text-slate-600 mt-0.5 font-medium">
-                        Subtítulo: {inf.subtitulo}
-                      </p>
-                      <p className="text-[11px] text-slate-400 mt-0.5">
-                        Arquivado em: {inf.criadoEm || 'Agosto 2026'} • ID: {inf.id}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 self-end md:self-center shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setInformeParaVisualizar(inf)}
-                      className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-800 text-white text-xs font-semibold px-3 py-1.5 rounded transition shadow-2xs cursor-pointer"
-                      title="Consultar e visualizar este relatório arquivado"
-                    >
-                      <Eye size={14} />
-                      <span>Consultar</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onCarregarInformeArquivado(inf);
-                        setSubAba('edicao');
-                        setMensagemSucesso(`Informe "${inf.titulo} - {inf.mesAno}" carregado para edição.`);
-                        setTimeout(() => setMensagemSucesso(null), 3500);
-                      }}
-                      className="flex items-center gap-1.5 bg-[#1a2b4c] hover:bg-[#2c4373] text-white text-xs font-semibold px-3 py-1.5 rounded transition shadow-2xs cursor-pointer"
-                      title="Carregar todos os dados deste informe na aba de edição"
-                    >
-                      <Plus size={14} className="rotate-45" />
-                      <span>Carregar na Edição</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setInformeParaExcluir(inf)}
-                      className="p-1.5 text-red-500 hover:text-red-700 rounded hover:bg-red-100/70 transition cursor-pointer"
-                      title="Excluir do arquivo"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+        <DashboardGestaoArquivo
+          informesArquivados={informesArquivados}
+          onCarregarInforme={(inf) => {
+            onCarregarInformeArquivado(inf);
+            setSubAba('edicao');
+            setMensagemSucesso(`Informe "${inf.titulo} - ${inf.mesAno}" carregado para edição.`);
+            setTimeout(() => setMensagemSucesso(null), 3500);
+          }}
+          onVisualizarInforme={(inf) => setInformeParaVisualizar(inf)}
+          onExcluirInforme={(inf) => setInformeParaExcluir(inf)}
+          onLimparHistorico={() => setModalLimparAberto(true)}
+          onDuplicarParaNovoMes={handleDuplicarParaNovoMes}
+          onImportarBackup={onImportarBackupInformes}
+          onAbrirImpressaoDireta={(inf) => {
+            onCarregarInformeArquivado(inf);
+            setSubAba('edicao');
+            setTimeout(() => setModalPdfAberto(true), 250);
+          }}
+        />
       )}
 
       {/* Modal de Consulta e Visualização Completa do Informe Arquivado */}
@@ -1838,16 +2039,39 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
                     {pag.descricao}
                   </p>
 
-                  <div className={`grid gap-3 mb-4 ${pag.tipoGrid === '1' ? 'grid-cols-1' : pag.tipoGrid === '3' ? 'grid-cols-3' : pag.tipoGrid === '4' ? 'grid-cols-2' : 'grid-cols-2'}`}>
-                    {pag.fotos.map((f) => (
-                      <div key={f.id} className="border border-slate-300 rounded overflow-hidden bg-slate-50">
-                        <img src={f.url} alt={f.legenda} className="w-full h-40 object-cover" />
-                        <div className="p-2 text-[11px] font-bold text-slate-800 text-center border-t border-slate-200">
-                          {f.legenda}
+                  {pag.tipoGrid === 'antes_depois' || pag.layoutDedicado === 'antes_depois' ? (
+                    <LayoutAntesDepois
+                      pagina={pag}
+                      onUpdatePagina={() => {}}
+                      onUploadFoto={() => {}}
+                      uploadingFotoKey={null}
+                      dragOverFotoKey={null}
+                      setDragOverFotoKey={() => {}}
+                      onBaixarFoto={baixarFoto}
+                      modoEdicao={false}
+                    />
+                  ) : (
+                    <div className={`grid gap-3 mb-4 ${pag.tipoGrid === '1' ? 'grid-cols-1' : pag.tipoGrid === '3' ? 'grid-cols-3' : pag.tipoGrid === '4' ? 'grid-cols-2' : 'grid-cols-2'}`}>
+                      {pag.fotos.map((f) => (
+                        <div key={f.id} className="border border-slate-300 rounded overflow-hidden bg-slate-50 relative">
+                          {f.tipoBadge && f.tipoBadge !== 'nenhum' && (
+                            <div className="absolute top-1.5 left-1.5 z-10">
+                              <BadgeFotoColorido
+                                tipoBadge={f.tipoBadge}
+                                badgeTexto={f.badgeTexto}
+                                badgeCor={f.badgeCor}
+                                tamanho="sm"
+                              />
+                            </div>
+                          )}
+                          <img src={f.url} alt={f.legenda} className="w-full h-40 object-cover" />
+                          <div className="p-2 text-[11px] font-bold text-slate-800 text-center border-t border-slate-200">
+                            {f.legenda}
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
 
                   {pag.anotacao && (
                     <div className="border-2 border-black rounded-lg p-2.5 text-xs font-bold text-black text-center bg-slate-50">
@@ -2154,6 +2378,15 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
         subtitulo={`Relatório oficial da APMBB • Período: ${informeAtual.mesAno || 'Mensal'}`}
         nomeArquivo={`Informe_Mensal_APMBB_${(informeAtual.mesAno || 'Mensal').replace(/[\s/]+/g, '_')}.pdf`}
         orientacao="p"
+      />
+
+      {/* Modal de Gestão de Histórico e Auditoria do Relatório */}
+      <ModalHistoricoAuditoria
+        isOpen={modalHistoricoAberto}
+        onClose={() => setModalHistoricoAberto(false)}
+        informe={informeAtual}
+        onUpdateHistorico={(novoHist) => handleUpdateField('historico', novoHist)}
+        usuarioLogadoNome={usuarioLogado?.nome || 'Operador'}
       />
     </div>
   );

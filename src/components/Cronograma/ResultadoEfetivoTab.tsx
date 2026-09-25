@@ -85,6 +85,11 @@ export const ResultadoEfetivoTab: React.FC<ResultadoEfetivoTabProps> = ({
   const [filtroTipo, setFiltroTipo] = useState<'todos' | 'fixo' | 'apoio'>('todos');
   const [filtroStatus, setFiltroStatus] = useState<'todos' | 'impedidos' | 'disponiveis'>('todos');
   const [filtroPelotao, setFiltroPelotao] = useState('todos');
+  const [modalConfirmacao, setModalConfirmacao] = useState<{
+    titulo: string;
+    mensagem: string;
+    onConfirmar: () => void;
+  } | null>(null);
 
   // Estado para modal / edição de impedimento do dia
   const [militarEditandoImpedimento, setMilitarEditandoImpedimento] = useState<MembroEquipe | null>(null);
@@ -218,48 +223,52 @@ export const ResultadoEfetivoTab: React.FC<ResultadoEfetivoTabProps> = ({
       temImpedimentoNoDia(m, diaAnterior)
     ).length;
 
-    const confirmacao = window.confirm(
-      `Deseja copiar os impedimentos de ${formatarDataCurta(diaAnterior)} (${qtdImpedimentosAnterior} registrado(s)) para ${formatarDataCurta(dataAtiva)}?`
-    );
-    if (!confirmacao) return;
+    setModalConfirmacao({
+      titulo: 'Copiar Impedimentos do Dia Anterior',
+      mensagem: `Deseja copiar os impedimentos de ${formatarDataCurta(diaAnterior)} (${qtdImpedimentosAnterior} registrado(s)) para ${formatarDataCurta(dataAtiva)}?`,
+      onConfirmar: () => {
+        const novosMembros = membros.map((m) => {
+          const impAnterior = getImpedimentoMembroNoDia(m, diaAnterior);
+          const mapaAtualizado = { ...(m.impedimentosPorData || {}) };
+          if (impAnterior) {
+            mapaAtualizado[dataAtiva] = impAnterior;
+          } else {
+            delete mapaAtualizado[dataAtiva];
+          }
+          return {
+            ...m,
+            ...(dataAtiva === hoje ? { impedimento: impAnterior } : {}),
+            impedimentosPorData: mapaAtualizado,
+          };
+        });
 
-    const novosMembros = membros.map((m) => {
-      const impAnterior = getImpedimentoMembroNoDia(m, diaAnterior);
-      const mapaAtualizado = { ...(m.impedimentosPorData || {}) };
-      if (impAnterior) {
-        mapaAtualizado[dataAtiva] = impAnterior;
-      } else {
-        delete mapaAtualizado[dataAtiva];
-      }
-      return {
-        ...m,
-        ...(dataAtiva === hoje ? { impedimento: impAnterior } : {}),
-        impedimentosPorData: mapaAtualizado,
-      };
+        onChangeMembros(novosMembros);
+        setModalConfirmacao(null);
+      },
     });
-
-    onChangeMembros(novosMembros);
   };
 
   // Limpar todos os impedimentos do dia ativo (todos aptos)
   const limparTodosDoDia = () => {
     if (metricas.impedidos === 0) return;
-    const confirmacao = window.confirm(
-      `Deseja marcar todos os militares como aptos no dia ${formatarDataCurta(dataAtiva)}? Isso removerá todos os ${metricas.impedidos} impedimento(s) registrados exclusivamente nesta data.`
-    );
-    if (!confirmacao) return;
+    setModalConfirmacao({
+      titulo: 'Marcar Todos como Aptos',
+      mensagem: `Deseja marcar todos os militares como aptos no dia ${formatarDataCurta(dataAtiva)}? Isso removerá todos os ${metricas.impedidos} impedimento(s) registrados exclusivamente nesta data.`,
+      onConfirmar: () => {
+        const novosMembros = membros.map((m) => {
+          const mapaAtualizado = { ...(m.impedimentosPorData || {}) };
+          delete mapaAtualizado[dataAtiva];
+          return {
+            ...m,
+            ...(dataAtiva === hoje ? { impedimento: '' } : {}),
+            impedimentosPorData: mapaAtualizado,
+          };
+        });
 
-    const novosMembros = membros.map((m) => {
-      const mapaAtualizado = { ...(m.impedimentosPorData || {}) };
-      delete mapaAtualizado[dataAtiva];
-      return {
-        ...m,
-        ...(dataAtiva === hoje ? { impedimento: '' } : {}),
-        impedimentosPorData: mapaAtualizado,
-      };
+        onChangeMembros(novosMembros);
+        setModalConfirmacao(null);
+      },
     });
-
-    onChangeMembros(novosMembros);
   };
 
   return (
@@ -886,6 +895,36 @@ export const ResultadoEfetivoTab: React.FC<ResultadoEfetivoTabProps> = ({
               >
                 <Save size={13} />
                 <span>Salvar para {formatarDataCurta(dataAtiva)}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Estilizado de Confirmação */}
+      {modalConfirmacao && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 border border-slate-200 animate-in zoom-in-95 duration-200">
+            <h3 className="text-base font-bold text-slate-800 text-center">
+              {modalConfirmacao.titulo}
+            </h3>
+            <p className="text-xs text-slate-600 mt-2.5 text-center leading-relaxed">
+              {modalConfirmacao.mensagem}
+            </p>
+            <div className="flex gap-2.5 mt-5">
+              <button
+                type="button"
+                onClick={() => setModalConfirmacao(null)}
+                className="flex-1 py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={modalConfirmacao.onConfirmar}
+                className="flex-1 py-2 px-3 bg-[#1a2b4c] hover:bg-[#2c4373] text-[#c9a84e] font-bold text-xs rounded-xl shadow-md transition cursor-pointer"
+              >
+                Confirmar
               </button>
             </div>
           </div>

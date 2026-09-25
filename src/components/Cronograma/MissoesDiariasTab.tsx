@@ -106,6 +106,11 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
   const [missaoEmEdicao, setMissaoEmEdicao] = useState<MissaoDiaria | null>(null);
   const [missaoPreviaFolha, setMissaoPreviaFolha] = useState<MissaoDiaria | null>(null);
   const [mensagemSucesso, setMensagemSucesso] = useState<string | null>(null);
+  const [modalConfirmacao, setModalConfirmacao] = useState<{
+    titulo: string;
+    mensagem: string;
+    onConfirmar: () => void;
+  } | null>(null);
 
   // Referência para impressão da folha oficial de ordem do dia
   const folhaOrdemDoDiaRef = useRef<HTMLDivElement>(null);
@@ -234,65 +239,68 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
     if (!missao) return;
 
     const dataDestino = adicionarDiasISO(missao.data, 1);
-    if (
-      confirm(
-        `Deseja transferir a missão "${missao.titulo}" para o próximo dia (${formatarDataCurta(
-          dataDestino
-        )})?`
-      )
-    ) {
-      onChangeMissoes(
-        missoes.map((m) => {
-          if (m.id === id) {
-            return {
-              ...m,
-              data: dataDestino,
-              adiadaParaProximoDia: false,
-              concluida: false,
-              observacoes: m.observacoes
-                ? `${m.observacoes} | Transferida de ${formatarDataCurta(missao.data)}`
-                : `Transferida de ${formatarDataCurta(missao.data)}`,
-            };
-          }
-          return m;
-        })
-      );
-    }
+    setModalConfirmacao({
+      titulo: 'Transferir Missão',
+      mensagem: `Deseja transferir a missão "${missao.titulo}" para o próximo dia (${formatarDataCurta(dataDestino)})?`,
+      onConfirmar: () => {
+        onChangeMissoes(
+          missoes.map((m) => {
+            if (m.id === id) {
+              return {
+                ...m,
+                data: dataDestino,
+                adiadaParaProximoDia: false,
+                concluida: false,
+                observacoes: m.observacoes
+                  ? `${m.observacoes} | Transferida de ${formatarDataCurta(missao.data)}`
+                  : `Transferida de ${formatarDataCurta(missao.data)}`,
+              };
+            }
+            return m;
+          })
+        );
+        setModalConfirmacao(null);
+        setMensagemSucesso(`Missão "${missao.titulo}" transferida para ${formatarDataCurta(dataDestino)}.`);
+        setTimeout(() => setMensagemSucesso(null), 3000);
+      },
+    });
   };
 
   // Mover todas as pendentes não concluídas do dia para o dia seguinte
   const handleMoverTodasPendentesParaAmanha = () => {
     const pendentes = missoes.filter((m) => m.data === dataSelecionada && !m.concluida);
     if (pendentes.length === 0) {
-      alert('Não há missões pendentes nesta data.');
+      setMensagemSucesso('⚠️ Não há missões pendentes nesta data.');
+      setTimeout(() => setMensagemSucesso(null), 3000);
       return;
     }
 
     const dataDestino = adicionarDiasISO(dataSelecionada, 1);
-    if (
-      confirm(
-        `Confirma transferir ${pendentes.length} missão(ões) pendente(s) do dia ${formatarDataCurta(
-          dataSelecionada
-        )} para o próximo dia (${formatarDataCurta(dataDestino)})?`
-      )
-    ) {
-      onChangeMissoes(
-        missoes.map((m) => {
-          if (m.data === dataSelecionada && !m.concluida) {
-            return {
-              ...m,
-              data: dataDestino,
-              adiadaParaProximoDia: false,
-              observacoes: m.observacoes
-                ? `${m.observacoes} | Postergrada de ${formatarDataCurta(dataSelecionada)}`
-                : `Postergada de ${formatarDataCurta(dataSelecionada)}`,
-            };
-          }
-          return m;
-        })
-      );
-      setDataSelecionada(dataDestino);
-    }
+    setModalConfirmacao({
+      titulo: 'Transferir Missões Pendentes',
+      mensagem: `Confirma transferir ${pendentes.length} missão(ões) pendente(s) do dia ${formatarDataCurta(dataSelecionada)} para o próximo dia (${formatarDataCurta(dataDestino)})?`,
+      onConfirmar: () => {
+        onChangeMissoes(
+          missoes.map((m) => {
+            if (m.data === dataSelecionada && !m.concluida) {
+              return {
+                ...m,
+                data: dataDestino,
+                adiadaParaProximoDia: false,
+                observacoes: m.observacoes
+                  ? `${m.observacoes} | Postergada de ${formatarDataCurta(dataSelecionada)}`
+                  : `Postergada de ${formatarDataCurta(dataSelecionada)}`,
+              };
+            }
+            return m;
+          })
+        );
+        setDataSelecionada(dataDestino);
+        setModalConfirmacao(null);
+        setMensagemSucesso(`${pendentes.length} missões transferidas para ${formatarDataCurta(dataDestino)}.`);
+        setTimeout(() => setMensagemSucesso(null), 3000);
+      },
+    });
   };
 
   // Duplicar missão
@@ -310,9 +318,17 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
 
   // Excluir missão
   const excluirMissao = (id: string) => {
-    if (confirm('Deseja realmente remover esta missão do cronograma?')) {
-      onChangeMissoes(missoes.filter((m) => m.id !== id));
-    }
+    const missao = missoes.find((m) => m.id === id);
+    setModalConfirmacao({
+      titulo: 'Excluir Missão',
+      mensagem: `Deseja realmente remover a missão "${missao?.titulo || 'selecionada'}" do cronograma?`,
+      onConfirmar: () => {
+        onChangeMissoes(missoes.filter((m) => m.id !== id));
+        setModalConfirmacao(null);
+        setMensagemSucesso('Missão removida do cronograma.');
+        setTimeout(() => setMensagemSucesso(null), 2500);
+      },
+    });
   };
 
   // Sincronização automática da missão com o Informe Mensal (cria folha oficial)
@@ -1637,6 +1653,36 @@ export const MissoesDiariasTab: React.FC<MissoesDiariasTabProps> = ({
         onFechar={() => setMissaoPreviaFolha(null)}
         onNavegarParaInforme={onNavegarParaInforme}
       />
+
+      {/* Modal Estilizado de Confirmação de Ações */}
+      {modalConfirmacao && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 border border-slate-200 animate-in zoom-in-95 duration-200">
+            <h3 className="text-base font-bold text-slate-800 text-center">
+              {modalConfirmacao.titulo}
+            </h3>
+            <p className="text-xs text-slate-600 mt-2.5 text-center leading-relaxed">
+              {modalConfirmacao.mensagem}
+            </p>
+            <div className="flex gap-2.5 mt-5">
+              <button
+                type="button"
+                onClick={() => setModalConfirmacao(null)}
+                className="flex-1 py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={modalConfirmacao.onConfirmar}
+                className="flex-1 py-2 px-3 bg-[#1a2b4c] hover:bg-[#2c4373] text-[#c9a84e] font-bold text-xs rounded-xl shadow-md transition cursor-pointer"
+              >
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -192,7 +192,7 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
 
   const handleAlternarStatus = async (usuario: UsuarioSistema) => {
     if (usuario.id === usuarioLogado.id) {
-      alert('Você não pode desativar seu próprio usuário logado.');
+      exibirFeedback('Você não pode desativar seu próprio usuário logado.', 'erro');
       return;
     }
 
@@ -207,7 +207,7 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
 
   const handleAlterarRole = async (usuario: UsuarioSistema, novoRole: UserRole) => {
     if (usuario.id === usuarioLogado.id && novoRole !== 'admin') {
-      alert('Você não pode revogar seu próprio papel de Administrador.');
+      exibirFeedback('Você não pode revogar seu próprio papel de Administrador.', 'erro');
       return;
     }
 
@@ -355,7 +355,7 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
     e.preventDefault();
     if (!usuarioRedefinir) return;
     if (novaSenha.length < 6) {
-      alert('A nova senha deve ter no mínimo 6 caracteres.');
+      exibirFeedback('A nova senha deve ter no mínimo 6 caracteres.', 'erro');
       return;
     }
 
@@ -373,7 +373,7 @@ export const UsuariosView: React.FC<UsuariosViewProps> = ({
         setSucessoSenha(null);
       }, 1500);
     } catch (e: any) {
-      alert('Erro ao atualizar senha.');
+      exibirFeedback('Erro ao atualizar senha.', 'erro');
     } finally {
       setSalvandoSenha(false);
     }

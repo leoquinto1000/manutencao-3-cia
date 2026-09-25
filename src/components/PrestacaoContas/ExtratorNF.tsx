@@ -422,7 +422,8 @@ export const ExtratorNF: React.FC<ExtratorNFProps> = ({ onExportarParaPlanilha, 
   // Exportar para a planilha de composição
   const handleExportarParaPlanilha = () => {
     if (itensConferencia.length === 0) {
-      alert('Nenhum item na tabela para transferir.');
+      setAlertaSucesso('⚠️ Nenhum item na tabela para transferir.');
+      setTimeout(() => setAlertaSucesso(null), 3000);
       return;
     }
 

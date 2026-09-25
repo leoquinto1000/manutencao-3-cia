@@ -128,10 +128,7 @@ export const TabelaComposicao: React.FC<TabelaComposicaoProps> = ({
   };
 
   const handleRemoveEmpresa = () => {
-    if (totalEmpresas <= 1) {
-      alert('É necessário manter no mínimo 1 empresa.');
-      return;
-    }
+    if (totalEmpresas <= 1) return;
     const newTotal = totalEmpresas - 1;
     onUpdateNF({ ...nf, totalEmpresas: newTotal });
   };

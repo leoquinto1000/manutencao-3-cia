@@ -72,6 +72,7 @@ export const CronogramaView: React.FC<CronogramaViewProps> = ({
   const hoje = formatarDataISO();
   const [dataSelecionada, setDataSelecionada] = useState<string>(hoje);
   const [mensagemRestauracao, setMensagemRestauracao] = useState<string | null>(null);
+  const [modalConfirmarRestaurar, setModalConfirmarRestaurar] = useState<boolean>(false);
 
   // Redireciona caso a sub-aba ativa não seja permitida
   useEffect(() => {
@@ -83,18 +84,9 @@ export const CronogramaView: React.FC<CronogramaViewProps> = ({
     }
   }, [subAbaAtiva, canVerEquipes, canVerResultado]);
 
-  // Restaurar TODOS os dados da aba Cronograma (Missões de todas as datas, Equipes e Efetivo/Impedimentos)
-  const handleRestaurarTudoCronograma = () => {
-    const confirmou = window.confirm(
-      'ATENÇÃO: Deseja restaurar TODOS os dados da aba Cronograma?\n\n' +
-      'Esta ação irá redefinir e restabelecer a base de dados oficial completa da 3ª Cia Escola:\n' +
-      '• Todas as Missões e Determinações Diárias (16/09, 17/09, Missões de Hoje e Próximos Dias);\n' +
-      '• Todas as Equipes de Manutenção (Equipe Alfa, Equipe Bravo e Equipe Charlie);\n' +
-      '• Todo o Efetivo e Apoios (todos os 11 policiais fixos + policiais em apoio, pelotões e impedimentos).\n\n' +
-      'Deseja prosseguir com a restauração completa de todo o cronograma?'
-    );
-
-    if (!confirmou) return;
+  // Executa a restauração completa dos dados oficiais da 3ª Cia
+  const executarRestauracaoCompleta = () => {
+    setModalConfirmarRestaurar(false);
 
     // 1. Restaurar Missões completas (preservando fotos anexadas caso existam)
     const restauradas = DADOS_INICIAIS_MISSOES.map((oficial) => {
@@ -115,7 +107,7 @@ export const CronogramaView: React.FC<CronogramaViewProps> = ({
 
     onChangeMissoes(restauradas);
     try {
-      localStorage.setItem('cronograma_missoes_pmesp_v1', JSON.stringify(restauradas));
+      localStorage.setItem('pmesp_missoes', JSON.stringify(restauradas));
     } catch (e) {
       console.error(e);
     }
@@ -123,7 +115,7 @@ export const CronogramaView: React.FC<CronogramaViewProps> = ({
     // 2. Restaurar Equipes Oficiais
     onChangeEquipes(DADOS_INICIAIS_EQUIPES);
     try {
-      localStorage.setItem('cronograma_equipes_pmesp_v1', JSON.stringify(DADOS_INICIAIS_EQUIPES));
+      localStorage.setItem('pmesp_equipes', JSON.stringify(DADOS_INICIAIS_EQUIPES));
     } catch (e) {
       console.error(e);
     }
@@ -131,7 +123,7 @@ export const CronogramaView: React.FC<CronogramaViewProps> = ({
     // 3. Restaurar Efetivo e Apoios com todos os impedimentos
     onChangeMembros(DADOS_INICIAIS_MEMBROS);
     try {
-      localStorage.setItem('cronograma_membros_pmesp_v1', JSON.stringify(DADOS_INICIAIS_MEMBROS));
+      localStorage.setItem('pmesp_membros', JSON.stringify(DADOS_INICIAIS_MEMBROS));
     } catch (e) {
       console.error(e);
     }
@@ -140,6 +132,10 @@ export const CronogramaView: React.FC<CronogramaViewProps> = ({
       'Todos os dados da aba Cronograma (Missões, Equipes e Efetivo/Impedimentos) foram restaurados com sucesso!'
     );
     setTimeout(() => setMensagemRestauracao(null), 6000);
+  };
+
+  const handleRestaurarTudoCronograma = () => {
+    setModalConfirmarRestaurar(true);
   };
 
   // Contadores para os badges das abas
@@ -339,6 +335,48 @@ export const CronogramaView: React.FC<CronogramaViewProps> = ({
           />
         )}
       </div>
+
+      {/* Modal Estilizado de Confirmação de Restauração */}
+      {modalConfirmarRestaurar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 animate-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center mx-auto mb-4">
+              <RotateCcw size={24} />
+            </div>
+            <h3 className="text-base font-bold text-slate-800 text-center">
+              Restaurar Cronograma Oficial
+            </h3>
+            <p className="text-xs text-slate-600 mt-2 text-center leading-relaxed">
+              Esta ação irá redefinir e restabelecer a base de dados oficial completa da 3ª Cia Escola:
+            </p>
+            <ul className="text-[11px] text-slate-500 bg-slate-50 p-3 rounded-lg mt-3 space-y-1.5 border border-slate-200">
+              <li>• <strong>Missões e Determinações:</strong> Restaura todas as missões históricas e de hoje;</li>
+              <li>• <strong>Equipes de Manutenção:</strong> Alfa, Bravo e Charlie;</li>
+              <li>• <strong>Efetivo Oficial:</strong> Todos os 11 policiais fixos + apoios e impedimentos.</li>
+            </ul>
+            <p className="text-[11px] text-slate-400 text-center mt-3">
+              Fotos anexadas a missões existentes serão preservadas.
+            </p>
+            <div className="flex gap-2.5 mt-5">
+              <button
+                type="button"
+                onClick={() => setModalConfirmarRestaurar(false)}
+                className="flex-1 py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={executarRestauracaoCompleta}
+                className="flex-1 py-2.5 px-3 bg-[#1a2b4c] hover:bg-[#2c4373] text-[#c9a84e] font-bold text-xs rounded-xl shadow-md transition cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <RotateCcw size={14} />
+                Restaurar Tudo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
