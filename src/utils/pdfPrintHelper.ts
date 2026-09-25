@@ -189,7 +189,11 @@ export async function gerarDocumentoPdf(
       );
     }
 
-    // Gera canvas de alta resolução com proporção estrita de 794px (~210mm a 96DPI)
+    // Identificador temporário para achar a página exata no clonedDoc
+    const pageIdAttr = `a4-page-render-${Date.now()}-${i}`;
+    pagina.setAttribute('data-render-id', pageIdAttr);
+
+    // Gera canvas de alta resolução com proporção estrita de 794px × 1123px (A4 a 96DPI)
     const canvas = await html2canvas(pagina, {
       scale: 2, // 2x para nitidez
       useCORS: true,
@@ -197,24 +201,102 @@ export async function gerarDocumentoPdf(
       backgroundColor: '#ffffff',
       logging: false,
       ignoreElements: (element) => element.classList.contains('no-print'),
+      width: 794,
+      height: 1123,
       windowWidth: 794,
+      windowHeight: 1123,
       onclone: (clonedDoc) => {
-        // Sincroniza valores de inputs e textareas no DOM clonado
-        try {
-          const origInputs = pagina.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea');
-          const clonedInputs = clonedDoc.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea');
-          origInputs.forEach((orig, idx) => {
-            const clone = clonedInputs[idx];
-            if (clone) {
-              clone.value = orig.value;
-              clone.setAttribute('value', orig.value);
-            }
-          });
-        } catch {
-          // Ignora erros de sincronização
+        // 1. Remove qualquer elemento .no-print
+        const noPrintElements = clonedDoc.querySelectorAll('.no-print');
+        noPrintElements.forEach((el) => el.remove());
+
+        // 2. Localiza a página clonada exata
+        const clonedPage = clonedDoc.querySelector<HTMLElement>(`[data-render-id="${pageIdAttr}"]`);
+        if (clonedPage) {
+          // Força a página a ter exatamente 794px x 1123px (A4 a 96DPI)
+          clonedPage.style.width = '794px';
+          clonedPage.style.minWidth = '794px';
+          clonedPage.style.maxWidth = '794px';
+          clonedPage.style.height = '1123px';
+          clonedPage.style.minHeight = '1123px';
+          clonedPage.style.maxHeight = '1123px';
+          clonedPage.style.margin = '0 auto';
+          clonedPage.style.padding = '38px 45px 30px 45px';
+          clonedPage.style.border = 'none';
+          clonedPage.style.boxShadow = 'none';
+          clonedPage.style.boxSizing = 'border-box';
+          clonedPage.style.overflow = 'hidden';
+          clonedPage.style.backgroundColor = '#ffffff';
+          clonedPage.style.display = 'flex';
+          clonedPage.style.flexDirection = 'column';
+          clonedPage.style.justifyContent = 'space-between';
         }
+
+        // Também normaliza todas as outras páginas A4 no documento clonado
+        const allClonedPages = clonedDoc.querySelectorAll<HTMLElement>(
+          '.pesquisa-page, .sheet-paper, .balancete-page, .textoparte-page, .apmbb-page, .pauta-diaria-page'
+        );
+        allClonedPages.forEach((p) => {
+          p.style.width = '794px';
+          p.style.minWidth = '794px';
+          p.style.maxWidth = '794px';
+          p.style.boxShadow = 'none';
+        });
+
+        // 3. Converte inputs, textareas e selects em texto estático idêntico
+        const origInputs = pagina.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+          'input, textarea, select'
+        );
+        const clonedTarget = clonedPage || clonedDoc;
+        const clonedInputs = clonedTarget.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+          'input, textarea, select'
+        );
+
+        origInputs.forEach((orig, idx) => {
+          const cloned = clonedInputs[idx];
+          if (!cloned) return;
+
+          if (orig instanceof HTMLSelectElement) {
+            const span = clonedDoc.createElement('span');
+            span.textContent = orig.options[orig.selectedIndex]?.text || orig.value || '';
+            span.className = cloned.className || '';
+            span.style.cssText = cloned.style.cssText;
+            span.style.border = 'none';
+            span.style.outline = 'none';
+            span.style.background = 'transparent';
+            span.style.display = 'inline-block';
+            span.style.fontWeight = 'bold';
+            cloned.parentNode?.replaceChild(span, cloned);
+          } else if (orig instanceof HTMLTextAreaElement) {
+            const div = clonedDoc.createElement('div');
+            div.textContent = orig.value || '';
+            div.className = cloned.className || '';
+            div.style.cssText = cloned.style.cssText;
+            div.style.whiteSpace = 'pre-wrap';
+            div.style.wordBreak = 'break-word';
+            div.style.border = 'none';
+            div.style.outline = 'none';
+            div.style.background = 'transparent';
+            div.style.resize = 'none';
+            cloned.parentNode?.replaceChild(div, cloned);
+          } else if (orig instanceof HTMLInputElement) {
+            if (orig.type !== 'checkbox' && orig.type !== 'radio') {
+              const span = clonedDoc.createElement('span');
+              span.textContent = orig.value || '';
+              span.className = cloned.className || '';
+              span.style.cssText = cloned.style.cssText;
+              span.style.display = 'inline-block';
+              span.style.border = 'none';
+              span.style.outline = 'none';
+              span.style.background = 'transparent';
+              cloned.parentNode?.replaceChild(span, cloned);
+            }
+          }
+        });
       },
     });
+
+    pagina.removeAttribute('data-render-id');
 
     const imgData = canvas.toDataURL('image/jpeg', 0.95);
     paginasImagens.push(imgData);

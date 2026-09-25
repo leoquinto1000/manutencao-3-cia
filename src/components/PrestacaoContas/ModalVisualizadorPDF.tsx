@@ -373,10 +373,10 @@ export const ModalVisualizadorPDF: React.FC<ModalVisualizadorPDFProps> = ({
             modoVisualizador === 'a4' ? (
               /* Visualizador de Folhas Renderizadas A4 */
               <div
-                className="flex flex-col items-center gap-8 py-2 transition-all duration-150"
+                className="flex flex-col items-center gap-8 py-4 transition-all duration-150"
                 style={{
-                  width: `${zoom}%`,
-                  maxWidth: 'none',
+                  width: `${Math.round(794 * (zoom / 100))}px`,
+                  maxWidth: '100%',
                 }}
               >
                 {layoutExibicao === 'todas' ? (
@@ -384,8 +384,7 @@ export const ModalVisualizadorPDF: React.FC<ModalVisualizadorPDFProps> = ({
                   resultadoPdf.paginasImagens.map((imgSrc, idx) => (
                     <div
                       key={idx}
-                      className="flex flex-col items-center group"
-                      style={{ width: '100%', maxWidth: '210mm' }}
+                      className="flex flex-col items-center group w-full"
                     >
                       {/* Indicador de Folha */}
                       <div className="w-full flex items-center justify-between text-[11px] text-slate-300 font-semibold mb-2 px-1">
@@ -393,16 +392,15 @@ export const ModalVisualizadorPDF: React.FC<ModalVisualizadorPDFProps> = ({
                           <span className="bg-[#c9a84e] text-[#1a2b4c] font-black px-1.5 py-0.5 rounded text-[10px]">
                             FOLHA {idx + 1} DE {totalPaginas}
                           </span>
-                          <span>Padrão A4 • 210mm × 297mm</span>
+                          <span>Padrão Oficial APMBB • 210mm × 297mm</span>
                         </span>
                         <span className="text-slate-400 text-[10px]">Página Oficial</span>
                       </div>
 
                       {/* Folha A4 em Papel Branco com Sombra */}
                       <div
-                        className="bg-white rounded-xs shadow-2xl overflow-hidden border border-slate-400/30 transition-transform"
+                        className="bg-white rounded shadow-2xl overflow-hidden border border-slate-400/30 transition-transform w-full"
                         style={{
-                          width: '100%',
                           aspectRatio: '210 / 297',
                         }}
                       >
@@ -417,8 +415,7 @@ export const ModalVisualizadorPDF: React.FC<ModalVisualizadorPDFProps> = ({
                 ) : (
                   /* Modo Folha Única */
                   <div
-                    className="flex flex-col items-center"
-                    style={{ width: '100%', maxWidth: '210mm' }}
+                    className="flex flex-col items-center w-full"
                   >
                     <div className="w-full flex items-center justify-between text-[11px] text-slate-300 font-semibold mb-2 px-1">
                       <span className="bg-[#c9a84e] text-[#1a2b4c] font-black px-2 py-0.5 rounded text-[10px]">
@@ -428,9 +425,8 @@ export const ModalVisualizadorPDF: React.FC<ModalVisualizadorPDFProps> = ({
                     </div>
 
                     <div
-                      className="bg-white rounded-xs shadow-2xl overflow-hidden border border-slate-400/30"
+                      className="bg-white rounded shadow-2xl overflow-hidden border border-slate-400/30 w-full"
                       style={{
-                        width: '100%',
                         aspectRatio: '210 / 297',
                       }}
                     >

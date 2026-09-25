@@ -425,11 +425,11 @@ export const DashboardGestaoArquivo: React.FC<DashboardGestaoArquivoProps> = ({
                   <button
                     type="button"
                     onClick={() => onVisualizarInforme(inf)}
-                    className="flex items-center gap-1 bg-slate-700 hover:bg-slate-800 text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg transition shadow-2xs cursor-pointer"
-                    title="Consultar e pré-visualizar este informe arquivado"
+                    className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition shadow-2xs cursor-pointer"
+                    title="Visualizar relatório oficial formatado"
                   >
                     <Eye size={13} />
-                    <span>Consultar</span>
+                    <span>Visualizar</span>
                   </button>
 
                   <button

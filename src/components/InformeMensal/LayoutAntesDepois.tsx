@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PaginaFotoServico, FotoCard, DetalhesIntervencao, TipoBadgeFoto } from '../../types';
+import { PaginaFotoServico, FotoCard, TipoBadgeFoto } from '../../types';
 import { BadgeFotoColorido } from './BadgeFotoColorido';
 import {
   Upload,
@@ -7,10 +7,6 @@ import {
   Download,
   Loader2,
   Trash2,
-  MapPin,
-  Users,
-  Calendar,
-  CheckCircle2,
   Palette,
   Edit3,
   X,
@@ -88,11 +84,6 @@ export const LayoutAntesDepois: React.FC<LayoutAntesDepoisProps> = ({
       ];
       onUpdatePagina('fotos', novas);
     }
-  };
-
-  const handleUpdateDetalhes = (campo: keyof DetalhesIntervencao, valor: any) => {
-    const detalhesAtuais = pagina.detalhes || {};
-    onUpdatePagina('detalhes', { ...detalhesAtuais, [campo]: valor });
   };
 
   const renderCardComparativo = (
@@ -427,8 +418,6 @@ export const LayoutAntesDepois: React.FC<LayoutAntesDepoisProps> = ({
     );
   };
 
-  const detalhes = pagina.detalhes || {};
-
   return (
     <div className="space-y-4 my-2">
       {/* Barra de Ferramentas Dedicada ao Antes e Depois (com botão de inversão) */}
@@ -471,98 +460,6 @@ export const LayoutAntesDepois: React.FC<LayoutAntesDepoisProps> = ({
 
         {/* Card DEPOIS */}
         {renderCardComparativo(fotoDepois, 1, 'depois')}
-      </div>
-
-      {/* Ficha Técnica / Metadados da Intervenção Predial (Impressa no PDF) */}
-      <div className="bg-slate-50 border border-slate-300 rounded-lg p-3 text-xs shadow-2xs">
-        <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-slate-200">
-          <span className="font-heading font-extrabold text-[11px] text-[#1a2b4c] uppercase tracking-wider flex items-center gap-1.5">
-            <CheckCircle2 size={14} className="text-emerald-600" />
-            <span>Ficha Técnica da Intervenção e Execução</span>
-          </span>
-
-          {/* Status da Intervenção */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-slate-500 font-bold uppercase">Status:</span>
-            {modoEdicao ? (
-              <select
-                value={detalhes.statusIntervencao || '100% Concluído'}
-                onChange={(e) => handleUpdateDetalhes('statusIntervencao', e.target.value)}
-                className="text-[11px] font-bold text-emerald-800 bg-white border border-emerald-300 rounded px-2 py-0.5 focus:ring-1 focus:ring-emerald-500 outline-none cursor-pointer"
-              >
-                <option value="100% Concluído">✅ 100% Concluído</option>
-                <option value="Em Andamento">⏳ Em Andamento</option>
-                <option value="Fase Final">🏁 Fase Final de Acabamento</option>
-                <option value="Emergencial">🚨 Intervenção Emergencial</option>
-              </select>
-            ) : (
-              <span className="text-[11px] font-extrabold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded">
-                {detalhes.statusIntervencao || '✅ 100% Concluído'}
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {/* Local */}
-          <div>
-            <label className="text-[9.5px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1 mb-0.5">
-              <MapPin size={11} className="text-[#b89535]" />
-              <span>Local / Instalação:</span>
-            </label>
-            <input
-              type="text"
-              disabled={!modoEdicao}
-              value={detalhes.local || ''}
-              onChange={(e) => handleUpdateDetalhes('local', e.target.value)}
-              placeholder="Ex: Alojamento 3ª Cia - Bloco B"
-              className="w-full text-xs font-semibold text-slate-900 bg-transparent border border-transparent hover:border-slate-300 focus:border-[#1a2b4c] focus:bg-white rounded px-1.5 py-0.5 outline-none transition"
-            />
-          </div>
-
-          {/* Equipe Responsável */}
-          <div>
-            <label className="text-[9.5px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1 mb-0.5">
-              <Users size={11} className="text-[#1a2b4c]" />
-              <span>Equipe / Encarregado:</span>
-            </label>
-            <input
-              type="text"
-              disabled={!modoEdicao}
-              value={detalhes.responsavel || ''}
-              onChange={(e) => handleUpdateDetalhes('responsavel', e.target.value)}
-              placeholder="Ex: Cad PM Cristian / Cb PM Ribeiro"
-              className="w-full text-xs font-semibold text-slate-900 bg-transparent border border-transparent hover:border-slate-300 focus:border-[#1a2b4c] focus:bg-white rounded px-1.5 py-0.5 outline-none transition"
-            />
-          </div>
-
-          {/* Período */}
-          <div>
-            <label className="text-[9.5px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1 mb-0.5">
-              <Calendar size={11} className="text-[#b89535]" />
-              <span>Período da Execução:</span>
-            </label>
-            <div className="flex items-center gap-1">
-              <input
-                type="text"
-                disabled={!modoEdicao}
-                value={detalhes.dataInicio || ''}
-                onChange={(e) => handleUpdateDetalhes('dataInicio', e.target.value)}
-                placeholder="Início (ex: 15/08)"
-                className="w-1/2 text-xs font-semibold text-slate-900 bg-transparent border border-transparent hover:border-slate-300 focus:border-[#1a2b4c] focus:bg-white rounded px-1.5 py-0.5 outline-none transition"
-              />
-              <span className="text-slate-400 font-bold">a</span>
-              <input
-                type="text"
-                disabled={!modoEdicao}
-                value={detalhes.dataTermino || ''}
-                onChange={(e) => handleUpdateDetalhes('dataTermino', e.target.value)}
-                placeholder="Término (ex: 20/08)"
-                className="w-1/2 text-xs font-semibold text-slate-900 bg-transparent border border-transparent hover:border-slate-300 focus:border-[#1a2b4c] focus:bg-white rounded px-1.5 py-0.5 outline-none transition"
-              />
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );

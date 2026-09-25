@@ -183,13 +183,6 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
       anotacao: '✅ Intervenção concluída garantindo a segurança, funcionalidade e habitabilidade das instalações.',
       tipoGrid: 'antes_depois',
       layoutDedicado: 'antes_depois',
-      detalhes: {
-        local: 'Alojamentos da 3ª Cia',
-        responsavel: usuarioLogado?.nome || 'Equipe da Manutenção',
-        dataInicio: new Date().toLocaleDateString('pt-BR'),
-        dataTermino: new Date().toLocaleDateString('pt-BR'),
-        statusIntervencao: '100% Concluído',
-      },
       fotos: [
         {
           id: gerarId(),
@@ -781,11 +774,11 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
               <button
                 type="button"
                 onClick={() => setModalPdfAberto(true)}
-                className="flex items-center gap-1 bg-[#b89535] hover:bg-[#a48228] text-white text-xs font-semibold px-2.5 py-2 rounded-md transition shadow-sm cursor-pointer"
-                title="Visualizar relatório oficial, exportar arquivo em PDF ou imprimir"
+                className="flex items-center gap-1.5 bg-[#b89535] hover:bg-[#a48228] text-white text-xs font-bold px-3 py-2 rounded-md transition shadow-sm cursor-pointer"
+                title="Visualizar relatório oficial formatado em folhas A4, exportar PDF ou imprimir"
               >
-                <Printer size={14} />
-                <span>PDF</span>
+                <Eye size={14} />
+                <span>Visualizar Relatório Oficial</span>
               </button>
               <button
                 type="button"
@@ -1938,6 +1931,20 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
                 <button
                   type="button"
                   onClick={() => {
+                    onChangeInformeAtual(informeParaVisualizar);
+                    setInformeParaVisualizar(null);
+                    setSubAba('edicao');
+                    setTimeout(() => setModalPdfAberto(true), 200);
+                  }}
+                  className="bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold px-3 py-1.5 rounded transition shadow-xs cursor-pointer flex items-center gap-1.5"
+                  title="Abrir diretamente no Visualizador Oficial de PDF"
+                >
+                  <Eye size={13} className="text-[#c9a84e]" />
+                  <span>Visualizar PDF Oficial</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
                     onCarregarInformeArquivado(informeParaVisualizar);
                     setInformeParaVisualizar(null);
                     setSubAba('edicao');
@@ -1961,7 +1968,7 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
             {/* Modal Content Preview */}
             <div className="p-4 overflow-y-auto space-y-6 flex-1 bg-slate-200/60">
               {/* Capa */}
-              <div className="bg-white p-6 rounded-lg border border-slate-300 shadow-sm max-w-3xl mx-auto font-sans">
+              <div className="bg-white p-8 rounded-lg border border-slate-300 shadow-sm w-full max-w-[210mm] mx-auto font-sans">
                 <div className="flex justify-between items-start border-b-2 border-black pb-2 mb-4 font-heading text-[10px] font-black uppercase">
                   <span>{informeParaVisualizar.cabecalhoEsquerda || 'ACADEMIA DE POLÍCIA MILITAR DO BARRO BRANCO - O003'}</span>
                   <span className="text-right whitespace-pre-line">{informeParaVisualizar.cabecalhoDireita || 'MANUTENÇÃO 3ª CIA\nCIA ES'}</span>
@@ -2029,7 +2036,7 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
 
               {/* Páginas de Serviços e Fotos */}
               {informeParaVisualizar.paginas.map((pag, idx) => (
-                <div key={pag.id} className="bg-white p-6 rounded-lg border border-slate-300 shadow-sm max-w-2xl mx-auto font-sans">
+                <div key={pag.id} className="bg-white p-8 rounded-lg border border-slate-300 shadow-sm w-full max-w-[210mm] mx-auto font-sans">
                   <div className="flex justify-between items-center border-b-2 border-black pb-2 mb-4 font-heading text-[10px] font-black uppercase">
                     <span>PÁGINA {idx + 2} • {pag.tituloServico}</span>
                     <span>DATA: {pag.dataServico}</span>
@@ -2064,7 +2071,7 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
                               />
                             </div>
                           )}
-                          <img src={f.url} alt={f.legenda} className="w-full h-40 object-cover" />
+                          <img src={f.url} alt={f.legenda} className="w-full h-52 sm:h-60 object-cover" />
                           <div className="p-2 text-[11px] font-bold text-slate-800 text-center border-t border-slate-200">
                             {f.legenda}
                           </div>
