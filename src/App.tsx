@@ -411,18 +411,9 @@ export default function App() {
           });
         }
 
-        if (informeDB && typeof informeDB === 'object') {
-          setInformeAtual((atual) => {
-            const fotosNoDB =
-              (informeDB.paginas || []).some((p) => (p.fotos || []).length > 0) ||
-              !!informeDB.capaUrl;
-            const fotosNoAtual =
-              (atual.paginas || []).some((p) => (p.fotos || []).length > 0) ||
-              !!atual.capaUrl;
-            if (fotosNoDB && !fotosNoAtual) {
-              return { ...DADOS_INICIAIS_INFORME, ...informeDB };
-            }
-            return atual;
+        if (informeDB && typeof informeDB === 'object' && informeDB.id) {
+          setInformeAtual(() => {
+            return { ...DADOS_INICIAIS_INFORME, ...informeDB };
           });
         }
 
@@ -534,7 +525,21 @@ export default function App() {
     const materiaisFinal = Array.isArray(dados.materiaisUsados) ? dados.materiaisUsados : [];
     const ferramentasFinais = Array.isArray(dados.ferramentas) && dados.ferramentas.length > 0 ? dados.ferramentas : DADOS_INICIAIS_FERRAMENTAS;
     const itensComprasFinais = Array.isArray(dados.itensCompras) && dados.itensCompras.length > 0 ? dados.itensCompras : DADOS_INICIAIS_LISTA_COMPRAS;
-    const informeFinal = dados.informeAtual ? { ...DADOS_INICIAIS_INFORME, ...dados.informeAtual } : DADOS_INICIAIS_INFORME;
+    let informeFinal = DADOS_INICIAIS_INFORME;
+    setInformeAtual((atualLocal) => {
+      if (!dados.informeAtual || !dados.informeAtual.id) {
+        informeFinal = atualLocal && atualLocal.id ? atualLocal : DADOS_INICIAIS_INFORME;
+        return informeFinal;
+      }
+      const tempoRemoto = new Date(dados.informeAtual.ultimaAtualizacao || dados.ultimaAtualizacao || 0).getTime();
+      const tempoLocal = new Date(atualLocal?.ultimaAtualizacao || 0).getTime();
+      if (!isNaN(tempoLocal) && !isNaN(tempoRemoto) && tempoLocal > tempoRemoto && tempoLocal > 0) {
+        informeFinal = atualLocal;
+        return atualLocal;
+      }
+      informeFinal = { ...DADOS_INICIAIS_INFORME, ...dados.informeAtual };
+      return informeFinal;
+    });
     const informesArquivadosFinais = Array.isArray(dados.informesArquivados) ? dados.informesArquivados : [];
     const arquivosSalvosFinais = Array.isArray(dados.arquivosSalvos) ? dados.arquivosSalvos : [];
     const missoesFinais = Array.isArray(dados.missoes) && dados.missoes.length > 0 ? dados.missoes : DADOS_INICIAIS_MISSOES;
@@ -549,7 +554,7 @@ export default function App() {
     setMateriaisUsados(materiaisFinal);
     setFerramentas(ferramentasFinais);
     setItensCompras(itensComprasFinais);
-    setInformeAtual(informeFinal);
+    // setInformeAtual já foi atualizado acima preservando edições locais mais recentes
     setInformesArquivados(informesArquivadosFinais);
     setArquivosSalvos(arquivosSalvosFinais);
     setMissoes(missoesFinais);
@@ -844,6 +849,36 @@ export default function App() {
       setUltimaSincronizacao(new Date().toLocaleTimeString('pt-BR'));
     } catch (err: any) {
       console.error(err);
+      if (err?.code === 'permission-denied') {
+        setStatusFirebase('erro-permissao');
+      } else {
+        setStatusFirebase('offline');
+      }
+    }
+  };
+
+  const handleSalvarManualInforme = async (informeParaSalvar?: InformeMensal) => {
+    const inf = informeParaSalvar || informeAtual;
+    const agoraFormatada = new Date().toLocaleString('pt-BR');
+    const informeComTimestamp: InformeMensal = {
+      ...inf,
+      ultimaAtualizacao: agoraFormatada,
+      autorUltimaAtualizacao: usuarioLogado?.nome || inf.autorUltimaAtualizacao || 'Operador',
+    };
+
+    setInformeAtual(informeComTimestamp);
+    try {
+      localStorage.setItem('pmesp_informe_atual', JSON.stringify(informeComTimestamp));
+    } catch (e) {}
+    await salvarItemIndexedDB('pmesp_informe_atual', informeComTimestamp);
+
+    setStatusFirebase('salvando');
+    try {
+      await salvarDadosFirestore({ informeAtual: informeComTimestamp });
+      setStatusFirebase('conectado');
+      setUltimaSincronizacao(new Date().toLocaleTimeString('pt-BR'));
+    } catch (err: any) {
+      console.warn('Aviso no salvamento remoto do informe:', err);
       if (err?.code === 'permission-denied') {
         setStatusFirebase('erro-permissao');
       } else {
@@ -1251,6 +1286,7 @@ export default function App() {
             onExcluirInformeArquivado={handleExcluirInformeArquivado}
             onLimparHistoricoInformes={handleLimparHistoricoInformes}
             onImportarBackupInformes={handleImportarBackupInformes}
+            onSalvarDocumento={handleSalvarManualInforme}
             usuarioLogado={usuarioLogado}
             membros={membros}
           />

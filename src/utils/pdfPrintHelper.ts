@@ -36,6 +36,22 @@ export function executarImpressaoA4(containerElement: HTMLElement, titulo: strin
     // 3. Clona o elemento original mantendo estrutura
     const clone = containerElement.cloneNode(true) as HTMLElement;
 
+    // Normaliza largura e remove qualquer zoom ou escala residual da UI da tela
+    clone.style.width = '100%';
+    clone.style.minWidth = '100%';
+    clone.style.maxWidth = '100%';
+    clone.style.transform = 'none';
+    clone.style.margin = '0 auto';
+    clone.style.padding = '0';
+
+    // Normaliza elementos internos que possam ter herdado largura fixa em pixels da tela
+    clone.querySelectorAll<HTMLElement>('#documento-informe-oficial-wrapper, #documento-informe-print-wrapper, .apmbb-page, .apmbb-capa-page').forEach((el) => {
+      el.style.width = '';
+      el.style.minWidth = '';
+      el.style.maxWidth = '';
+      el.style.transform = 'none';
+    });
+
     // 4. Converte campos editáveis (inputs, textareas, selects) em texto estático com estilo fiel
     const origInputs = containerElement.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
       'input, textarea, select'

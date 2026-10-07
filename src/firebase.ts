@@ -148,6 +148,7 @@ export async function carregarDadosFirestore(): Promise<DadosSistemaFirestore | 
     const refHistorico = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_HISTORICO);
     const refArquivosSalvos = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_ARQUIVOS_SALVOS);
     const colInformesIndividuais = collection(db, FIRESTORE_COLLECTION, 'dados_historico', 'informes');
+    const colPaginasInforme = collection(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_INFORME, 'paginas');
 
     // Leituras diretas no servidor com fallback suave
     const [
@@ -157,6 +158,7 @@ export async function carregarDadosFirestore(): Promise<DadosSistemaFirestore | 
       snapHistorico,
       snapArquivosSalvos,
       snapColInformes,
+      snapColPaginasInforme,
     ] = await Promise.all([
       lerDocServidorComFallback(refGeral),
       lerDocServidorComFallback(refMissoes),
@@ -164,6 +166,7 @@ export async function carregarDadosFirestore(): Promise<DadosSistemaFirestore | 
       lerDocServidorComFallback(refHistorico),
       lerDocServidorComFallback(refArquivosSalvos),
       lerColecaoServidorComFallback(colInformesIndividuais),
+      lerColecaoServidorComFallback(colPaginasInforme),
     ]);
 
     const temAlgumDado =
@@ -185,7 +188,28 @@ export async function carregarDadosFirestore(): Promise<DadosSistemaFirestore | 
     const dadosArquivosSalvos = snapArquivosSalvos?.exists() ? (snapArquivosSalvos.data() as Record<string, any>) : null;
 
     const missoesFinais = (dadosMissoes?.missoes as MissaoDiaria[]) || dadosGerais.missoes;
-    const informeFinal = (dadosInforme?.informeAtual as InformeMensal) || dadosGerais.informeAtual;
+    let informeFinal = (dadosInforme?.informeAtual as InformeMensal) || dadosGerais.informeAtual;
+
+    // Se houver páginas salvas na subcoleção particionada, mescla para garantir fotos completas
+    if (informeFinal && snapColPaginasInforme && !snapColPaginasInforme.empty) {
+      const mapaPaginasSub = new Map<string, any>();
+      snapColPaginasInforme.forEach((d) => {
+        if (d.exists()) {
+          const pg = d.data() as Record<string, any>;
+          if (pg && pg.id) mapaPaginasSub.set(pg.id, pg);
+        }
+      });
+      if (mapaPaginasSub.size > 0 && Array.isArray(informeFinal.paginas)) {
+        const paginasConsolidadas = informeFinal.paginas.map((p) => {
+          const subPg = mapaPaginasSub.get(p.id);
+          if (subPg && Array.isArray(subPg.fotos) && subPg.fotos.some((f: any) => f.url)) {
+            return { ...p, ...subPg };
+          }
+          return p;
+        });
+        informeFinal = { ...informeFinal, paginas: paginasConsolidadas };
+      }
+    }
 
     // Recupera informes arquivados tanto da subcoleção individual quanto do documento consolidado
     const mapInformes = new Map<string, InformeMensal>();
@@ -289,7 +313,7 @@ export async function salvarDadosFirestore(dados: Partial<DadosSistemaFirestore>
       );
     }
 
-    // 3. Informe Mensal e suas fotos (salvo em documento dedicado)
+    // 3. Informe Mensal e suas fotos (salvo em documento dedicado com particionamento automático)
     if (informeAtual !== undefined) {
       const refInforme = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_INFORME);
       promises.push(
@@ -300,7 +324,49 @@ export async function salvarDadosFirestore(dados: Partial<DadosSistemaFirestore>
             ultimaAtualizacao: timestamp,
           }),
           { merge: true }
-        )
+        ).catch(async (err) => {
+          console.warn('Aviso no salvamento direto de informeAtual no Firestore, acionando particionamento:', err);
+          try {
+            // Salva metadados e textos no documento principal sem estourar o limite de 1MB
+            const informeMetadados: any = {
+              ...informeAtual,
+              paginas: (informeAtual.paginas || []).map((p) => ({
+                id: p.id,
+                tituloServico: p.tituloServico,
+                dataServico: p.dataServico,
+                descricao: p.descricao,
+                anotacao: p.anotacao,
+                tipoGrid: p.tipoGrid,
+                fotos: (p.fotos || []).map((f) => ({
+                  id: f.id,
+                  legenda: f.legenda,
+                  tipoBadge: f.tipoBadge,
+                  badgeTexto: f.badgeTexto,
+                  badgeCor: f.badgeCor,
+                  url: typeof f.url === 'string' && f.url.length > 250000 ? '' : f.url,
+                })),
+              })),
+            };
+            await setDoc(
+              refInforme,
+              limparParaFirestore({
+                informeAtual: informeMetadados,
+                ultimaAtualizacao: timestamp,
+              }),
+              { merge: true }
+            );
+
+            // Grava cada página individualmente na subcoleção para nunca estourar a cota de 1MB
+            for (const pag of informeAtual.paginas || []) {
+              if (pag && pag.id) {
+                const refPag = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_INFORME, 'paginas', pag.id);
+                await setDoc(refPag, limparParaFirestore(pag), { merge: true });
+              }
+            }
+          } catch (partErr) {
+            console.warn('Aviso ao particionar páginas do informe no Firestore:', partErr);
+          }
+        })
       );
     }
 

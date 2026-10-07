@@ -120,6 +120,55 @@
   overflow: hidden;
 }
 
+/* 5.1 Capa Oficial do Informe Mensal - Preenchimento Completo da Folha A4 */
+.apmbb-capa-page {
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+  height: 297mm !important;
+  min-height: 297mm !important;
+  max-height: 297mm !important;
+  width: 210mm !important;
+  max-width: 210mm !important;
+  margin: 0 auto !important;
+  padding: 10mm 13mm 8mm 13mm !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+  background: #ffffff !important;
+}
+
+.apmbb-capa-conteudo {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 auto !important;
+  justify-content: space-between !important;
+  height: 100% !important;
+  min-height: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.apmbb-capa-banner {
+  height: 420px !important;
+  min-height: 380px !important;
+  max-height: 460px !important;
+  width: 100% !important;
+  flex-shrink: 0 !important;
+}
+
+.apmbb-capa-banner img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
+
+.apmbb-capa-grid {
+  flex: 1 1 auto !important;
+  display: grid !important;
+  grid-template-columns: 260px 1fr !important;
+  gap: 20px !important;
+  min-height: 0 !important;
+}
+
 /* 6. Pauta Diária de Missões */
 .pauta-diaria-page {
   background: white;
@@ -237,6 +286,7 @@
 
   /* Evita folha em branco residual na última página */
   .apmbb-page:last-child,
+  .apmbb-capa-page:last-child,
   .pesquisa-page:last-child,
   .balancete-page:last-child,
   .textoparte-page:last-child,
@@ -244,6 +294,68 @@
   .pauta-diaria-page:last-child {
     page-break-after: auto !important;
     break-after: auto !important;
+  }
+
+  /* Ajustes da Capa na Impressão Oficial A4 - Preenchimento Perfeito de Folha Inteira */
+  .apmbb-capa-page {
+    width: 210mm !important;
+    max-width: 210mm !important;
+    height: 297mm !important;
+    max-height: 297mm !important;
+    min-height: 297mm !important;
+    margin: 0 auto !important;
+    padding: 10mm 13mm 8mm 13mm !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    background: #ffffff !important;
+  }
+
+  .apmbb-capa-conteudo {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 1 auto !important;
+    justify-content: space-between !important;
+    height: 100% !important;
+    min-height: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .apmbb-capa-banner {
+    height: 420px !important;
+    min-height: 380px !important;
+    max-height: 460px !important;
+    width: 100% !important;
+    flex-shrink: 0 !important;
+  }
+
+  .apmbb-capa-banner img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+  }
+
+  .apmbb-capa-grid {
+    flex: 1 1 auto !important;
+    display: grid !important;
+    grid-template-columns: 260px 1fr !important;
+    gap: 20px !important;
+    min-height: 0 !important;
+  }
+
+  /* Garante que o wrapper da folha oficial de impressão ocupe sempre a largura total A4 */
+  #folha-impressao-a4-ativa > div,
+  #folha-impressao-a4-ativa #documento-informe-oficial-wrapper,
+  #folha-impressao-a4-ativa #documento-informe-print-wrapper {
+    width: 210mm !important;
+    min-width: 210mm !important;
+    max-width: 210mm !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
   }
 
   /* Wrappers não geram quebras duplicadas */

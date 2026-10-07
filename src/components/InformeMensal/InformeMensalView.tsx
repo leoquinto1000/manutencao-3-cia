@@ -9,6 +9,7 @@ import {
   HistoricoModificacaoInforme,
 } from '../../types';
 import { gerarId, baixarFoto, comprimirImagemParaArmazenamento, DADOS_INICIAIS_INFORME } from '../../utils';
+import { salvarItemIndexedDB } from '../../utils/indexedDbStorage';
 import { ModalVisualizadorPDF } from '../PrestacaoContas/ModalVisualizadorPDF';
 import { executarImpressaoA4, gerarDocumentoPdf } from '../../utils/pdfPrintHelper';
 import { LayoutAntesDepois } from './LayoutAntesDepois';
@@ -56,6 +57,7 @@ import {
   CheckCircle2,
   Clock,
   AlertCircle,
+  Save,
 } from 'lucide-react';
 
 interface InformeMensalViewProps {
@@ -67,6 +69,7 @@ interface InformeMensalViewProps {
   onExcluirInformeArquivado: (id: string) => void;
   onLimparHistoricoInformes: () => void;
   onImportarBackupInformes?: (informes: InformeMensal[]) => void;
+  onSalvarDocumento?: (informe?: InformeMensal) => Promise<void> | void;
   usuarioLogado?: { nome?: string; graduacaoOuCargo?: string; email?: string } | null;
   membros?: MembroEquipe[];
 }
@@ -80,6 +83,7 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
   onExcluirInformeArquivado,
   onLimparHistoricoInformes,
   onImportarBackupInformes,
+  onSalvarDocumento,
   usuarioLogado,
   membros = [],
 }) => {
@@ -99,12 +103,12 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
   const [paginaParaExcluirId, setPaginaParaExcluirId] = useState<string | null>(null);
   const [mensagemSucesso, setMensagemSucesso] = useState<string | null>(null);
   const [filtroPesquisa, setFiltroPesquisa] = useState<string>('');
+  const [salvandoDocumento, setSalvandoDocumento] = useState<boolean>(false);
   const [modoEdicaoDestaques, setModoEdicaoDestaques] = useState<boolean>(false);
   const [destaqueEmEdicaoId, setDestaqueEmEdicaoId] = useState<string | null>(null);
 
   const documentoRef = useRef<HTMLDivElement>(null);
   const inputCapaRef = useRef<HTMLInputElement>(null);
-  const inputNovaPaginaFotosRef = useRef<HTMLInputElement>(null);
   const [carregandoCapa, setCarregandoCapa] = useState<boolean>(false);
   const [isDraggingCapa, setIsDraggingCapa] = useState<boolean>(false);
 
@@ -132,10 +136,58 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
   });
 
   const handleUpdateField = (field: keyof InformeMensal, val: any) => {
-    onChangeInformeAtual({ ...informeAtualRef.current, [field]: val });
+    const agora = new Date().toLocaleString('pt-BR');
+    const atualizado: InformeMensal = {
+      ...informeAtualRef.current,
+      [field]: val,
+      ultimaAtualizacao: agora,
+    };
+    onChangeInformeAtual(atualizado);
+    salvarItemIndexedDB('pmesp_informe_atual', atualizado);
+  };
+
+  const handleSalvarManual = async () => {
+    setSalvandoDocumento(true);
+    const agora = new Date().toLocaleString('pt-BR');
+    const autor = usuarioLogado?.nome || informeAtualRef.current.autorUltimaAtualizacao || 'Operador';
+    const atualizado: InformeMensal = {
+      ...informeAtualRef.current,
+      ultimaAtualizacao: agora,
+      autorUltimaAtualizacao: autor,
+    };
+
+    onChangeInformeAtual(atualizado);
+    await salvarItemIndexedDB('pmesp_informe_atual', atualizado);
+    try {
+      localStorage.setItem('pmesp_informe_atual', JSON.stringify(atualizado));
+    } catch (e) {}
+
+    if (onSalvarDocumento) {
+      try {
+        await onSalvarDocumento(atualizado);
+      } catch (err) {
+        console.warn('Aviso no salvamento remoto do informe:', err);
+      }
+    }
+
+    setSalvandoDocumento(false);
+    setMensagemSucesso('💾 Documento oficial do Informe Mensal salvo com sucesso no banco de dados e no dispositivo!');
+    setTimeout(() => setMensagemSucesso(null), 4000);
   };
 
   const handleImprimirOficial = () => {
+    if (subAba === 'visualizar' && modoExibicaoFolhas === 'individual') {
+      setModoExibicaoFolhas('todas');
+      setTimeout(() => {
+        const el = documentoOficialVisualizacaoRef.current || documentoRef.current;
+        if (el) {
+          executarImpressaoA4(el, `Informe_Mensal_APMBB_${(informeAtual.mesAno || 'Mensal').replace(/[\s/]+/g, '_')}`);
+        } else {
+          window.print();
+        }
+      }, 150);
+      return;
+    }
     const el = documentoOficialVisualizacaoRef.current || documentoRef.current;
     if (el) {
       executarImpressaoA4(el, `Informe_Mensal_APMBB_${(informeAtual.mesAno || 'Mensal').replace(/[\s/]+/g, '_')}`);
@@ -179,8 +231,8 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
 
         let finalDataUrl = rawDataUrl;
         try {
-          // Comprime suavemente para otimização de render e armazenamento
-          const compressed = await comprimirImagemParaArmazenamento(rawDataUrl, 1280, 0.76);
+          // Comprime de forma otimizada para carregamento veloz e armazenamento seguro
+          const compressed = await comprimirImagemParaArmazenamento(rawDataUrl, 1000, 0.72);
           if (compressed && compressed.length > 50) {
             finalDataUrl = compressed;
           }
@@ -208,7 +260,7 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
 
   const handleRestaurarCapaPadrao = () => {
     handleUpdateField('capaUrl', DADOS_INICIAIS_INFORME.capaUrl);
-    handleUpdateField('capaAltura', 195);
+    handleUpdateField('capaAltura', 335);
     setMensagemSucesso('🔄 Imagem da capa restaurada para o padrão oficial.');
     setTimeout(() => setMensagemSucesso(null), 3000);
   };
@@ -385,7 +437,7 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
       const fotosCarregadas: FotoCard[] = [];
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const dataUrl = await comprimirImagemParaArmazenamento(file, 1200, 0.78);
+        const dataUrl = await comprimirImagemParaArmazenamento(file, 1000, 0.72);
         if (dataUrl && dataUrl.length > 50 && !dataUrl.startsWith('data:,')) {
           const prefixo = i === 0 ? 'ANTES: ' : i === 1 ? 'DEPOIS: ' : '';
           const nomeLimpo = file.name.replace(/\.[^/.]+$/, '').toUpperCase();
@@ -475,7 +527,7 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
     const key = `${pagId}-${fotoId}`;
     setUploadingFotoKey(key);
     try {
-      const dataUrl = await comprimirImagemParaArmazenamento(file, 1200, 0.78);
+      const dataUrl = await comprimirImagemParaArmazenamento(file, 1000, 0.72);
       if (!dataUrl || dataUrl.length < 50 || dataUrl.startsWith('data:,')) {
         throw new Error('Falha ao processar arquivo de imagem');
       }
@@ -503,7 +555,7 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
     try {
       const novasFotos: FotoCard[] = [];
       for (const file of files) {
-        const dataUrl = await comprimirImagemParaArmazenamento(file, 1200, 0.78);
+        const dataUrl = await comprimirImagemParaArmazenamento(file, 1000, 0.72);
         if (dataUrl && dataUrl.length > 50 && !dataUrl.startsWith('data:,')) {
           novasFotos.push({
             id: gerarId(),
@@ -598,7 +650,7 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
       cabecalhoEsquerda: 'ACADEMIA DE POLÍCIA MILITAR DO BARRO BRANCO - O003',
       cabecalhoDireita: 'MANUTENÇÃO 3ª CIA\nCIA ES',
       capaUrl: DADOS_INICIAIS_INFORME.capaUrl,
-      capaAltura: 195,
+      capaAltura: 335,
       equipeTexto: '',
       resumoTexto: '',
       tituloDestaques: 'Dentre as principais atividades executadas, destacam-se:',
@@ -789,39 +841,31 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
                 <span>+ Antes & Depois</span>
               </button>
 
-              {/* Input oculto para carregar fotos do PC e criar nova página automaticamente */}
-              <input
-                ref={inputNovaPaginaFotosRef}
-                type="file"
-                multiple
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  if (e.target.files && e.target.files.length > 0) {
-                    handleCriarPaginaComFotosDoPC(e.target.files);
-                    e.target.value = '';
-                  }
-                }}
-              />
               <button
                 type="button"
-                onClick={() => inputNovaPaginaFotosRef.current?.click()}
-                className="flex items-center gap-1 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold px-2.5 py-2 rounded-md transition shadow-sm cursor-pointer"
-                title="Criar nova página carregando diretamente as fotos do seu computador"
+                onClick={handleSalvarManual}
+                disabled={salvandoDocumento}
+                className="flex items-center gap-1.5 bg-[#b89535] hover:bg-[#a3822b] text-white text-xs font-bold px-3 py-2 rounded-md transition shadow-sm cursor-pointer disabled:opacity-60"
+                title="Salvar alterações deste documento no banco de dados e no navegador"
               >
-                <Upload size={14} />
-                <span>+ Fotos PC</span>
+                {salvandoDocumento ? (
+                  <Loader2 size={14} className="animate-spin text-white" />
+                ) : (
+                  <Save size={14} className="text-white" />
+                )}
+                <span>{salvandoDocumento ? 'Salvando...' : 'Salvar Documento'}</span>
               </button>
 
               <button
                 type="button"
-                onClick={handleAddPaginaFotos}
-                className="flex items-center gap-1 bg-[#1a2b4c] hover:bg-[#2c4373] text-white text-xs font-semibold px-2.5 py-2 rounded-md transition shadow-sm cursor-pointer"
-                title="Adicionar nova página com fotos de serviços"
+                onClick={handleImprimirOficial}
+                className="flex items-center gap-1.5 bg-[#1a2b4c] hover:bg-[#2c4373] text-white text-xs font-bold px-3 py-2 rounded-md transition shadow-sm cursor-pointer"
+                title="Imprimir relatório oficial completo em folhas A4 diretamente"
               >
-                <Plus size={14} />
-                <span>+ Pág ({informeAtual.paginas.length})</span>
+                <Printer size={14} className="text-[#c9a84e]" />
+                <span>Imprimir A4</span>
               </button>
+
               <button
                 type="button"
                 onClick={() => handleArquivarComAuditoria()}
@@ -847,169 +891,175 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
                   Folha A4 • 210 × 297 mm
                 </span>
               </div>
-              <div className="apmbb-page bg-white">
-              <div>
-                {/* Header Institucional (Editável) */}
-                <div className="flex justify-between items-start border-b-2 border-black pb-1.5 mb-4 font-heading gap-4">
-                  <input
-                    type="text"
-                    value={informeAtual.cabecalhoEsquerda ?? 'ACADEMIA DE POLÍCIA MILITAR DO BARRO BRANCO - O003'}
-                    onChange={(e) => handleUpdateField('cabecalhoEsquerda', e.target.value.toUpperCase())}
-                    title="Clique para editar o cabeçalho institucional"
-                    className="text-[11px] font-black text-black tracking-wide uppercase bg-transparent border border-transparent hover:border-slate-300 focus:border-[#1a2b4c] focus:bg-blue-50/20 rounded px-1.5 py-0.5 w-full max-w-md transition outline-none"
-                  />
-                  <textarea
-                    rows={2}
-                    value={informeAtual.cabecalhoDireita ?? 'MANUTENÇÃO 3ª CIA\nCIA ES'}
-                    onChange={(e) => handleUpdateField('cabecalhoDireita', e.target.value.toUpperCase())}
-                    title="Clique para editar a subunidade/companhia"
-                    className="text-[11px] font-black text-black tracking-wide text-right uppercase leading-tight bg-transparent border border-transparent hover:border-slate-300 focus:border-[#1a2b4c] focus:bg-blue-50/20 rounded px-1.5 py-0.5 w-56 transition outline-none resize-none"
-                  />
-                </div>
-
-                {/* Cover photo banner com Suporte a Upload Direto, Drag & Drop e Troca Confiável */}
-                <div
-                  className={`relative mb-4 group rounded-xl overflow-hidden border transition-all ${
-                    isDraggingCapa ? 'ring-3 ring-[#1a2b4c] border-[#1a2b4c]' : 'border-slate-300 shadow-sm'
-                  }`}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setIsDraggingCapa(true);
-                  }}
-                  onDragLeave={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setIsDraggingCapa(false);
-                  }}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setIsDraggingCapa(false);
-                    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                      handleUploadCapa(e.dataTransfer.files[0]);
-                    }
-                  }}
-                >
-                  <div
-                    className="bg-black transition-all relative flex items-center justify-center overflow-hidden"
-                    style={{ height: `${informeAtual.capaAltura || 195}px` }}
-                  >
-                    <img
-                      src={informeAtual.capaUrl || DADOS_INICIAIS_INFORME.capaUrl}
-                      alt="Banner Capa Fachada"
-                      className="w-full h-full object-cover"
-                      crossOrigin="anonymous"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = DADOS_INICIAIS_INFORME.capaUrl;
-                      }}
-                    />
-
-                    {/* Indicador visual de processamento da capa */}
-                    {carregandoCapa && (
-                      <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex flex-col items-center justify-center text-white z-20">
-                        <Loader2 size={30} className="animate-spin mb-1.5 text-[#c9a84e]" />
-                        <span className="text-xs font-bold tracking-wide">Atualizando imagem da capa...</span>
+              {(() => {
+                const alturaCapaReal = (informeAtual.capaAltura && informeAtual.capaAltura > 350) ? informeAtual.capaAltura : 420;
+                return (
+                  <div className="apmbb-page apmbb-capa-page bg-white">
+                    <div className="apmbb-capa-conteudo flex-1 flex flex-col justify-between">
+                      {/* Header Institucional (Editável) */}
+                      <div className="flex justify-between items-start border-b-2 border-black pb-1.5 mb-3 font-heading gap-4">
+                        <input
+                          type="text"
+                          value={informeAtual.cabecalhoEsquerda ?? 'ACADEMIA DE POLÍCIA MILITAR DO BARRO BRANCO - O003'}
+                          onChange={(e) => handleUpdateField('cabecalhoEsquerda', e.target.value.toUpperCase())}
+                          title="Clique para editar o cabeçalho institucional"
+                          className="text-[11px] font-black text-black tracking-wide uppercase bg-transparent border border-transparent hover:border-slate-300 focus:border-[#1a2b4c] focus:bg-blue-50/20 rounded px-1.5 py-0.5 w-full max-w-md transition outline-none"
+                        />
+                        <textarea
+                          rows={2}
+                          value={informeAtual.cabecalhoDireita ?? 'MANUTENÇÃO 3ª CIA\nCIA ES'}
+                          onChange={(e) => handleUpdateField('cabecalhoDireita', e.target.value.toUpperCase())}
+                          title="Clique para editar a subunidade/companhia"
+                          className="text-[11px] font-black text-black tracking-wide text-right uppercase leading-tight bg-transparent border border-transparent hover:border-slate-300 focus:border-[#1a2b4c] focus:bg-blue-50/20 rounded px-1.5 py-0.5 w-56 transition outline-none resize-none"
+                        />
                       </div>
-                    )}
 
-                    {/* Indicador de Drag & Drop ativo */}
-                    {isDraggingCapa && (
-                      <div className="absolute inset-0 bg-blue-900/80 border-2 border-dashed border-white flex flex-col items-center justify-center text-white z-30">
-                        <Upload size={32} className="animate-bounce mb-1 text-white" />
-                        <span className="text-xs font-black uppercase tracking-wider">Solte a foto da fachada aqui</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Input de Arquivo oculto vinculado ao Ref */}
-                  <input
-                    ref={inputCapaRef}
-                    id="input-arquivo-capa"
-                    type="file"
-                    accept="image/*"
-                    style={{ display: 'none' }}
-                    onChange={(e) => {
-                      if (e.target.files && e.target.files[0]) {
-                        handleUploadCapa(e.target.files[0]);
-                        e.target.value = '';
-                      }
-                    }}
-                  />
-
-                  {/* Botões de Ação na Capa */}
-                  <div className="no-print absolute bottom-2.5 right-2.5 flex items-center gap-1.5 z-10">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        inputCapaRef.current?.click();
-                      }}
-                      disabled={carregandoCapa}
-                      className="bg-white/95 hover:bg-white text-slate-800 hover:text-[#1a2b4c] text-xs font-bold px-3 py-1.5 rounded-lg shadow-md hover:shadow-lg border border-slate-300/80 cursor-pointer transition flex items-center gap-1.5 backdrop-blur-xs disabled:opacity-50"
-                      title="Clique para selecionar uma nova foto da capa do seu dispositivo"
-                    >
-                      <Upload size={13} className="text-[#1a2b4c]" />
-                      <span>Alterar Imagem</span>
-                    </button>
-
-                    {informeAtual.capaUrl && informeAtual.capaUrl !== DADOS_INICIAIS_INFORME.capaUrl && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
+                      {/* Cover photo banner com Suporte a Upload Direto, Drag & Drop e Troca Confiável */}
+                      <div
+                        className={`apmbb-capa-banner relative mb-3 group rounded-xl overflow-hidden border transition-all ${
+                          isDraggingCapa ? 'ring-3 ring-[#1a2b4c] border-[#1a2b4c]' : 'border-slate-300 shadow-sm'
+                        }`}
+                        onDragOver={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          handleRestaurarCapaPadrao();
+                          setIsDraggingCapa(true);
                         }}
-                        disabled={carregandoCapa}
-                        className="bg-white/90 hover:bg-white text-slate-600 hover:text-red-700 text-[11px] font-semibold px-2 py-1.5 rounded-lg shadow-xs border border-slate-300/80 cursor-pointer transition flex items-center gap-1 backdrop-blur-xs"
-                        title="Restaurar a fachada padrão da APMBB"
+                        onDragLeave={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setIsDraggingCapa(false);
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setIsDraggingCapa(false);
+                          if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                            handleUploadCapa(e.dataTransfer.files[0]);
+                          }
+                        }}
                       >
-                        <RotateCcw size={11} />
-                        <span>Padrão</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
+                        <div
+                          className="bg-black transition-all relative flex items-center justify-center overflow-hidden w-full h-full"
+                          style={{ height: `${alturaCapaReal}px` }}
+                        >
+                          <img
+                            src={informeAtual.capaUrl || DADOS_INICIAIS_INFORME.capaUrl}
+                            alt="Banner Capa Fachada"
+                            className="w-full h-full object-cover"
+                            crossOrigin="anonymous"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = DADOS_INICIAIS_INFORME.capaUrl;
+                            }}
+                          />
 
-              {/* Titles */}
-              <div className="text-center mb-4 space-y-1">
-                <input
-                  type="text"
-                  value={informeAtual.titulo}
-                  onChange={(e) => handleUpdateField('titulo', e.target.value)}
-                  placeholder="TÍTULO DO INFORME"
-                  title="Clique para editar o título principal"
-                  className="font-heading text-xl font-extrabold text-[#1a2b4c] text-center w-full uppercase tracking-wide bg-transparent border border-transparent hover:border-slate-300 focus:border-[#1a2b4c] focus:bg-blue-50/20 rounded px-2 py-1 transition outline-none"
-                />
-                <input
-                  type="text"
-                  value={informeAtual.subtitulo}
-                  onChange={(e) => handleUpdateField('subtitulo', e.target.value)}
-                  placeholder="SUBTÍTULO DO INFORME"
-                  title="Clique para editar o subtítulo"
-                  className="font-heading text-xs font-black text-[#b89535] text-center w-full uppercase tracking-wider bg-transparent border border-transparent hover:border-slate-300 focus:border-[#1a2b4c] focus:bg-blue-50/20 rounded px-2 py-0.5 transition outline-none mt-0.5"
-                />
-              </div>
+                          {/* Indicador visual de processamento da capa */}
+                          {carregandoCapa && (
+                            <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex flex-col items-center justify-center text-white z-20">
+                              <Loader2 size={30} className="animate-spin mb-1.5 text-[#c9a84e]" />
+                              <span className="text-xs font-bold tracking-wide">Atualizando imagem da capa...</span>
+                            </div>
+                          )}
 
-              {/* Editorial Grid: Team and Text (Sem barra de rolagem, caixas ajustadas) */}
-              {(() => {
-                const totalLinhasEquipe = Math.max((informeAtual.equipeTexto || '').split('\n').length, 1);
-                const linhasEquipeCalc = Math.max(totalLinhasEquipe + 1, 14);
+                          {/* Indicador de Drag & Drop ativo */}
+                          {isDraggingCapa && (
+                            <div className="absolute inset-0 bg-blue-900/80 border-2 border-dashed border-white flex flex-col items-center justify-center text-white z-30">
+                              <Upload size={32} className="animate-bounce mb-1 text-white" />
+                              <span className="text-xs font-black uppercase tracking-wider">Solte a foto da fachada aqui</span>
+                            </div>
+                          )}
+                        </div>
 
-                const handlePreencherEfetivoCadastrado = () => {
-                  if (!membros || membros.length === 0) return;
-                  const nomesFormatados = membros
-                    .map((m) => `${m.graduacao} PM ${m.nomeGuerra}`)
-                    .join('\n');
-                  handleUpdateField('equipeTexto', nomesFormatados);
-                  setMensagemSucesso('📋 Lista da equipe preenchida com o efetivo cadastrado da 3ª Cia!');
-                  setTimeout(() => setMensagemSucesso(null), 3500);
-                };
+                        {/* Input de Arquivo oculto vinculado ao Ref */}
+                        <input
+                          ref={inputCapaRef}
+                          id="input-arquivo-capa"
+                          type="file"
+                          accept="image/*"
+                          style={{ display: 'none' }}
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files[0]) {
+                              handleUploadCapa(e.target.files[0]);
+                              e.target.value = '';
+                            }
+                          }}
+                        />
 
-                return (
-                  <div className="grid grid-cols-[260px_1fr] gap-5 mt-2">
+                        {/* Botões de Ação na Capa */}
+                        <div className="no-print absolute bottom-2.5 right-2.5 flex items-center gap-1.5 z-10">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              inputCapaRef.current?.click();
+                            }}
+                            disabled={carregandoCapa}
+                            className="bg-white/95 hover:bg-white text-slate-800 hover:text-[#1a2b4c] text-xs font-bold px-3 py-1.5 rounded-lg shadow-md hover:shadow-lg border border-slate-300/80 cursor-pointer transition flex items-center gap-1.5 backdrop-blur-xs disabled:opacity-50"
+                            title="Clique para selecionar uma nova foto da capa do seu dispositivo"
+                          >
+                            <Upload size={13} className="text-[#1a2b4c]" />
+                            <span>Alterar Imagem</span>
+                          </button>
+
+                          {informeAtual.capaUrl && informeAtual.capaUrl !== DADOS_INICIAIS_INFORME.capaUrl && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleRestaurarCapaPadrao();
+                              }}
+                              disabled={carregandoCapa}
+                              className="bg-white/90 hover:bg-white text-slate-600 hover:text-red-700 text-[11px] font-semibold px-2 py-1.5 rounded-lg shadow-xs border border-slate-300/80 cursor-pointer transition flex items-center gap-1 backdrop-blur-xs"
+                              title="Restaurar a fachada padrão da APMBB"
+                            >
+                              <RotateCcw size={11} />
+                              <span>Padrão</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Titles */}
+                      <div className="text-center mb-3 space-y-1">
+                        <input
+                          type="text"
+                          value={informeAtual.titulo}
+                          onChange={(e) => handleUpdateField('titulo', e.target.value)}
+                          placeholder="TÍTULO DO INFORME"
+                          title="Clique para editar o título principal"
+                          className="font-heading text-2xl font-black text-[#1a2b4c] text-center w-full uppercase tracking-wide bg-transparent border border-transparent hover:border-slate-300 focus:border-[#1a2b4c] focus:bg-blue-50/20 rounded px-2 py-0.5 transition outline-none"
+                        />
+                        <input
+                          type="text"
+                          value={informeAtual.subtitulo}
+                          onChange={(e) => handleUpdateField('subtitulo', e.target.value)}
+                          placeholder="SUBTÍTULO DO INFORME"
+                          title="Clique para editar o subtítulo"
+                          className="font-heading text-xs font-black text-[#b89535] text-center w-full uppercase tracking-wider bg-transparent border border-transparent hover:border-slate-300 focus:border-[#1a2b4c] focus:bg-blue-50/20 rounded px-2 py-0.5 transition outline-none mt-0.5"
+                        />
+                        <div className="font-heading text-[10.5px] font-bold text-slate-700 uppercase tracking-widest mt-0.5">
+                          PERÍODO: {informeAtual.mesAno || 'MENSAL'}
+                        </div>
+                      </div>
+
+                      {/* Editorial Grid: Team and Text (Sem barra de rolagem, caixas ajustadas) */}
+                      {(() => {
+                        const totalLinhasEquipe = Math.max((informeAtual.equipeTexto || '').split('\n').length, 1);
+                        const linhasEquipeCalc = Math.max(totalLinhasEquipe + 1, 14);
+
+                        const handlePreencherEfetivoCadastrado = () => {
+                          if (!membros || membros.length === 0) return;
+                          const nomesFormatados = membros
+                            .map((m) => `${m.graduacao} PM ${m.nomeGuerra}`)
+                            .join('\n');
+                          handleUpdateField('equipeTexto', nomesFormatados);
+                          setMensagemSucesso('📋 Lista da equipe preenchida com o efetivo cadastrado da 3ª Cia!');
+                          setTimeout(() => setMensagemSucesso(null), 3500);
+                        };
+
+                        return (
+                          <div className="apmbb-capa-grid grid grid-cols-[260px_1fr] gap-5 flex-1 border-t border-slate-300 pt-3">
                     {/* Team roster */}
                     <div className="border-r border-slate-300 pr-3 font-mono text-[10.5px] font-bold leading-relaxed text-slate-900 flex flex-col">
                       <div className="no-print flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-200 gap-1">
@@ -1393,20 +1443,21 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
                   </div>
                 );
               })()}
-            </div>
-
-            {/* Footer Institucional (Editável) */}
-            <div className="border-t-2 border-black pt-2 text-center font-heading text-[11px] font-black tracking-widest text-black uppercase mt-4">
-              <input
-                type="text"
-                value={informeAtual.rodapeTexto ?? 'BERÇO DO OFICIALATO PAULISTA'}
-                onChange={(e) => handleUpdateField('rodapeTexto', e.target.value.toUpperCase())}
-                title="Clique para editar o rodapé institucional"
-                className="text-center font-heading text-[11px] font-black tracking-widest text-black uppercase w-full bg-transparent border border-transparent hover:border-slate-300 focus:border-[#1a2b4c] focus:bg-blue-50/20 rounded py-0.5 outline-none transition"
-              />
-            </div>
+              {/* Footer Institucional (Editável) */}
+              <div className="border-t-2 border-black pt-2 pb-0.5 text-center font-heading text-[11px] font-black tracking-widest text-black uppercase mt-3 shrink-0">
+                <input
+                  type="text"
+                  value={informeAtual.rodapeTexto ?? 'BERÇO DO OFICIALATO PAULISTA'}
+                  onChange={(e) => handleUpdateField('rodapeTexto', e.target.value.toUpperCase())}
+                  title="Clique para editar o rodapé institucional"
+                  className="text-center font-heading text-[11px] font-black tracking-widest text-black uppercase w-full bg-transparent border border-transparent hover:border-slate-300 focus:border-[#1a2b4c] focus:bg-blue-50/20 rounded py-0.5 outline-none transition"
+                />
               </div>
             </div>
+          </div>
+        );
+      })()}
+    </div>
 
             {/* Dynamic Photo Pages */}
             {informeAtual.paginas.map((pagina, pagIdx) => (
@@ -2059,36 +2110,15 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
                 </button>
               </div>
 
-              {/* Action Buttons: Download PDF and Print */}
-              <button
-                type="button"
-                onClick={handleBaixarPdfOficial}
-                disabled={gerandoPdfDownload}
-                className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold px-3 py-1.5 rounded-md transition shadow-xs cursor-pointer"
-                title="Baixar arquivo oficial em formato PDF A4"
-              >
-                {gerandoPdfDownload ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
-                <span>{gerandoPdfDownload ? 'Gerando...' : 'Baixar PDF'}</span>
-              </button>
-
+              {/* Action Button: Print Only */}
               <button
                 type="button"
                 onClick={handleImprimirOficial}
-                className="flex items-center gap-1.5 bg-[#c9a84e] hover:bg-[#b8973f] text-[#1a2b4c] text-xs font-bold px-3.5 py-1.5 rounded-md transition shadow-xs cursor-pointer"
-                title="Enviar diretamente para a impressora no formato A4"
+                className="flex items-center gap-2 bg-[#b89535] hover:bg-[#a3822b] text-white text-xs font-extrabold px-4 py-2 rounded-md transition shadow-sm cursor-pointer"
+                title="Enviar diretamente para a impressora ou salvar em PDF no formato oficial A4"
               >
-                <Printer size={13} />
+                <Printer size={14} className="text-white" />
                 <span>Imprimir Folhas A4</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setModalPdfAberto(true)}
-                className="flex items-center gap-1 bg-slate-700 hover:bg-slate-800 text-white text-xs font-semibold px-2.5 py-1.5 rounded-md transition shadow-xs cursor-pointer"
-                title="Abrir no leitor avançado com PDF embutido"
-              >
-                <FileText size={13} className="text-[#c9a84e]" />
-                <span className="hidden sm:inline">PDF Embutido</span>
               </button>
             </div>
           </div>
@@ -2117,16 +2147,16 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
                     <span className="text-slate-400 text-[10px]">Padrão Institucional APMBB</span>
                   </div>
 
-                  <div className="apmbb-page bg-white shadow-2xl relative w-full" style={{ minHeight: '297mm' }}>
-                    <div>
+                  <div className="apmbb-page apmbb-capa-page bg-white shadow-2xl relative w-full">
+                    <div className="apmbb-capa-conteudo flex-1 flex flex-col justify-between h-full">
                       {/* Header Institucional */}
-                      <div className="flex justify-between items-start border-b-2 border-black pb-1.5 mb-4 font-heading gap-4 text-[11px] font-black text-black tracking-wide uppercase">
+                      <div className="flex justify-between items-start border-b-2 border-black pb-1.5 mb-3 font-heading gap-4 text-[11px] font-black text-black tracking-wide uppercase shrink-0">
                         <span>{informeAtual.cabecalhoEsquerda || 'ACADEMIA DE POLÍCIA MILITAR DO BARRO BRANCO - O003'}</span>
                         <span className="text-right whitespace-pre-line leading-tight">{informeAtual.cabecalhoDireita || 'MANUTENÇÃO 3ª CIA\nCIA ES'}</span>
                       </div>
 
-                      {/* Fachada / Capa */}
-                      <div className="mb-4 rounded-xl overflow-hidden border border-slate-300 shadow-xs bg-black" style={{ height: `${informeAtual.capaAltura || 195}px` }}>
+                      {/* Fachada / Capa Banner - Preenchimento Completo A4 */}
+                      <div className="apmbb-capa-banner relative mb-3 rounded-xl overflow-hidden border border-slate-300 shadow-sm bg-black shrink-0">
                         <img
                           src={informeAtual.capaUrl || DADOS_INICIAIS_INFORME.capaUrl}
                           alt="Fachada Institucional"
@@ -2136,8 +2166,8 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
                       </div>
 
                       {/* Titles */}
-                      <div className="text-center mb-4 space-y-1">
-                        <h1 className="font-heading text-xl font-extrabold text-[#1a2b4c] uppercase tracking-wide">
+                      <div className="apmbb-capa-titulos text-center mb-3 space-y-1 shrink-0">
+                        <h1 className="font-heading text-2xl font-black text-[#1a2b4c] uppercase tracking-wide">
                           {informeAtual.titulo || 'INFORME DE MANUTENÇÃO'}
                         </h1>
                         <p className="font-heading text-xs font-black text-[#b89535] uppercase tracking-wider">
@@ -2149,20 +2179,22 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
                       </div>
 
                       {/* Editorial Grid: Team & Text */}
-                      <div className="grid grid-cols-[250px_1fr] gap-5 mt-2 border-t border-slate-200 pt-3">
+                      <div className="apmbb-capa-grid grid grid-cols-[260px_1fr] gap-5 flex-1 border-t border-slate-300 pt-3 min-h-0">
                         {/* Team Roster */}
-                        <div className="border-r border-slate-300 pr-3 font-mono text-[10.5px] font-bold leading-relaxed text-slate-900 flex flex-col">
-                          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 font-sans mb-1.5 pb-1 border-b border-slate-200 flex items-center gap-1">
-                            <Users size={12} className="text-[#1a2b4c]" />
-                            <span>Equipe de Manutenção</span>
-                          </div>
-                          <div className="whitespace-pre-line leading-relaxed text-slate-900 font-bold">
-                            {informeAtual.equipeTexto || 'Efetivo da 3ª Cia Manutenção'}
+                        <div className="border-r border-slate-300 pr-3 font-mono text-[10.5px] font-bold leading-relaxed text-slate-900 flex flex-col justify-between">
+                          <div>
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 font-sans mb-1.5 pb-1 border-b border-slate-200 flex items-center gap-1">
+                              <Users size={12} className="text-[#1a2b4c]" />
+                              <span>Equipe de Manutenção</span>
+                            </div>
+                            <div className="whitespace-pre-line leading-relaxed text-slate-900 font-bold">
+                              {informeAtual.equipeTexto || 'Efetivo da 3ª Cia Manutenção'}
+                            </div>
                           </div>
                         </div>
 
                         {/* Editorial Content */}
-                        <div className="text-xs leading-relaxed text-slate-900 text-justify space-y-3 font-sans flex flex-col">
+                        <div className="text-xs leading-relaxed text-slate-900 text-justify space-y-3 font-sans flex flex-col justify-between">
                           <div>
                             <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
                               Resumo Editorial:
@@ -2190,11 +2222,11 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
                           </div>
                         </div>
                       </div>
-                    </div>
 
-                    {/* Footer Institucional */}
-                    <div className="border-t-2 border-black pt-2 text-center font-heading text-[11px] font-black tracking-widest text-black uppercase mt-4">
-                      {informeAtual.rodapeTexto || 'BERÇO DO OFICIALATO PAULISTA'}
+                      {/* Footer Institucional */}
+                      <div className="apmbb-capa-rodape border-t-2 border-black pt-2 pb-0.5 text-center font-heading text-[11px] font-black tracking-widest text-black uppercase mt-3 shrink-0">
+                        {informeAtual.rodapeTexto || 'BERÇO DO OFICIALATO PAULISTA'}
+                      </div>
                     </div>
                   </div>
                 </div>

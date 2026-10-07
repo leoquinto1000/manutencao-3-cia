@@ -394,7 +394,7 @@ export const DADOS_INICIAIS_INFORME: InformeMensal = {
   id: 'informe-agosto-2026',
   mesAno: 'AGOSTO 2026',
   capaUrl: 'https://images.unsplash.com/photo-1541888946425-d0fbb18086f6?w=900&auto=format&fit=crop&q=60',
-  capaAltura: 195,
+  capaAltura: 335,
   cabecalhoEsquerda: 'ACADEMIA DE POLÍCIA MILITAR DO BARRO BRANCO - O003',
   cabecalhoDireita: 'MANUTENÇÃO 3ª CIA\nCIA ES',
   rodapeTexto: 'BERÇO DO OFICIALATO PAULISTA',
