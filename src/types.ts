@@ -204,6 +204,7 @@ export interface InformeMensal {
   criadoEm: string;
   status?: StatusInformeMensal;
   ultimaAtualizacao?: string;
+  ultimaAtualizacaoISO?: string;
   autorUltimaAtualizacao?: string;
   versao?: number;
   historico?: HistoricoModificacaoInforme[];

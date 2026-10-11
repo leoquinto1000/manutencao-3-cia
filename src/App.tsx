@@ -38,6 +38,7 @@ import {
   DADOS_INICIAIS_MEMBROS,
   DADOS_INICIAIS_BANCO_FORNECEDORES,
   gerarId,
+  obterTimestampMilissegundos,
 } from './utils';
 import {
   carregarDadosFirestore,
@@ -531,9 +532,13 @@ export default function App() {
         informeFinal = atualLocal && atualLocal.id ? atualLocal : DADOS_INICIAIS_INFORME;
         return informeFinal;
       }
-      const tempoRemoto = new Date(dados.informeAtual.ultimaAtualizacao || dados.ultimaAtualizacao || 0).getTime();
-      const tempoLocal = new Date(atualLocal?.ultimaAtualizacao || 0).getTime();
-      if (!isNaN(tempoLocal) && !isNaN(tempoRemoto) && tempoLocal > tempoRemoto && tempoLocal > 0) {
+      const tempoRemoto = obterTimestampMilissegundos(
+        dados.informeAtual.ultimaAtualizacaoISO || dados.informeAtual.ultimaAtualizacao || dados.ultimaAtualizacao
+      );
+      const tempoLocal = obterTimestampMilissegundos(
+        atualLocal?.ultimaAtualizacaoISO || atualLocal?.ultimaAtualizacao
+      );
+      if (tempoLocal > tempoRemoto && tempoLocal > 0) {
         informeFinal = atualLocal;
         return atualLocal;
       }
@@ -802,7 +807,7 @@ export default function App() {
             setStatusFirebase('offline');
           }
         });
-    }, 1200);
+    }, 2500);
 
     return () => clearTimeout(timer);
   }, [
@@ -820,7 +825,6 @@ export default function App() {
     equipes,
     membros,
     bancoFornecedores,
-    statusFirebase,
   ]);
 
   // Sincronização manual imediata solicitada pelo usuário
@@ -860,9 +864,11 @@ export default function App() {
   const handleSalvarManualInforme = async (informeParaSalvar?: InformeMensal) => {
     const inf = informeParaSalvar || informeAtual;
     const agoraFormatada = new Date().toLocaleString('pt-BR');
+    const agoraISO = new Date().toISOString();
     const informeComTimestamp: InformeMensal = {
       ...inf,
       ultimaAtualizacao: agoraFormatada,
+      ultimaAtualizacaoISO: agoraISO,
       autorUltimaAtualizacao: usuarioLogado?.nome || inf.autorUltimaAtualizacao || 'Operador',
     };
 

@@ -28,6 +28,27 @@ export function gerarId(): string {
 }
 
 /**
+ * Converte de forma robusta strings de datas (ISO, pt-BR ou milissegundos) em timestamp numérico confiável.
+ * Resolve problemas de comparação com strings formatadas em pt-BR (ex: "07/10/2026, 12:00:00").
+ */
+export function obterTimestampMilissegundos(dataVal?: string | number | null): number {
+  if (!dataVal) return 0;
+  if (typeof dataVal === 'number') return isNaN(dataVal) ? 0 : dataVal;
+  const isoTime = new Date(dataVal).getTime();
+  if (!isNaN(isoTime) && isoTime > 0) return isoTime;
+
+  // Fallback para formato comum brasileiro dd/mm/aaaa, hh:mm:ss
+  const match = dataVal.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})[,\s]+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/);
+  if (match) {
+    const [, dia, mes, ano, hora, min, seg] = match;
+    const dt = new Date(Number(ano), Number(mes) - 1, Number(dia), Number(hora), Number(min), Number(seg || 0));
+    const t = dt.getTime();
+    if (!isNaN(t) && t > 0) return t;
+  }
+  return 0;
+}
+
+/**
  * Faz o download de uma foto (Base64/DataURL ou link) no navegador do usuário
  */
 export function baixarFoto(urlOuDataUrl: string, nomeArquivo: string): void {

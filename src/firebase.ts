@@ -286,17 +286,20 @@ export async function salvarDadosFirestore(dados: Partial<DadosSistemaFirestore>
       ...dadosGeraisSemFotosPesadas
     } = dados;
 
-    const refGeral = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_ID);
-    promises.push(
-      setDoc(
-        refGeral,
-        limparParaFirestore({
-          ...dadosGeraisSemFotosPesadas,
-          ultimaAtualizacao: timestamp,
-        }),
-        { merge: true }
-      )
-    );
+    // Só grava no documento geral se houver campos gerais a atualizar (evita gravações redundantes)
+    if (Object.keys(dadosGeraisSemFotosPesadas).length > 0) {
+      const refGeral = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_ID);
+      promises.push(
+        setDoc(
+          refGeral,
+          limparParaFirestore({
+            ...dadosGeraisSemFotosPesadas,
+            ultimaAtualizacao: timestamp,
+          }),
+          { merge: true }
+        )
+      );
+    }
 
     // 2. Missões e suas fotos (salvas em documento dedicado para não esgotar 1MB)
     if (missoes !== undefined) {
@@ -313,61 +316,76 @@ export async function salvarDadosFirestore(dados: Partial<DadosSistemaFirestore>
       );
     }
 
-    // 3. Informe Mensal e suas fotos (salvo em documento dedicado com particionamento automático)
+    // 3. Informe Mensal e suas fotos (salvo em documento dedicado com particionamento paralelo de alta velocidade)
     if (informeAtual !== undefined) {
       const refInforme = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_INFORME);
-      promises.push(
-        setDoc(
+      const tamanhoAprox = JSON.stringify(informeAtual).length;
+
+      const salvarParticionadoEmParalelo = async () => {
+        // Salva metadados e textos no documento principal sem estourar o limite de 1MB do Firestore
+        const informeMetadados: any = {
+          ...informeAtual,
+          paginas: (informeAtual.paginas || []).map((p) => ({
+            id: p.id,
+            tituloServico: p.tituloServico,
+            dataServico: p.dataServico,
+            descricao: p.descricao,
+            anotacao: p.anotacao,
+            tipoGrid: p.tipoGrid,
+            layoutDedicado: p.layoutDedicado,
+            fotos: (p.fotos || []).map((f) => ({
+              id: f.id,
+              legenda: f.legenda,
+              tipoBadge: f.tipoBadge,
+              badgeTexto: f.badgeTexto,
+              badgeCor: f.badgeCor,
+              url: typeof f.url === 'string' && f.url.length > 250000 ? '' : f.url,
+            })),
+          })),
+        };
+
+        const salvarMetadadosPromise = setDoc(
           refInforme,
           limparParaFirestore({
-            informeAtual,
+            informeAtual: informeMetadados,
             ultimaAtualizacao: timestamp,
           }),
           { merge: true }
-        ).catch(async (err) => {
-          console.warn('Aviso no salvamento direto de informeAtual no Firestore, acionando particionamento:', err);
-          try {
-            // Salva metadados e textos no documento principal sem estourar o limite de 1MB
-            const informeMetadados: any = {
-              ...informeAtual,
-              paginas: (informeAtual.paginas || []).map((p) => ({
-                id: p.id,
-                tituloServico: p.tituloServico,
-                dataServico: p.dataServico,
-                descricao: p.descricao,
-                anotacao: p.anotacao,
-                tipoGrid: p.tipoGrid,
-                fotos: (p.fotos || []).map((f) => ({
-                  id: f.id,
-                  legenda: f.legenda,
-                  tipoBadge: f.tipoBadge,
-                  badgeTexto: f.badgeTexto,
-                  badgeCor: f.badgeCor,
-                  url: typeof f.url === 'string' && f.url.length > 250000 ? '' : f.url,
-                })),
-              })),
-            };
-            await setDoc(
-              refInforme,
-              limparParaFirestore({
-                informeAtual: informeMetadados,
-                ultimaAtualizacao: timestamp,
-              }),
-              { merge: true }
-            );
+        );
 
-            // Grava cada página individualmente na subcoleção para nunca estourar a cota de 1MB
-            for (const pag of informeAtual.paginas || []) {
-              if (pag && pag.id) {
-                const refPag = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_INFORME, 'paginas', pag.id);
-                await setDoc(refPag, limparParaFirestore(pag), { merge: true });
-              }
-            }
-          } catch (partErr) {
-            console.warn('Aviso ao particionar páginas do informe no Firestore:', partErr);
+        // Grava todas as páginas da subcoleção em PARALELO simultaneamente (instantâneo)
+        const paginasPromises = (informeAtual.paginas || []).map((pag) => {
+          if (pag && pag.id) {
+            const refPag = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_INFORME, 'paginas', pag.id);
+            return setDoc(refPag, limparParaFirestore(pag), { merge: true }).catch((err) => {
+              console.warn(`Aviso ao particionar página ${pag.id} do informe:`, err);
+            });
           }
-        })
-      );
+          return Promise.resolve();
+        });
+
+        await Promise.all([salvarMetadadosPromise, ...paginasPromises]);
+      };
+
+      // Se o tamanho passar de 550KB (limite de segurança antes de 1MB), grava diretamente particionado em paralelo,
+      // economizando segundos preciosos sem aguardar a recusa do servidor da nuvem.
+      if (tamanhoAprox > 550000) {
+        promises.push(salvarParticionadoEmParalelo());
+      } else {
+        promises.push(
+          setDoc(
+            refInforme,
+            limparParaFirestore({
+              informeAtual,
+              ultimaAtualizacao: timestamp,
+            }),
+            { merge: true }
+          ).catch(async (err) => {
+            console.warn('Aviso no salvamento direto de informeAtual, acionando particionamento paralelo:', err);
+            await salvarParticionadoEmParalelo();
+          })
+        );
+      }
     }
 
     // 4. Arquivos Salvos da Prestação de Contas (salvo em documento dedicado sem concorrência de fotos)

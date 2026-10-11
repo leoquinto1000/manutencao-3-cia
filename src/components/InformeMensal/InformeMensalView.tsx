@@ -149,29 +149,39 @@ export const InformeMensalView: React.FC<InformeMensalViewProps> = ({
   const handleSalvarManual = async () => {
     setSalvandoDocumento(true);
     const agora = new Date().toLocaleString('pt-BR');
+    const agoraISO = new Date().toISOString();
     const autor = usuarioLogado?.nome || informeAtualRef.current.autorUltimaAtualizacao || 'Operador';
     const atualizado: InformeMensal = {
       ...informeAtualRef.current,
       ultimaAtualizacao: agora,
+      ultimaAtualizacaoISO: agoraISO,
       autorUltimaAtualizacao: autor,
     };
 
+    // 1. Atualiza estado em memória e salva no armazenamento local instantâneo (< 20ms)
     onChangeInformeAtual(atualizado);
     await salvarItemIndexedDB('pmesp_informe_atual', atualizado);
     try {
       localStorage.setItem('pmesp_informe_atual', JSON.stringify(atualizado));
     } catch (e) {}
 
+    // Desbloqueia a interface imediatamente para o usuário não ficar esperando
+    setSalvandoDocumento(false);
+    setMensagemSucesso('💾 Salvo no dispositivo! Sincronizando com a nuvem...');
+
+    // 2. Sincronização remota via Firestore de alta velocidade
     if (onSalvarDocumento) {
       try {
         await onSalvarDocumento(atualizado);
+        setMensagemSucesso('✅ Informe Mensal salvo e sincronizado na nuvem com sucesso!');
       } catch (err) {
         console.warn('Aviso no salvamento remoto do informe:', err);
+        setMensagemSucesso('💾 Salvo com segurança localmente no dispositivo.');
       }
+    } else {
+      setMensagemSucesso('💾 Documento oficial do Informe Mensal salvo com sucesso no dispositivo!');
     }
 
-    setSalvandoDocumento(false);
-    setMensagemSucesso('💾 Documento oficial do Informe Mensal salvo com sucesso no banco de dados e no dispositivo!');
     setTimeout(() => setMensagemSucesso(null), 4000);
   };
 
