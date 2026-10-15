@@ -236,12 +236,25 @@ service cloud.firestore {
             </ol>
 
             <div className="flex justify-end gap-2">
+              {onRecarregarBanco && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModalAjudaRegras(false);
+                    onRecarregarBanco();
+                  }}
+                  className="px-4 py-2 text-xs font-bold bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition cursor-pointer flex items-center gap-1.5"
+                >
+                  <RefreshCw size={13} />
+                  Tentar Conectar Agora
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setModalAjudaRegras(false)}
                 className="px-4 py-2 text-xs font-bold bg-[#1a2b4c] text-white rounded-lg hover:bg-[#2c4373] transition cursor-pointer"
               >
-                Entendi, Fechar
+                Fechar
               </button>
             </div>
           </div>

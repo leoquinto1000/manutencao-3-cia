@@ -41,20 +41,24 @@ import {
 import { NIVEIS_ACESSO_PADRAO } from './utils/permissoes';
 import { removerItemIndexedDB } from './utils/indexedDbStorage';
 
-// Configuração oficial do Firebase fornecida para o projeto manutencao-3-cia
+import firebaseAppletConfig from '../firebase-applet-config.json';
+
+// Configuração oficial do Firebase para o projeto manutencao-3-cia
 export const firebaseConfig = {
-  apiKey: "AIzaSyCJKzbSdAJmdxjaLOEMX6nqR48vGfyMYQ8",
-  authDomain: "manutencao-3-cia.firebaseapp.com",
-  projectId: "manutencao-3-cia",
-  storageBucket: "manutencao-3-cia.firebasestorage.app",
-  messagingSenderId: "904703143241",
-  appId: "1:904703143241:web:7c2c3944471ede726b7e98",
-  measurementId: "G-PYZ3EJ0CYK"
+  apiKey: firebaseAppletConfig.apiKey || "AIzaSyCJKzbSdAJmdxjaLOEMX6nqR48vGfyMYQ8",
+  authDomain: firebaseAppletConfig.authDomain || "manutencao-3-cia.firebaseapp.com",
+  projectId: firebaseAppletConfig.projectId || "manutencao-3-cia",
+  storageBucket: firebaseAppletConfig.storageBucket || "manutencao-3-cia.firebasestorage.app",
+  messagingSenderId: firebaseAppletConfig.messagingSenderId || "904703143241",
+  appId: firebaseAppletConfig.appId || "1:904703143241:web:870c5b5c9871c6a86b7e98",
+  measurementId: firebaseAppletConfig.measurementId || "G-PYZ3EJ0CYK"
 };
+
+export const FIRESTORE_DATABASE_ID = firebaseAppletConfig.firestoreDatabaseId || "ai-studio-manuteno3ciasist-0da72a0b-bb78-4732-ae64-0d92697a98fb";
 
 // Inicialização segura do Firebase (evita re-inicializações)
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+export const db = FIRESTORE_DATABASE_ID ? getFirestore(app, FIRESTORE_DATABASE_ID) : getFirestore(app);
 export const auth = getAuth(app);
 
 // Garante persistência permanente da sessão no navegador (nunca expira o login)
